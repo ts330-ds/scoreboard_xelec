@@ -12,6 +12,9 @@ class HockeyControllerState extends Equatable {
   final int team2PenaltyCorner;
   final int team1Shootout;
   final int team2Shootout;
+  final int brightness;
+  final int tempbrightness;
+  final bool buzzerOn;
 
   const HockeyControllerState({
     required this.team1Name,
@@ -24,6 +27,9 @@ class HockeyControllerState extends Equatable {
     required this.team2PenaltyCorner,
     required this.team1Shootout,
     required this.team2Shootout,
+    required this.brightness,
+    required this.tempbrightness,
+    required this.buzzerOn
   });
 
   factory HockeyControllerState.initial() {
@@ -38,6 +44,9 @@ class HockeyControllerState extends Equatable {
       team2PenaltyCorner: 0,
       team1Shootout: 0,
       team2Shootout: 0,
+      brightness: 255,
+      tempbrightness: 255,
+      buzzerOn: false,
     );
   }
 
@@ -52,6 +61,9 @@ class HockeyControllerState extends Equatable {
     int? team2PenaltyCorner,
     int? team1Shootout,
     int? team2Shootout,
+    int? brightness,
+    int? tempbrightness,
+    bool? buzzerOn,
   }) {
     return HockeyControllerState(
       team1Name: team1Name ?? this.team1Name,
@@ -64,6 +76,9 @@ class HockeyControllerState extends Equatable {
       team2PenaltyCorner: team2PenaltyCorner ?? this.team2PenaltyCorner,
       team1Shootout: team1Shootout ?? this.team1Shootout,
       team2Shootout: team2Shootout ?? this.team2Shootout,
+      brightness: brightness ?? this.brightness,
+      tempbrightness: tempbrightness ?? this.tempbrightness,
+      buzzerOn: buzzerOn ?? this.buzzerOn,
     );
   }
 
@@ -79,6 +94,9 @@ class HockeyControllerState extends Equatable {
         team2PenaltyCorner,
         team1Shootout,
         team2Shootout,
+        brightness,
+        tempbrightness,
+        buzzerOn
       ];
 
   Map<String, dynamic> toJson() => {

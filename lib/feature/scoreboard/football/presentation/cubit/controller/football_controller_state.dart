@@ -11,6 +11,9 @@ class FootballControllerState extends Equatable {
   final Color team2Color;
   final int extraTime;
   final int currentHalf;
+  final int brightness; // 0 - 255
+  final int tempBrightness;
+  final bool buzzerOn;
 
   const FootballControllerState({
     this.team1Name = "Team 1",
@@ -21,6 +24,10 @@ class FootballControllerState extends Equatable {
     this.team2Color = Colors.blue,
     this.extraTime = 0,
     this.currentHalf = 1,
+    this.brightness = 255,
+    this.tempBrightness = 255,
+    this.buzzerOn = false
+
   });
 
   FootballControllerState copyWith({
@@ -32,6 +39,9 @@ class FootballControllerState extends Equatable {
     Color? team2Color,
     int? extraTime,
     int? currentHalf,
+    int? brightness,
+    int? tempBrightness,
+    bool? buzzerOn
   }) {
     return FootballControllerState(
       team1Name: team1Name ?? this.team1Name,
@@ -42,6 +52,9 @@ class FootballControllerState extends Equatable {
       team2Color: team2Color ?? this.team2Color,
       extraTime: extraTime ?? this.extraTime,
       currentHalf: currentHalf ?? this.currentHalf,
+      brightness: brightness ?? this.brightness,
+      tempBrightness: tempBrightness ?? this.tempBrightness,
+      buzzerOn: buzzerOn ?? this.buzzerOn
     );
   }
 
@@ -55,5 +68,8 @@ class FootballControllerState extends Equatable {
         team2Color,
         extraTime,
         currentHalf,
+        brightness,
+        tempBrightness,
+        buzzerOn
       ];
 }

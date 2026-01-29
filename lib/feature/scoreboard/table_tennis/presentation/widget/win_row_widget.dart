@@ -15,7 +15,7 @@ Widget WinRowWidget({
         label,
         style: context.text.titleSmall!.copyWith(color: context.colors.surface)
       ),
-      const SizedBox(width: 8),
+      const SizedBox(width: 4),
       Container(
         alignment: Alignment.center,
         decoration: BoxDecoration(

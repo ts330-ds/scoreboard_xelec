@@ -18,7 +18,6 @@ class BasketBallControlPanelUI extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cubit = context.read<BasketControlPanelCubit>();
     final timerCubit = context.read<BasketBallTimerCubit>();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -121,35 +120,34 @@ class BasketBallControlPanelUI extends StatelessWidget {
 
           const ControllerHeading(text: "Display Settings"),
 
-          Row(
-            children: [
-              Expanded(
-                child: BlocSelector<BasketControlPanelCubit, ControlPanelState, int>(
-                  selector: (state) => state.brightness,
-                  builder: (context, brightness) {
-                    return Row(
-                      children: [
-                        const ControllerHeading(text: "Brightness",),
-                        Expanded(
-                          child: Slider(
-                            min: 0,
-                            max: 1,
-                            value: brightness / 255,
-                            onChanged: (value) {
-                              print(value*255);
-                              context
-                                  .read<BasketControlPanelCubit>()
-                                  .setBrightness((value * 255).toInt());
-                            },
-                          ),
+
+          BlocSelector<BasketControlPanelCubit, ControlPanelState, int>(
+                selector: (state) => state.tempBrightness,
+                builder: (context, brightness) {
+                  return Row(
+                    children: [
+                      const ControllerHeading(text: "Brightness",),
+                      Expanded(
+                        child: Slider(
+                          min: 0,
+                          max: 1,
+                          value: brightness / 255,
+                          onChangeEnd: (value) {
+                            context
+                                .read<BasketControlPanelCubit>()
+                                .setBrightness((value * 255).toInt());
+                          }, onChanged: (value) {
+                            context
+                                .read<BasketControlPanelCubit>()
+                                .setTempBrightness((value * 255).toInt());
+                        },
                         ),
-                      ],
-                    );
-                  },
-                ),
+                      ),
+                    ],
+                  );
+                },
               ),
-            ],
-          ),
+
 
           BlocSelector<BasketControlPanelCubit, ControlPanelState, bool>(
             selector: (state) => state.buzzerOn,

@@ -1,9 +1,17 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/feature/bluetooth/mapper/table_tennis_ble_mapper.dart';
+import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
+import 'package:xelex_esp/utility/universal_method.dart';
 import 'table_tennis_controller_state.dart';
 import 'package:flutter/material.dart';
 
 class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
-  TableTennisControllerCubit() : super(TableTennisControllerState.initial());
+  BleService bleService;
+  TableTennisBleMapper tableTennisBleMapper;
+  TableTennisControllerCubit({
+    required this.bleService,
+    required this.tableTennisBleMapper
+}) : super(TableTennisControllerState.initial());
 
 
   void exit(){
@@ -14,10 +22,12 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   // ------------------------------------------------
   void setTeam1Name(String name) {
     emit(state.copyWith(team1Name: name));
+    bleService.send(tableTennisBleMapper.setTeam1Name(name));
   }
 
   void setTeam2Name(String name) {
     emit(state.copyWith(team2Name: name));
+    bleService.send(tableTennisBleMapper.setTeam2Name(name));
   }
 
   // ------------------------------------------------
@@ -25,10 +35,13 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   // ------------------------------------------------
   void setTeam1Color(Color color) {
     emit(state.copyWith(team1Color: color));
+    bleService.send(tableTennisBleMapper.setTeam1Color(toRgb565(color)));
+
   }
 
   void setTeam2Color(Color color) {
     emit(state.copyWith(team2Color: color));
+    bleService.send(tableTennisBleMapper.setTeam2Color(toRgb565(color)));
   }
 
   // ------------------------------------------------
@@ -36,23 +49,28 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   // ------------------------------------------------
   void incTeam1Score() {
     emit(state.copyWith(team1Score: state.team1Score + 1));
+    bleService.send(tableTennisBleMapper.setTeam1Score(state.team1Score));
+    // Auto switch serve (every 2 points)
     _autoSwitchServe();
   }
 
   void decTeam1Score() {
     if (state.team1Score > 0) {
       emit(state.copyWith(team1Score: state.team1Score - 1));
+      bleService.send(tableTennisBleMapper.setTeam1Score(state.team1Score));
     }
   }
 
   void incTeam2Score() {
     emit(state.copyWith(team2Score: state.team2Score + 1));
+    bleService.send(tableTennisBleMapper.setTeam2Score(state.team2Score));
     _autoSwitchServe();
   }
 
   void decTeam2Score() {
     if (state.team2Score > 0) {
       emit(state.copyWith(team2Score: state.team2Score - 1));
+      bleService.send(tableTennisBleMapper.setTeam2Score(state.team2Score));
     }
   }
 
@@ -75,21 +93,17 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
     // team = 1 or 2
     if (team == 1 || team == 2) {
       emit(state.copyWith(servingTeam: team));
+      bleService.send(tableTennisBleMapper.setServe(team));
     }
   }
 
   void changeServe() {
     if (state.servingTeam == 0) return;
-
     emit(state.copyWith(servingTeam: state.servingTeam == 1 ? 2 : 1));
+    bleService.send(tableTennisBleMapper.setServe(state.servingTeam));
+
   }
 
-  // ------------------------------------------------
-  // GAMES WON
-  // ------------------------------------------------
-  // ------------------------------------------------
-  // GAMES WON
-  // ------------------------------------------------
   void incTeam1GamesWon() {
     if (state.team1GamesWon < 4) {
       final newTeam1GamesWon = state.team1GamesWon + 1;
@@ -100,7 +114,6 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
           roundPlayed: newTeam1GamesWon + state.team2GamesWon,
         ),
       );
-
       _resetScoresForNextGame();
     }
   }
@@ -221,5 +234,21 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   // ------------------------------------------------
   void resetMatch() {
     emit(TableTennisControllerState.initial());
+  }
+
+  // Brightness (0 - 255)
+  void setBrightness(int value) {
+    emit(state.copyWith(brightness: value.clamp(0, 255)));
+    //bleService.send(basketBallBleMapper.setBrightness(value));
+  }
+
+  void setTempBrightness(int value) {
+    emit(state.copyWith(tempBrightness: value.clamp(0, 255)));
+  }
+
+  // Buzzer toggle
+  void toggleBuzzer() {
+    emit(state.copyWith(buzzerOn: !state.buzzerOn));
+    //bleService.send(state.buzzerOn ? "BBBUZZERON" : "BBBUZZEROFF");
   }
 }

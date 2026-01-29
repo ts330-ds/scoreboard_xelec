@@ -56,6 +56,9 @@ class BasketBallBleMapper {
   // ======================
   // SHOT / MINI TIMER
   // ======================
+  String setBrightness(int value) => "HOBS:$value";
+
+  String setBuzzer(int value) => "HOBS:$value";
 
   String startShotTimer() => "BBMS";
   String resetShotTimer() => "BBMR";
@@ -63,6 +66,8 @@ class BasketBallBleMapper {
   // ======================
   // SCREEN
   // ======================
+
+
 
   String resetScreen() => "BBRT";
 }

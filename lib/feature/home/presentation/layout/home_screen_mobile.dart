@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/home/presentation/widget/game_card.dart';
+import 'package:xelex_esp/utility/appColor.dart';
 import '../../../../responsive/adaptive_scaffold.dart';
 import '../../../../router/app_path.dart';
 import '../../../bluetooth/presentation/cubit/ble/ble_cubit.dart';
@@ -12,118 +13,131 @@ class HomeScreenMobile extends StatelessWidget {
 
   int _crossAxisCount(double width) {
     if (width >= 1200) return 4; // Desktop
-    if (width >= 800) return 3;  // Tablet
-    return 2;                    // Mobile
+    if (width >= 800) return 3; // Tablet
+    return 2; // Mobile
   }
 
   @override
   Widget build(BuildContext context) {
-    final ble_cubit = context.read<BleCubit>();
+    final bleCubit = context.read<BleCubit>();
     final games = [
-       GameCard(
-        title: 'Basketball',
-        icon: Icons.sports_basketball,
-        onTap: (){
+      GameCard(
+        name: 'Basketball',
+        iconPath: "images/svg_icon/basketball.svg",
+        onTap: () {
           context.push(AppPaths.basketball);
-          //ble_cubit.setGame("BB");
+          bleCubit.setGame("BB");
         },
+
       ),
-       GameCard(
-        title: 'HandBall',
-        icon: Icons.sports_handball,
-       onTap: (){
+      GameCard(
+        name: 'HandBall',
+        iconPath: "images/svg_icon/handball.svg",
+        onTap: () {
           context.push(AppPaths.handball);
-         // ble_cubit.setGame("HB");
-       },
-      ),
-       GameCard(
-        title: 'Hockey',
-        icon: Icons.sports_hockey,
-        onTap: (){
-          context.push(AppPaths.hockey);
-          //ble_cubit.setGame("HO");
-        },
-      ),
-       GameCard(
-        title: 'Table Tennis',
-        icon: Icons.sports_tennis,
-        onTap: (){
-          context.push(AppPaths.table_tennis);
-          //ble_cubit.setGame("TT");
-        },
-      ),
-       GameCard(
-        title: 'Kho Kho',
-        icon: Icons.sports_gymnastics,
-        onTap: (){
-          context.push(AppPaths.kho_kho);
-          //ble_cubit.setGame("KK");
+          bleCubit.setGame("HB");
         },
       ),
       GameCard(
-        title: 'Football',
-        icon: Icons.sports_soccer,
-        onTap: (){
+        name: 'Hockey',
+        iconPath: "images/svg_icon/ice-hockey.svg",
+        onTap: () {
+          context.push(AppPaths.hockey);
+          bleCubit.setGame("HO");
+        },
+      ),
+      GameCard(
+        name: 'Table Tennis',
+        iconPath: "images/svg_icon/table-tennis.svg",
+        onTap: () {
+          context.push(AppPaths.table_tennis);
+          bleCubit.setGame("TT");
+        },
+      ),
+      GameCard(
+        name: 'Kho Kho',
+        iconPath: "images/svg_icon/kho-kho.svg",
+        onTap: () {
+          context.push(AppPaths.kho_kho);
+          bleCubit.setGame("KK");
+        },
+      ),
+      GameCard(
+        name: 'Football',
+        iconPath: "images/svg_icon/shoot.svg",
+        onTap: () {
           context.push(AppPaths.football);
-          //ble_cubit.setGame("FB");
+          bleCubit.setGame("FO");
+        },
+      ),
+      GameCard(
+        name: 'Kabaddi',
+        iconPath: "images/svg_icon/kabaddi.svg",
+        onTap: () {
+          context.push(AppPaths.khabaddi);
+          bleCubit.setGame("FB");
+        },
+      ),
+      GameCard(
+        name: 'Badminton',
+        iconPath: "images/svg_icon/badminton.svg",
+        onTap: () {
+          context.push(AppPaths.badminton);
+          //bleCubit.setGame("BD");
         },
       ),
     ];
 
     return AdaptiveScaffold(
-      title: 'Home Screen',
+      title: 'Games',
+      appBarBackground: Colors.transparent,
+      textColor: Colors.black,
       body: Column(
         children: [
           BlocBuilder<BleCubit, BleState>(
-      builder: (context, state) {
-        if (state.status != BleStatus.connected) {
-          return const Text(
-            "Bluetooth not connected",
-            style: TextStyle(color: Colors.red),
-          );
-        }
+            builder: (context, state) {
+              if (state.status != BleStatus.connected) {
+                return const Text("Bluetooth not connected", style: TextStyle(color: Colors.red));
+              }
 
-        final rssi = state.rssi ?? -100;
+              final rssi = state.rssi ?? -100;
 
-        return Row(
-          children: [
-            const Icon(Icons.bluetooth_connected,
-                color: Colors.green),
-            const SizedBox(width: 8),
-            Text(
-              "${state.deviceName}",
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(width: 12),
-            _SignalIcon(rssi),
-            const SizedBox(width: 4),
-            Text("$rssi dBm"),
-          ],
-        );
-      },
-      ),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: _crossAxisCount(constraints.maxWidth),
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 1.1,
+              return Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.bluetooth_connected, color: Colors.green),
+                      const SizedBox(width: 8),
+                      Text("${state.deviceName}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 12),
+                      _SignalIcon(rssi),
+                      const SizedBox(width: 4),
+                      Text("$rssi dBm"),
+                    ],
                   ),
-                  itemCount: games.length,
-                  itemBuilder: (_, index) {
-                    final game = games[index];
-                    return GameCard(
-                      title: game.title,
-                      icon: game.icon,
-                      onTap: game.onTap,
-                    );
-                  },
-                );
-              },
+                  TextButton.icon(
+                    onPressed: () {
+                      context.read<BleCubit>().disconnectBluetooth();
+                    },
+                    icon: const Icon(Icons.bluetooth_disabled, color: Colors.red),
+                    label: const Text("Disconnect", style: TextStyle(color: Colors.red)),
+                  ),
+                ],
+              );
+            },
+          ),
+          Expanded(
+            child: ListView.separated(
+              itemCount: games.length,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              itemBuilder: (context, index) {
+                final game = games[index];
+                final isEven = index % 2 == 0;
+
+                return GameCard(name: game.name, iconPath: game.iconPath, onTap: game.onTap, iconRight: isEven);
+              }, separatorBuilder: (BuildContext context, int index) {
+                return const SizedBox(height: 32);
+            },
             ),
           ),
         ],
@@ -131,21 +145,20 @@ class HomeScreenMobile extends StatelessWidget {
     );
   }
 }
+
 class _SignalIcon extends StatelessWidget {
   final int rssi;
+
   const _SignalIcon(this.rssi);
 
   @override
   Widget build(BuildContext context) {
     if (rssi >= -60) {
-      return const Icon(Icons.signal_wifi_4_bar,
-          color: Colors.green);
+      return const Icon(Icons.signal_wifi_4_bar, color: Colors.green);
     } else if (rssi >= -75) {
-      return const Icon(Icons.signal_wifi_0_bar,
-          color: Colors.orange);
+      return const Icon(Icons.signal_wifi_0_bar, color: Colors.orange);
     } else {
-      return const Icon(Icons.signal_wifi_4_bar,
-          color: Colors.red);
+      return const Icon(Icons.signal_wifi_4_bar, color: Colors.red);
     }
   }
 }

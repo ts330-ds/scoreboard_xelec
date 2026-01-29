@@ -14,9 +14,9 @@ class ShotClockCubit extends Cubit<ShotClockState> {
 }) : super(const ShotClockState());
 
   void start() {
-    _timer?.cancel();
     emit(state.copyWith(status: ShotClockStatus.running));
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 24), (timer) {
       if (state.seconds <= 1) {
         timer.cancel();
         emit(state.copyWith(seconds: 0, status: ShotClockStatus.expired));
@@ -24,7 +24,6 @@ class ShotClockCubit extends Cubit<ShotClockState> {
         emit(state.copyWith(seconds: state.seconds - 1));
       }
     });
-    bleService.send(ballBleMapper.startShotTimer());
   }
 
   void pause() {

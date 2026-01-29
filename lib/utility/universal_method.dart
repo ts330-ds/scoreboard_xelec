@@ -1,6 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:xelex_esp/utility/theme_extension.dart';
 
+String safeName(String name) =>
+    name.substring(0, name.length.clamp(0, 10));
+
+bool isValidHex565(String hex) =>
+    RegExp(r'^[0-9A-Fa-f]{4}$').hasMatch(hex);
+
+
+int toRgb565(Color color) {
+  final argb = color.toARGB32();
+
+  final r = (argb >> 16) & 0xFF;
+  final g = (argb >> 8) & 0xFF;
+  final b = argb & 0xFF;
+
+  return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+}
 
 String colorToHex(Color color) {
   return color.toARGB32()

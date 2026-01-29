@@ -100,7 +100,12 @@ class DeviceSelectionScreen extends StatelessWidget {
                                     style: context.text.bodySmall,
                                   ),
                                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                                  onTap: () => _showScanSheet(context),
+                                  onTap: () async {
+                                    await context.read<BleCubit>().connectToId(device['id']!, device['name']!);
+                                    if(state.status == BleStatus.connected){
+                                      _navigateToFeature(context);
+                                    }
+                                  },
                                 ),
                               );
                             },

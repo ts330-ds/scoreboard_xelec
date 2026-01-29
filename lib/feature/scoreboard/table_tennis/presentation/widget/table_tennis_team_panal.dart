@@ -44,11 +44,10 @@ class TableTennisTeamPanel extends StatelessWidget {
               child: Column(
                 children: [
                   widgetGap(),
-
                   /// Team name
                   Text(
                     name,
-                    style: context.text.titleLarge!
+                    style: context.text.titleMedium!
                         .copyWith(color: context.colors.surface),
                   ),
 
@@ -130,16 +129,15 @@ class TableTennisTeamPanel extends StatelessWidget {
           child: BlocBuilder<TableTennisControllerCubit,
               TableTennisControllerState>(
             buildWhen: (prev, curr) =>
-            prev.servingTeam != curr.servingTeam ||
-                prev.gameStart != curr.gameStart,
+            prev.servingTeam != curr.servingTeam ,
             builder: (context, state) {
-              final showServe = state.gameStart &&
+              final showServe =
                   ((isTeam1 && state.servingTeam == 1) ||
                       (!isTeam1 && state.servingTeam == 2));
 
               return showServe
                   ?  ServeIcon()
-                  : const SizedBox.shrink();
+                  :  SizedBox.shrink();
             },
           ),
         ),

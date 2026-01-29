@@ -11,12 +11,12 @@ Widget TimeOutWidget({
     children: [
       Text(
           label,
-          style: context.text.titleSmall!.copyWith(color: context.colors.surface)
+          style: context.text.headlineMedium!.copyWith(color: context.colors.surface)
       ),
       const SizedBox(width: 8),
       Container(
-        width: 72,
-        height: 32,
+        width: 50,
+        height: 25,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(6),

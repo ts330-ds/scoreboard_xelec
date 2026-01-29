@@ -10,6 +10,8 @@ class AdaptiveScaffold extends StatelessWidget {
   final Widget? floatingActionButton;
   final bool resizeToAvoidBottomInset;
   final VoidCallback? onSettingsPressed;
+  final Color appBarBackground;
+  final Color textColor;
 
   const AdaptiveScaffold({
     super.key,
@@ -18,6 +20,8 @@ class AdaptiveScaffold extends StatelessWidget {
     this.floatingActionButton,
     this.resizeToAvoidBottomInset = true,
     this.onSettingsPressed,
+    this.appBarBackground = Colors.blue,
+    this.textColor = Colors.white,
   });
 
   @override
@@ -28,10 +32,12 @@ class AdaptiveScaffold extends StatelessWidget {
         resizeToAvoidBottomInset: resizeToAvoidBottomInset,
         appBar: AppBar(
           titleSpacing: 10,
+          elevation: 0,
+          backgroundColor: appBarBackground,
           title: Text(
             title,
             style: context.text.titleSmall!
-                .copyWith(color: context.colors.surface),
+                .copyWith(color: textColor),
           ),
           actions: onSettingsPressed != null
               ? [

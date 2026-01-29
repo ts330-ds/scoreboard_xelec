@@ -6,6 +6,9 @@ import 'package:xelex_esp/feature/bluetooth/presentation/screen/device_selection
 import 'package:xelex_esp/feature/home/presentation/screen/home_screen.dart';
 import 'package:xelex_esp/feature/feature_selection/presentation/screen/feature_selection_screen.dart';
 import 'package:xelex_esp/feature/permission/bluetooth/presentation/permissoin_gate.dart';
+import 'package:xelex_esp/feature/scoreboard/Kabaddi/presentation/screen/khabaddi_config_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/Kabaddi/presentation/screen/khabaddi_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/badminton/presentation/screen/badminton_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/basketball/presentation/screen/basket_ball_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/basketball/presentation/screen/basketball_config_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/football/presentation/screen/football_config_screen.dart';
@@ -19,6 +22,7 @@ import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/router/router_notifier.dart';
 
 import '../feature/permission/bluetooth/cubit/bluetooth_cubit.dart';
+import '../feature/scoreboard/badminton/presentation/screen/badminton_config_screen.dart';
 import '../feature/scoreboard/handball/presentation/screen/handball_config_screen.dart';
 import '../feature/scoreboard/table_tennis/presentation/screen/table_tennis_config_screen.dart';
 import '../feature/scoreboard/table_tennis/presentation/screen/table_tennis_screen.dart';
@@ -46,6 +50,24 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
 
+    /// Badminton Screen
+    GoRoute(
+      path: AppPaths.badminton,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: const BadmintonScreen(),
+      ),
+    ),
+
+    // Badminton Config Screen
+    GoRoute(
+      path: AppPaths.badmintonConfig,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: const BadmintonConfigScreen(),
+      ),
+    ),
+
     GoRoute(
       path: AppPaths.handball,
       pageBuilder: (context, state) => adaptivePage(
@@ -54,7 +76,7 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
 
-    /// 🏀 Basketball Config Screen
+    /// 🏀 Handball Config Screen
     GoRoute(
       path: AppPaths.handballConfig,
       pageBuilder: (context, state) => adaptivePage(
@@ -125,6 +147,27 @@ final GoRouter appRouter = GoRouter(
         child: const FootballConfigScreen(),
       ),
     ),
+
+
+    GoRoute(
+      path: AppPaths.khabaddisConfig,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: const KhabaddiConfigScreen(),
+      ),
+    ),
+    GoRoute(
+      path: AppPaths.khabaddi,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: const KhabaddiScreen(),
+
+      ),
+    ),
+
+
+
+
     /// ⚙️ Login Screen
     GoRoute(
       path: AppPaths.login,

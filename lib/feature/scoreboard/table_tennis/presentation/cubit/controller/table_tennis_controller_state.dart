@@ -25,6 +25,10 @@ class TableTennisControllerState {
   /// 0 = none, 1 = team1, 2 = team2
   final int servingTeam;
 
+  final int brightness; // 0 - 255
+  final int tempBrightness;
+  final bool buzzerOn;
+
   const TableTennisControllerState({
     required this.team1Name,
     required this.team2Name,
@@ -41,6 +45,9 @@ class TableTennisControllerState {
     required this.matchNumber,
     this.gameStart = false,
     this.servingTeam = 0,
+    this.brightness = 255,
+    this.tempBrightness = 255,
+    this.buzzerOn = false,
   });
 
   factory TableTennisControllerState.initial() {
@@ -60,6 +67,9 @@ class TableTennisControllerState {
       servingTeam: 0,
       team1Color: Colors.red,
       team2Color: Colors.blue,
+      brightness: 255,
+      tempBrightness: 255,
+      buzzerOn: false,
     );
   }
 
@@ -79,6 +89,9 @@ class TableTennisControllerState {
     int? servingTeam,
     Color? team1Color,
     Color? team2Color,
+    int? brightness,
+    int? tempBrightness,
+    bool? buzzerOn,
   }) {
     return TableTennisControllerState(
       team1Name: team1Name ?? this.team1Name,
@@ -96,6 +109,9 @@ class TableTennisControllerState {
       servingTeam: servingTeam ?? this.servingTeam,
       team1Color: team1Color ?? this.team1Color,
       team2Color: team2Color ?? this.team2Color,
+      brightness: brightness ?? this.brightness,
+      tempBrightness: tempBrightness ?? this.tempBrightness,
+      buzzerOn: buzzerOn ?? this.buzzerOn,
     );
   }
 }

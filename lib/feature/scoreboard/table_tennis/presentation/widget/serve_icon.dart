@@ -8,8 +8,8 @@ class ServeIcon extends StatelessWidget{
   Widget build(BuildContext context) {
     return Icon(
       Icons.sports_tennis,
-      weight: 40,
-      size: 40,
+      weight: 30,
+      size: 30,
       color: Colors.yellow,
     );
   }

@@ -33,7 +33,7 @@ class BasketBallTimerCubit extends Cubit<BasketBallTimerState> {
     if (state.status == TimerStatus.running) return;
 
     emit(state.copyWith(status: TimerStatus.running));
-
+    bleService.send(ballBleMapper.startTimer());
     _timer?.cancel();
     _timer = Timer.periodic(
       const Duration(seconds: 1),
@@ -48,7 +48,6 @@ class BasketBallTimerCubit extends Cubit<BasketBallTimerState> {
           );
         } else {
           emit(state.copyWith(seconds: state.seconds - 1));
-          bleService.send(ballBleMapper.startTimer());
         }
       },
     );

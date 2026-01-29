@@ -36,12 +36,12 @@ class KhokhoTeamCard extends StatelessWidget {
                 // Team Name at the Top
                 SizedBox(
                   height: height * 0.2,
-                  child: FittedBox(
-                    alignment: Alignment.topLeft,
-                    fit: BoxFit.scaleDown,
+                  child: Container(
+                    alignment: Alignment.center,
                     child: Text(
                       teamName,
-                      style: context.text.displayLarge?.copyWith(
+                      textAlign: TextAlign.center,
+                      style: context.text.titleLarge?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         height: 0.9,

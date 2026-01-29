@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/basketball_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/presentation/cubit/ble/ble_cubit.dart';
 import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
@@ -10,9 +11,11 @@ import 'controlPanalState.dart';
 class BasketControlPanelCubit extends Cubit<ControlPanelState> {
   final BleService bleService;
   final BasketBallBleMapper basketBallBleMapper;
+  final GlobalErrorCubit globalErrorCubit;
   BasketControlPanelCubit({
     required this.bleService,
-    required this.basketBallBleMapper
+    required this.basketBallBleMapper,
+    required this.globalErrorCubit
 }) : super(ControlPanelState.initial());
 
   // Team names
@@ -33,12 +36,14 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
   // Team colors
   void setTeam1Color(Color color) {
     emit(state.copyWith(team1Color: color));
-    bleService.send(basketBallBleMapper.setHomeTeamColor(colorToHex(color)));
+    bleService.send(basketBallBleMapper.setHomeTeamColor(toRgb565(color).toRadixString(16).padLeft(4, '0')
+        .toUpperCase()));
   }
 
   void setTeam2Color(Color color) {
     emit(state.copyWith(team2Color: color));
-    bleService.send(basketBallBleMapper.setAwayTeamColor(colorToHex(color)));
+    bleService.send(basketBallBleMapper.setAwayTeamColor(toRgb565(color).toRadixString(16).padLeft(4, '0')
+        .toUpperCase()));
   }
 
   // Quarter
@@ -93,7 +98,11 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
   // Brightness (0 - 255)
   void setBrightness(int value) {
     emit(state.copyWith(brightness: value.clamp(0, 255)));
-    bleService.send("BBBRIGHTNESS:$value");
+    bleService.send(basketBallBleMapper.setBrightness(value));
+  }
+
+  void setTempBrightness(int value) {
+    emit(state.copyWith(tempBrightness: value.clamp(0, 255)));
   }
 
   // Buzzer toggle

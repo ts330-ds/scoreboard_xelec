@@ -12,7 +12,28 @@ class BleCubit extends Cubit<BleState> {
   final BleService service;
   static const String _lastDevicesKey = 'last_connected_devices_data';
   final GameSelectBleMapper gameSelectBleMapper;
-  BleCubit(this.service,this.gameSelectBleMapper) : super(BleState.idle());
+
+  BleCubit(this.service, this.gameSelectBleMapper) : super(BleState.idle());
+
+  // inside BleCubit
+  Future<void> connectToId(String deviceId, String name) async {
+    try {
+      emit(BleState.connecting(previousDevices: state.previousDevices));
+
+      // Create device object directly from the stored ID
+      final device = BluetoothDevice.fromId(deviceId);
+
+      // Attempt connection
+      await device.connect(timeout: const Duration(seconds: 15), license: License.free);
+
+      // Once connected, you likely need to discover services
+      // (this logic should mirror your standard connect method)
+
+      emit(BleState.connected(deviceName: name, deviceId: deviceId, previousDevices: state.previousDevices));
+    } catch (e) {
+      emit(BleState.error("Failed to reconnect: $e", previousDevices: state.previousDevices));
+    }
+  }
 
   Future<void> loadSavedDevices() async {
     final devices = await _getSavedDevicesFromPrefs();
@@ -25,15 +46,12 @@ class BleCubit extends Cubit<BleState> {
     try {
       await service.connect(
         device,
-            (connState) async {
-          if (connState ==
-              BluetoothConnectionState.connected) {
-            final name = device.advName.isNotEmpty
-                ? device.advName
-                : "Unknown Device";
+        (connState) async {
+          if (connState == BluetoothConnectionState.connected) {
+            final name = device.advName.isNotEmpty ? device.advName : "Unknown Device";
             await _saveDeviceData(device.remoteId.str, name);
             final updatedDevices = await _getSavedDevicesFromPrefs();
-            
+
             emit(
               state.copyWith(
                 status: BleStatus.connected,
@@ -44,12 +62,11 @@ class BleCubit extends Cubit<BleState> {
             );
           }
 
-          if (connState ==
-              BluetoothConnectionState.disconnected) {
+          if (connState == BluetoothConnectionState.disconnected) {
             emit(state.copyWith(status: BleStatus.idle));
           }
         },
-            (rssi) {
+        (rssi) {
           if (state.status == BleStatus.connected) {
             emit(state.copyWith(rssi: rssi));
           }
@@ -63,39 +80,39 @@ class BleCubit extends Cubit<BleState> {
   Future<void> _saveDeviceData(String id, String name) async {
     final prefs = await SharedPreferences.getInstance();
     List<String> devicesJson = prefs.getStringList(_lastDevicesKey) ?? [];
-    
-    List<Map<String, String>> devices = devicesJson
-        .map((e) => Map<String, String>.from(json.decode(e)))
-        .toList();
+
+    List<Map<String, String>> devices = devicesJson.map((e) => Map<String, String>.from(json.decode(e))).toList();
 
     devices.removeWhere((element) => element['id'] == id);
     devices.insert(0, {'id': id, 'name': name});
-    
+
     if (devices.length > 5) {
       devices = devices.sublist(0, 5);
     }
-    
-    await prefs.setStringList(
-      _lastDevicesKey, 
-      devices.map((e) => json.encode(e)).toList()
-    );
+
+    await prefs.setStringList(_lastDevicesKey, devices.map((e) => json.encode(e)).toList());
   }
 
   Future<List<Map<String, String>>> _getSavedDevicesFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     List<String> devicesJson = prefs.getStringList(_lastDevicesKey) ?? [];
-    return devicesJson
-        .map((e) => Map<String, String>.from(json.decode(e)))
-        .toList();
+    return devicesJson.map((e) => Map<String, String>.from(json.decode(e))).toList();
   }
 
   // Legacy for backward compatibility if needed by other widgets
   Future<List<Map<String, String>>> getSavedDevices() => _getSavedDevicesFromPrefs();
 
-
   void setGame(String id) {
     if (state.status == BleStatus.connected) {
       service.send(id);
     }
+  }
+
+  Future<void> disconnectBluetooth() {
+    if (state.status == BleStatus.connected) {
+      emit(state.copyWith(status: BleStatus.idle));
+      return service.disconnect();
+    }
+    return Future.value();
   }
 }

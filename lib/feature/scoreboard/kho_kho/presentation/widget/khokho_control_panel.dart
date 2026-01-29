@@ -16,201 +16,245 @@ class KhokhoControlPanel extends StatelessWidget {
     final timerCubit = context.read<KhokhoTimerCubit>();
     final matchTimerCubit = context.read<MatchTimerCubit>();
 
-    return ListView(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(10),
-      children: [
-        const ControllerHeading(text: "Game Timer"),
-        const SizedBox(height: 6),
-        BlocBuilder<KhokhoTimerCubit, KhokhoTimerState>(
-          builder: (context, state) {
-            return Row(
-              children: [
-                Expanded(
-                  child: CustomButton(
-                    label: state.status == KhokhoTimerStatus.inProgress ? "Pause" : (state.status == KhokhoTimerStatus.paused ? "Resume" : "Start"),
-                    backgroundColor: state.status == KhokhoTimerStatus.inProgress ? Colors.orange : Colors.green,
-                    onPressed: () {
-                      if (state.status == KhokhoTimerStatus.inProgress) {
-                        timerCubit.pauseTimer();
-                      } else if (state.status == KhokhoTimerStatus.paused) {
-                        timerCubit.resumeTimer();
-                      } else {
-                        timerCubit.startTimer();
-                      }
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const ControllerHeading(text: "Game Timer"),
+          const SizedBox(height: 6),
+          BlocBuilder<KhokhoTimerCubit, KhokhoTimerState>(
+            builder: (context, state) {
+              return Row(
+                children: [
+                  Expanded(
+                    child: CustomButton(
+                      label: state.status == KhokhoTimerStatus.inProgress ? "Pause" : (state.status == KhokhoTimerStatus.paused ? "Resume" : "Start"),
+                      backgroundColor: state.status == KhokhoTimerStatus.inProgress ? Colors.orange : Colors.green,
+                      onPressed: () {
+                        if (state.status == KhokhoTimerStatus.inProgress) {
+                          timerCubit.pauseTimer();
+                        } else if (state.status == KhokhoTimerStatus.paused) {
+                          timerCubit.resumeTimer();
+                        } else {
+                          timerCubit.startTimer();
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: CustomButton(
+                      label: "Reset",
+                      backgroundColor: Colors.blueGrey,
+                      onPressed: () => timerCubit.resetTimer(540),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+
+          const SizedBox(height: 12),
+          const ControllerHeading(text: "Match Timer"),
+          const SizedBox(height: 6),
+          BlocBuilder<MatchTimerCubit, MatchTimerState>(
+            builder: (context, state) {
+              return Row(
+                children: [
+                  Expanded(
+                    child: CustomButton(
+                      label: state.status == MatchTimerStatus.inProgress ? "Pause" : (state.status == MatchTimerStatus.paused ? "Resume" : "Start"),
+                      backgroundColor: state.status == MatchTimerStatus.inProgress ? Colors.orange : Colors.green,
+                      onPressed: () {
+                        if (state.status == MatchTimerStatus.inProgress) {
+                          matchTimerCubit.stopTimer();
+                        } else if (state.status == MatchTimerStatus.paused) {
+                          matchTimerCubit.resumeTimer();
+                        } else {
+                          matchTimerCubit.startTimer();
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: CustomButton(
+                      label: "Reset",
+                      backgroundColor: Colors.blueGrey,
+                      onPressed: () => matchTimerCubit.resetTimer(18),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+
+          const SizedBox(height: 12),
+          const ControllerHeading(text: "Score"),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              BlocSelector<KhokhoControllerCubit, KhokhoControllerState, String>(
+                selector: (state) => state.team1Name,
+                builder: (context, name) {
+                  return Expanded(
+                    child: CustomButton(
+                      backgroundColor: AppColors.lakersGreen,
+                      label: "$name +",
+                      onPressed: () => controlCubit.incrementTeam1Score(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 10),
+              BlocSelector<KhokhoControllerCubit, KhokhoControllerState, String>(
+                selector: (state) => state.team1Name,
+                builder: (context, name) {
+                  return Expanded(
+                    child: CustomButton(
+                      backgroundColor: AppColors.scoreOrange,
+                      label: "$name -",
+                      onPressed: () => controlCubit.decrementTeam1Score(),
+                      height: 36,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              BlocSelector<KhokhoControllerCubit, KhokhoControllerState, String>(
+                selector: (state) => state.team2Name,
+                builder: (context, name) {
+                  return Expanded(
+                    child: CustomButton(
+                      backgroundColor: AppColors.lakersGreen,
+                      label: "$name +",
+                      onPressed: () => controlCubit.incrementTeam2Score(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 10),
+              BlocSelector<KhokhoControllerCubit, KhokhoControllerState, String>(
+                selector: (state) => state.team2Name,
+                builder: (context, name) {
+                  return Expanded(
+                    child: CustomButton(
+                      backgroundColor: AppColors.scoreOrange,
+                      label: "$name -",
+                      onPressed: () => controlCubit.decrementTeam2Score(),
+                      height: 36,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+          const ControllerHeading(text: "Innings & Turn"),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Expanded(child: Text("Inn.", style: TextStyle(fontWeight: FontWeight.bold))),
+              Expanded(
+                child: CustomButton(
+                  backgroundColor: AppColors.lakersGreen,
+                  label: "+",
+                  onPressed: () => controlCubit.incrementInn(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: CustomButton(
+                  backgroundColor: AppColors.scoreOrange,
+                  label: "-",
+                  onPressed: () => controlCubit.decrementInn(),
+                  height: 36,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Expanded(child: Text("Turn", style: TextStyle(fontWeight: FontWeight.bold))),
+              Expanded(
+                child: CustomButton(
+                  backgroundColor: AppColors.lakersGreen,
+                  label: "+",
+                  onPressed: () => controlCubit.incrementTurn(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: CustomButton(
+                  backgroundColor: AppColors.scoreOrange,
+                  label: "-",
+                  onPressed: () => controlCubit.decrementTurn(),
+                  height: 36,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+          const ControllerHeading(text: "Game Actions"),
+          const SizedBox(height: 6),
+          CustomButton(
+            backgroundColor: Colors.deepPurple,
+            label: "Toggle Chase/Defend",
+            onPressed: () => controlCubit.toggleChasingTeam(),
+            height: 44,
+          ),
+          const SizedBox(height: 20),
+
+          const ControllerHeading(text: "Display Settings"),
+
+
+          BlocSelector<KhokhoControllerCubit, KhokhoControllerState, int>(
+            selector: (state) => state.tempBrightness,
+            builder: (context, brightness) {
+              return Row(
+                children: [
+                  const ControllerHeading(text: "Brightness",),
+                  Expanded(
+                    child: Slider(
+                      min: 0,
+                      max: 1,
+                      value: brightness / 255,
+                      onChangeEnd: (value) {
+                        context
+                            .read<KhokhoControllerCubit>()
+                            .setBrightness((value * 255).toInt());
+                      }, onChanged: (value) {
+                      context
+                          .read<KhokhoControllerCubit>()
+                          .setTempBrightness((value * 255).toInt());
                     },
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: CustomButton(
-                    label: "Reset",
-                    backgroundColor: Colors.blueGrey,
-                    onPressed: () => timerCubit.resetTimer(540),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+                ],
+              );
+            },
+          ),
 
-        const SizedBox(height: 12),
-        const ControllerHeading(text: "Match Timer"),
-        const SizedBox(height: 6),
-        BlocBuilder<MatchTimerCubit, MatchTimerState>(
-          builder: (context, state) {
-            return Row(
-              children: [
-                Expanded(
-                  child: CustomButton(
-                    label: state.status == MatchTimerStatus.inProgress ? "Pause" : (state.status == MatchTimerStatus.paused ? "Resume" : "Start"),
-                    backgroundColor: state.status == MatchTimerStatus.inProgress ? Colors.orange : Colors.green,
-                    onPressed: () {
-                      if (state.status == MatchTimerStatus.inProgress) {
-                        matchTimerCubit.stopTimer();
-                      } else if (state.status == MatchTimerStatus.paused) {
-                        matchTimerCubit.resumeTimer();
-                      } else {
-                        matchTimerCubit.startTimer();
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: CustomButton(
-                    label: "Reset",
-                    backgroundColor: Colors.blueGrey,
-                    onPressed: () => matchTimerCubit.resetTimer(18),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
 
-        const SizedBox(height: 12),
-        const ControllerHeading(text: "Score"),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            BlocSelector<KhokhoControllerCubit, KhokhoControllerState, String>(
-              selector: (state) => state.team1Name,
-              builder: (context, name) {
-                return Expanded(
-                  child: CustomButton(
-                    backgroundColor: AppColors.lakersGreen,
-                    label: "$name +",
-                    onPressed: () => controlCubit.incrementTeam1Score(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 10),
-            BlocSelector<KhokhoControllerCubit, KhokhoControllerState, String>(
-              selector: (state) => state.team1Name,
-              builder: (context, name) {
-                return Expanded(
-                  child: CustomButton(
-                    backgroundColor: AppColors.scoreOrange,
-                    label: "$name -",
-                    onPressed: () => controlCubit.decrementTeam1Score(),
-                    height: 36,
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            BlocSelector<KhokhoControllerCubit, KhokhoControllerState, String>(
-              selector: (state) => state.team2Name,
-              builder: (context, name) {
-                return Expanded(
-                  child: CustomButton(
-                    backgroundColor: AppColors.lakersGreen,
-                    label: "$name +",
-                    onPressed: () => controlCubit.incrementTeam2Score(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 10),
-            BlocSelector<KhokhoControllerCubit, KhokhoControllerState, String>(
-              selector: (state) => state.team2Name,
-              builder: (context, name) {
-                return Expanded(
-                  child: CustomButton(
-                    backgroundColor: AppColors.scoreOrange,
-                    label: "$name -",
-                    onPressed: () => controlCubit.decrementTeam2Score(),
-                    height: 36,
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+          BlocSelector<KhokhoControllerCubit, KhokhoControllerState, bool>(
+              selector: (state) => state.buzzerOn,
+              builder: (context,buzzer) {
+                return SwitchListTile(title: const ControllerHeading(text: "Buzzer"), value: buzzer, onChanged: (value) {
+                  context.read<KhokhoControllerCubit>().toggleBuzzer();
+                });
+              }
+          ),
 
-        const SizedBox(height: 12),
-        const ControllerHeading(text: "Innings & Turn"),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            const Expanded(child: Text("Inn.", style: TextStyle(fontWeight: FontWeight.bold))),
-            Expanded(
-              child: CustomButton(
-                backgroundColor: AppColors.lakersGreen,
-                label: "+",
-                onPressed: () => controlCubit.incrementInn(),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: CustomButton(
-                backgroundColor: AppColors.scoreOrange,
-                label: "-",
-                onPressed: () => controlCubit.decrementInn(),
-                height: 36,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            const Expanded(child: Text("Turn", style: TextStyle(fontWeight: FontWeight.bold))),
-            Expanded(
-              child: CustomButton(
-                backgroundColor: AppColors.lakersGreen,
-                label: "+",
-                onPressed: () => controlCubit.incrementTurn(),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: CustomButton(
-                backgroundColor: AppColors.scoreOrange,
-                label: "-",
-                onPressed: () => controlCubit.decrementTurn(),
-                height: 36,
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 12),
-        const ControllerHeading(text: "Game Actions"),
-        const SizedBox(height: 6),
-        CustomButton(
-          backgroundColor: Colors.deepPurple,
-          label: "Toggle Chase/Defend",
-          onPressed: () => controlCubit.toggleChasingTeam(),
-          height: 44,
-        ),
-        const SizedBox(height: 20),
-      ],
+        ],
+      ),
     );
   }
 }

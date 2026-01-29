@@ -2,11 +2,18 @@ import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:xelex_esp/feature/bluetooth/mapper/khokho_ble_mapper.dart';
+import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
 
 part 'match_timer_state.dart';
 
 class MatchTimerCubit extends Cubit<MatchTimerState> {
-  MatchTimerCubit() : super(const MatchTimerState(duration: 18)); // Initial match time 18 seconds as per design
+  BleService bleService;
+  KhoKhoBleMapper khoBleMapper;
+  MatchTimerCubit({
+    required this.bleService,
+    required this.khoBleMapper
+}) : super(const MatchTimerState(duration: 18)); // Initial match time 18 seconds as per design
 
   Timer? _timer;
 

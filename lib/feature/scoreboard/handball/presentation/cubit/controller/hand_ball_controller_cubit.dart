@@ -151,4 +151,22 @@ class HandBallControlCubit extends Cubit<HandballControlState> {
     emit(state.copyWith(team2Color: color));
     bleService.send(ballBleMapper.setTeam2Color(colorToHex(color)));
   }
+
+
+  // Brightness (0 - 255)
+  void setBrightness(int value) {
+    emit(state.copyWith(brightness: value.clamp(0, 255)));
+    //bleService.send(basketBallBleMapper.setBrightness(value));
+  }
+
+  void setTempBrightness(int value) {
+    emit(state.copyWith(tempBrightness: value.clamp(0, 255)));
+  }
+
+  // Buzzer toggle
+  void toggleBuzzer() {
+    emit(state.copyWith(buzzerOn: !state.buzzerOn));
+    //bleService.send(state.buzzerOn ? "BBBUZZERON" : "BBBUZZEROFF");
+  }
+
 }

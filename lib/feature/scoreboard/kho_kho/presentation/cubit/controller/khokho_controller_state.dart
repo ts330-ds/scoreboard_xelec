@@ -11,6 +11,9 @@ class KhokhoControllerState extends Equatable {
   final bool isTeam1Chasing;
   final Color team1Color;
   final Color team2Color;
+  final int brightness; // 0 - 255
+  final int tempBrightness;
+  final bool buzzerOn;
 
 
   const KhokhoControllerState({
@@ -24,6 +27,10 @@ class KhokhoControllerState extends Equatable {
     this.isTeam1Chasing = true,
     this.team1Color = Colors.blue,
     this.team2Color = Colors.red,
+    this.brightness = 255,
+    this.tempBrightness = 255,
+    this.buzzerOn = false,
+
   });
 
   KhokhoControllerState copyWith({
@@ -37,6 +44,9 @@ class KhokhoControllerState extends Equatable {
     bool? isTeam1Chasing,
     Color? team1Color,
     Color? team2Color,
+    int? brightness,
+    int? tempBrightness,
+    bool? buzzerOn,
   }) {
     return KhokhoControllerState(
       team1Name: team1Name ?? this.team1Name,
@@ -48,7 +58,10 @@ class KhokhoControllerState extends Equatable {
       matchTime: matchTime ?? this.matchTime,
       isTeam1Chasing: isTeam1Chasing ?? this.isTeam1Chasing,
       team1Color: team1Color ?? this.team1Color,
-      team2Color: team2Color ?? this.team2Color
+      team2Color: team2Color ?? this.team2Color,
+      brightness: brightness ?? this.brightness,
+      tempBrightness: tempBrightness ?? this.tempBrightness,
+      buzzerOn: buzzerOn ?? this.buzzerOn,
     );
   }
 
@@ -63,6 +76,9 @@ class KhokhoControllerState extends Equatable {
         matchTime,
         isTeam1Chasing,
         team1Color,
-        team2Color
+        team2Color,
+        brightness,
+        tempBrightness,
+        buzzerOn,
       ];
 }

@@ -1,15 +1,17 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/feature/bluetooth/mapper/hockey_ble_mapper.dart';
+import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
 import 'package:xelex_esp/feature/scoreboard/hockey/presentation/cubit/timer/hockey_timer_state.dart';
 
 class HockeyTimerCubit extends Cubit<HockeyTimerState> {
   Timer? _timer;
-
   /// Base duration for each quarter (user configurable)
   int totalSeconds;
-
+  BleService bleService;
+  HockeyBleMapper hockeyBleMapper;
   /// Default = 15 minutes (900 seconds)
-  HockeyTimerCubit({int initialSeconds = 900})
+  HockeyTimerCubit({required this.bleService, required this.hockeyBleMapper,int initialSeconds = 900})
       : totalSeconds = initialSeconds,
         super(HockeyTimerState.initial(initialSeconds));
 
@@ -26,6 +28,7 @@ class HockeyTimerCubit extends Cubit<HockeyTimerState> {
         status: TimerStatus.initial,
       ),
     );
+    bleService.send(hockeyBleMapper.setTimerMinutes(seconds ~/ 60));
   }
 
   /// Start timer
@@ -51,6 +54,7 @@ class HockeyTimerCubit extends Cubit<HockeyTimerState> {
         }
       },
     );
+    bleService.send(hockeyBleMapper.startTimer());
   }
 
   /// Pause timer
@@ -59,6 +63,7 @@ class HockeyTimerCubit extends Cubit<HockeyTimerState> {
 
     _timer?.cancel();
     emit(state.copyWith(status: TimerStatus.paused));
+    bleService.send(hockeyBleMapper.pauseTimer());
   }
 
   /// Resume timer
@@ -71,6 +76,7 @@ class HockeyTimerCubit extends Cubit<HockeyTimerState> {
   void reset() {
     _timer?.cancel();
     emit(HockeyTimerState.initial(totalSeconds));
+    bleService.send(hockeyBleMapper.resetTimer());
   }
 
   /// Set quarter (1–4)
@@ -86,6 +92,7 @@ class HockeyTimerCubit extends Cubit<HockeyTimerState> {
         status: TimerStatus.initial,
       ),
     );
+    bleService.send(hockeyBleMapper.setQuarter(quarter));
     return true;
   }
 

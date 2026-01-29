@@ -34,10 +34,9 @@ class FootballCenterPanel extends StatelessWidget {
                   fit: BoxFit.scaleDown,
                   child: Text(
                     _formatDuration(state.duration),
-                    style: context.text.displayMedium?.copyWith(
+                    style: context.text.titleMedium?.copyWith(
                       color: Colors.orangeAccent,
                       fontWeight: FontWeight.bold,
-                      fontSize: 48,
                     ),
                   ),
                 );

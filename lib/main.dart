@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:xelex_esp/error/cubit/error_cubit.dart';
+import 'package:xelex_esp/error/screen/global_error_screen.dart';
 import 'package:xelex_esp/feature/auth/presentation/screen/loginScreen.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/game_select_mapper.dart';
 import 'package:xelex_esp/router/app_router.dart';
@@ -30,8 +32,10 @@ void main() {
       providers: [
         BlocProvider(create: (context) => PermissionCubit(bluetoothPermission)..checkPermission()),
         BlocProvider(create: (_) => sl<BleCubit>()),
+        BlocProvider(create: (_) => sl<GlobalErrorCubit>(),)
       ],
       child: const MyApp()
+
   ));
 }
 
@@ -45,6 +49,11 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: lightTheme(context),
       themeMode: ThemeMode.system,
+      builder: (context, child) {
+        return GlobalErrorToastListener(
+          child: child!,
+        );
+      },
     );
   }
 }

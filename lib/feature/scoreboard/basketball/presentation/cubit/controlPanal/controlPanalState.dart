@@ -8,6 +8,7 @@ class ControlPanelState {
   final Color team1Color;
   final Color team2Color;
   final int brightness; // 0 - 255
+  final int tempBrightness;
   final bool buzzerOn;
   final int quarter;
 
@@ -19,6 +20,7 @@ class ControlPanelState {
     required this.team1Color,
     required this.team2Color,
     required this.brightness,
+    required this.tempBrightness,
     required this.buzzerOn,
     required this.quarter
   });
@@ -32,6 +34,7 @@ class ControlPanelState {
       team1Color: Colors.blue,
       team2Color: Colors.red,
       brightness: 255,
+      tempBrightness: 255,
       buzzerOn: false,
       quarter: 1
     );
@@ -45,6 +48,7 @@ class ControlPanelState {
     Color? team1Color,
     Color? team2Color,
     int? brightness,
+    int? tempBrightness,
     bool? buzzerOn,
     int? quarter
   }) {
@@ -56,6 +60,7 @@ class ControlPanelState {
       team1Color: team1Color ?? this.team1Color,
       team2Color: team2Color ?? this.team2Color,
       brightness: brightness ?? this.brightness,
+      tempBrightness: tempBrightness ?? this.tempBrightness,
       buzzerOn: buzzerOn ?? this.buzzerOn,
       quarter: quarter ?? this.quarter
     );
@@ -70,7 +75,8 @@ class ControlPanelState {
       "team2_score": team2Score,
       "team1_color": team1Color.value,
       "team2_color": team2Color.value,
-      "brightness": brightness, // always 0–255
+      "brightness": brightness,
+      "tempBrightness": tempBrightness,// always 0–255
       "buzzer": buzzerOn,
       "quarter": quarter
     };

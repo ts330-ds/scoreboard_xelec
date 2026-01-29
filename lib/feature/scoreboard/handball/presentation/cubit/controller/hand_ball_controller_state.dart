@@ -20,6 +20,9 @@ class HandballControlState {
   final int team1Suspension;
   final int team2Suspension;
   final MatchHalf matchHalf;
+  final int brightness; // 0 - 255
+  final int tempBrightness;
+  final bool buzzerOn;
 
   const HandballControlState({
     required this.team1Name,
@@ -34,7 +37,10 @@ class HandballControlState {
     required this.team2Color,
     required this.team1Suspension,
     required this.team2Suspension,
-    required this.matchHalf
+    required this.matchHalf,
+    required this.brightness,
+    required this.tempBrightness,
+    required this.buzzerOn,
   });
 
   factory HandballControlState.initial() {
@@ -51,6 +57,9 @@ class HandballControlState {
       team2Suspension: 0,
       matchHalf: MatchHalf.first,
       team1Color: Colors.blue, team2Color: Colors.red,
+      brightness: 255,
+      tempBrightness: 255,
+      buzzerOn: false,
     );
   }
 
@@ -68,6 +77,9 @@ class HandballControlState {
     Color? team1Color,
     Color? team2Color,
     MatchHalf? matchHalf,
+    int? brightness,
+    int? tempBrightness,
+    bool? buzzerOn,
   }) {
     return HandballControlState(
       team1Name: team1Name ?? this.team1Name,
@@ -82,7 +94,10 @@ class HandballControlState {
       team2Suspension: team2Suspension ?? this.team2Suspension,
       matchHalf: matchHalf ?? this.matchHalf,
       team1Color: team1Color ?? this.team1Color,
-      team2Color: team2Color ?? this.team2Color
+      team2Color: team2Color ?? this.team2Color,
+      brightness: brightness ?? this.brightness,
+      tempBrightness: tempBrightness ?? this.tempBrightness,
+      buzzerOn: buzzerOn ?? this.buzzerOn,
 
     );
   }
