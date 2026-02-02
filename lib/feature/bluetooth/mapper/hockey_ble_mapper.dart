@@ -1,93 +1,39 @@
 class HockeyBleMapper {
+  // Team Names
+  String setTeam1Name(String name) => "HON1$name";
+  String setTeam2Name(String name) => "HON2$name";
 
-  /* =======================
-   * Team Names
-   * ======================= */
-  String setTeam1Name(String name) => "HON1:$name";
+  // Scores
+  String setTeam1Score(int score) => "HOS1$score";
+  String setTeam2Score(int score) => "HOS2$score";
 
-  String setTeam2Name(String name) => "HON2:$name";
+  // Quarters (1-4)
+  String setQuarter1() => "HOQ1";
+  String setQuarter2() => "HOQ2";
+  String setQuarter3() => "HOQ3";
+  String setQuarter4() => "HOQ4";
+  String setQuarter(int q) => "HOQ$q";
 
-  /* =======================
-   * Scores
-   * ======================= */
-  String setTeam1Score(int score) => "HOS1:$score";
-
-  String setTeam2Score(int score) => "HOS2:$score";
-
-  /* =======================
-   * Quarter
-   * ======================= */
-  String setQuarter(int quarter) {
-    assert(quarter >= 1 && quarter <= 4);
-    return "HOQ$quarter";
-  }
-
-  /* =======================
-   * Timer
-   * ======================= */
-  String setTimerMinutes(int minutes) => "HOTN:$minutes";
-
+  // Timer
+  String setTimerMinutes(int minutes) => "HOTN$minutes";
   String startTimer() => "HOTS";
-
   String pauseTimer() => "HOTP";
-
   String resetTimer() => "HOTR";
 
-  /* =======================
-   * Penalty Corner
-   * ======================= */
-  String setTeam1PenaltyCorner(int value) => "HOP1:$value";
+  // Penalty Corner
+  String setTeam1PenaltyCorner(int value) => "HOP1$value";
+  String setTeam2PenaltyCorner(int value) => "HOP2$value";
 
-  String setTeam2PenaltyCorner(int value) => "HOP2:$value";
+  // Shoot Out
+  String setTeam1ShootOut(int value) => "HOO1$value";
+  String setTeam2ShootOut(int value) => "HOO2$value";
 
-  /* =======================
-   * Shoot Out
-   * ======================= */
-  String setTeam1ShootOut(int value) => "HOO1:$value";
+  // Team Colors (RGB565 HEX)
+  String setTeam1Color(String hex565) => "HOC1$hex565";
+  String setTeam2Color(String hex565) => "HOC2$hex565";
 
-  String setTeam2ShootOut(int value) => "HOO2:$value";
-
-  /* =======================
-   * 7 Meter
-   * ======================= */
-  String setTeam1SevenMeter(int value) => "HOSM:$value";
-
-  String setTeam2SevenMeter(int value) => "HOSm:$value";
-
-  /* =======================
-   * Suspension
-   * 1 = Red, 2 = Green
-   * ======================= */
-  String setTeam1Suspension(int color) {
-    assert(color == 1 || color == 2);
-    return "HOS1:$color";
-  }
-
-  String setTeam2Suspension(int color) {
-    assert(color == 1 || color == 2);
-    return "HOS2:$color";
-  }
-
-  /* =======================
-   * Brightness
-   * ======================= */
-  String setBrightness(int value) => "HOBS:$value";
-
-  /* =======================
-   * Buzzer
-   * ======================= */
-  String triggerBuzzer(int value) => "HOBR:$value";
-
-  /* =======================
-   * Full Reset
-   * ======================= */
+  // Reset
   String resetScreen() => "HORT";
 
-  String setBuzzer(bool buzzer) {
-    if (buzzer) {
-      return "HOBR:${1}";
-    } else {
-      return "HOBR:${0}";
-    }
-  }
+// NOTE: Brightness & Buzzer NOT supported in Hockey firmware
 }

@@ -9,6 +9,7 @@ class ScoreBoardCard extends StatelessWidget {
     /// 🔥 This will come from Cubit later
     final sets = [
       const SetUIModel(winner: PlayerType.player1),
+      const SetUIModel(winner: PlayerType.player1),
       const SetUIModel(winner: PlayerType.player2),
       const SetUIModel(winner: null),
     ];
@@ -21,16 +22,10 @@ class ScoreBoardCard extends StatelessWidget {
         children: [
           PlayerRow(
             playerType: PlayerType.player1,
-            playerName: "Player 1",
-            color: Colors.green,
-            sets: sets,
           ),
           const Divider(color: Colors.orange, thickness: 3),
           PlayerRow(
             playerType: PlayerType.player2,
-            playerName: "Player 2",
-            color: Colors.red,
-            sets: sets,
           ),
         ],
       ),

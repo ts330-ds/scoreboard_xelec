@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:xelex_esp/feature/scoreboard/badminton/presentation/cubit/controller/badminton_controller_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/football/presentation/cubit/controller/football_controller_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/football/presentation/cubit/timer/football_timer_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/game_config/presentation/widget/timer_text_field.dart';
@@ -28,12 +29,10 @@ class _BadmintonConfigScreenState extends State<BadmintonConfigScreen> {
   @override
   void initState() {
     super.initState();
-    final controlState = sl<FootballControllerCubit>().state;
-    final timerState = sl<FootballTimerCubit>().state;
+    final controlState = sl<BadmintonControllerCubit>().state;
 
     team1Controller = TextEditingController(text: controlState.team1Name);
     team2Controller = TextEditingController(text: controlState.team2Name);
-    timerController = TextEditingController(text: (timerState.duration ~/ 60).toString());
 
     team1Color = controlState.team1Color;
     team2Color = controlState.team2Color;
@@ -56,11 +55,10 @@ class _BadmintonConfigScreenState extends State<BadmintonConfigScreen> {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider.value(value: sl<FootballControllerCubit>()),
-        BlocProvider.value(value: sl<FootballTimerCubit>())
+        BlocProvider.value(value: sl<BadmintonControllerCubit>()),
       ],
       child: AdaptiveScaffold(
-        title: 'Football Config',
+        title: 'Badminton Config',
         body: Padding(
           padding: const EdgeInsets.all(8.0),
           child: Column(
@@ -78,16 +76,12 @@ class _BadmintonConfigScreenState extends State<BadmintonConfigScreen> {
                 },
               ),
 
-              const SizedBox(height: 24),
 
-              TimerTextFieldWidget(
-                  timerController: timerController
-              ),
 
               const SizedBox(height: 24),
               Builder(
                 builder: (BuildContext context) {
-                  final controlCubit = context.read<FootballControllerCubit>();
+                  final controlCubit = context.read<BadmintonControllerCubit>();
                   // Note: Football usually counts up, but we can set a target duration
                   // For now, let's just use the timer setting logic
                   return ElevatedButton(
@@ -97,10 +91,10 @@ class _BadmintonConfigScreenState extends State<BadmintonConfigScreen> {
                         return;
                       }
 
-                      controlCubit.updateTeam1Name(team1Controller.text);
-                      controlCubit.updateTeam2Name(team2Controller.text);
-                      controlCubit.updateTeam1Color(team1Color ?? Colors.red);
-                      controlCubit.updateTeam2Color(team2Color ?? Colors.blue);
+                      controlCubit.setTeam1Name(team1Controller.text);
+                      controlCubit.setTeam2Name(team2Controller.text);
+                      controlCubit.setTeam1Color(team1Color ?? Colors.red);
+                      controlCubit.setTeam2Color(team2Color ?? Colors.blue);
 
                       context.pop();
                     },

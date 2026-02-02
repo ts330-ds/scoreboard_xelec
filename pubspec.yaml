@@ -46,6 +46,7 @@ dependencies:
   get_it:
   flutter_colorpicker: ^1.1.0
   flutter_svg:
+  device_preview_plus:
 
 dev_dependencies:
   flutter_test:

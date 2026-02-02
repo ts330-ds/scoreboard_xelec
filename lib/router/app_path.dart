@@ -22,6 +22,9 @@ abstract class AppPaths {
   static const String khoKhoConfig = '/kho-kho-config';
   static const String tableTennisConfig = '/table-tennis-config';
   static const String khabaddisConfig = '/khabaddis-config';
+  static const String universalConfig = '/universal-config';
+
+
 
   /// Bluetooth
   static const String ble_permission = '/ble_scan';
@@ -36,6 +39,9 @@ abstract class AppPaths {
   static const String kho_kho = '/kho_kho';
   static const String football = '/football';
   static const String khabaddi = '/khabaddi';
+  static const String universal = '/universal';
+
+
 
   /// Settings
   static const String settings = '/settings';

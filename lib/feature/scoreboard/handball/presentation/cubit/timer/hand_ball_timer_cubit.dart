@@ -60,7 +60,7 @@ class HandBallTimerCubit extends Cubit<HandBallTimerState> {
 
     _timer?.cancel();
     emit(state.copyWith(status: TimerStatus.paused));
-    bleService.send(ballBleMapper.stopTimer());
+    bleService.send(ballBleMapper.pauseTimer());
   }
 
   /// Resume timer

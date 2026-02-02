@@ -1,23 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:xelex_esp/utility/theme_extension.dart';
+import 'package:xelex_esp/utility/universal_method.dart';
+
+import '../cubit/controller/badminton_controller_state.dart';
 class PlayerInfoSection extends StatelessWidget {
   final String playerName;
   final Color scoreColor;
+  final bool isServe;
+  final int score;
 
   const PlayerInfoSection({
     super.key,
     required this.playerName,
     required this.scoreColor,
+    this.isServe = false,
+    required this.score
   });
+
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      flex: 4,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
             Text(
               playerName,
@@ -27,20 +35,20 @@ class PlayerInfoSection extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 10),
+            widgetGap(),
             Row(
               children: [
-                const Icon(Icons.sports_tennis,
-                    color: Colors.yellow, size: 40),
-                const SizedBox(width: 20),
                 Text(
-                  "00",
-                  style: TextStyle(
+                  score.toString(),
+                  style: context.text.titleLarge!.copyWith(
                     color: scoreColor,
-                    fontSize: 60,
                     fontWeight: FontWeight.bold,
+                    fontSize: 40
                   ),
                 ),
+                const SizedBox(width: 20),
+                if(isServe)...[const Icon(Icons.sports_tennis,
+                    color: Colors.yellow, size: 40)],
               ],
             ),
           ],

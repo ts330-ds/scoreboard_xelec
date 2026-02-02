@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:xelex_esp/feature/scoreboard/badminton/presentation/widget/badminton_control_panal.dart';
-import 'package:xelex_esp/feature/scoreboard/badminton/presentation/widget/scoreboard_card.dart';
+import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/cubit/controller/table_tennis_controller_cubit.dart';
+import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/screen/table_tennis_config_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/widget/table_tennis_preview.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
-import 'package:xelex_esp/router/app_path.dart';
 
+import '../../../../../router/app_path.dart';
+import '../../../../../service/dependency_injection/di_service.dart';
 
-class BadmintionMobile extends StatelessWidget {
-  const BadmintionMobile({super.key});
+class UniversalGameDesktop extends StatelessWidget {
+  const UniversalGameDesktop({super.key});
 
   Future<bool?> _showExitDialog(BuildContext context) {
+
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -19,7 +22,9 @@ class BadmintionMobile extends StatelessWidget {
           TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('CANCEL')),
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop(true);
+
+              context.pop(true);
+
             },
             child: const Text('EXIT', style: TextStyle(color: Colors.red)),
           ),
@@ -40,17 +45,15 @@ class BadmintionMobile extends StatelessWidget {
         }
       },
       child: AdaptiveScaffold(
-          title: "Badminton",
-          resizeToAvoidBottomInset: false,
-          onSettingsPressed: (){
-            context.push(AppPaths.badmintonConfig);
-          },
-          body: Column(
-            children: [
-              ScoreBoardCard(),
-              Expanded(child: BadmintonControlPanelUI())
-            ],
-          )
+        title: "Universal Game",
+        onSettingsPressed: (){
+          context.push(AppPaths.tableTennisConfig);
+        },
+        body: Column(
+          children: [
+
+          ],
+        ),
       ),
     );
   }

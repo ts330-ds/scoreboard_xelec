@@ -21,6 +21,7 @@ class HomeScreenMobile extends StatelessWidget {
   Widget build(BuildContext context) {
     final bleCubit = context.read<BleCubit>();
     final games = [
+
       GameCard(
         name: 'Basketball',
         iconPath: "images/svg_icon/basketball.svg",
@@ -28,7 +29,6 @@ class HomeScreenMobile extends StatelessWidget {
           context.push(AppPaths.basketball);
           bleCubit.setGame("BB");
         },
-
       ),
       GameCard(
         name: 'HandBall',
@@ -83,7 +83,15 @@ class HomeScreenMobile extends StatelessWidget {
         iconPath: "images/svg_icon/badminton.svg",
         onTap: () {
           context.push(AppPaths.badminton);
-          //bleCubit.setGame("BD");
+          bleCubit.setGame("BD");
+        },
+      ),
+      GameCard(
+        name: 'Universal Game',
+        iconPath: "images/svg_icon/universal_game.svg",
+        onTap: () {
+          context.push(AppPaths.universal);
+          bleCubit.setGame("UG");
         },
       ),
     ];

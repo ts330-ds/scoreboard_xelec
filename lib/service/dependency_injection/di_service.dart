@@ -6,6 +6,9 @@ import 'package:xelex_esp/feature/bluetooth/mapper/game_select_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/hockey_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/kabaddi_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/table_tennis_ble_mapper.dart';
+import 'package:xelex_esp/feature/bluetooth/mapper/universal_game_ble_mapper.dart';
+import 'package:xelex_esp/feature/scoreboard/badminton/presentation/cubit/controller/badminton_controller_cubit.dart';
+import '../../feature/bluetooth/mapper/badminton_ble_mapper.dart';
 import '../../feature/bluetooth/mapper/basketball_ble_mapper.dart';
 import '../../feature/bluetooth/mapper/handball_ble_mapper.dart';
 import '../../feature/bluetooth/mapper/khokho_ble_mapper.dart';
@@ -28,6 +31,7 @@ import '../../feature/scoreboard/kho_kho/presentation/cubit/controller/khokho_co
 import '../../feature/scoreboard/kho_kho/presentation/cubit/match_timer/match_timer_cubit.dart';
 import '../../feature/scoreboard/kho_kho/presentation/cubit/timer/khokho_timer_cubit.dart';
 import '../../feature/scoreboard/table_tennis/presentation/cubit/controller/table_tennis_controller_cubit.dart';
+import '../../feature/scoreboard/universal/presentation/cubit/controller/universal_game_controller_cubit.dart';
 import '../permission/bluetooth_permission_service.dart';
 
 final sl = GetIt.instance;
@@ -46,6 +50,9 @@ void setupDI() {
   sl.registerLazySingleton<KhoKhoBleMapper>(()=> KhoKhoBleMapper());
   sl.registerLazySingleton<FootballBleMapper>(()=> FootballBleMapper());
   sl.registerLazySingleton<KabaddiBleMapper>(()=> KabaddiBleMapper());
+  sl.registerLazySingleton<BadmintonBleMapper>(()=> BadmintonBleMapper());
+  sl.registerLazySingleton<UniversalGameBleMapper>(()=> UniversalGameBleMapper());
+
 
 
   // Bluetooth Cubits
@@ -128,6 +135,18 @@ void setupDI() {
   ));
 
 
+  // Badminton Control Panal Cubit
+
+  sl.registerLazySingleton<BadmintonControllerCubit>(()=> BadmintonControllerCubit(
+      bleService: sl(),
+      badmintonBleMapper: sl(),
+      globalErrorCubit: sl()));
+
+
+  sl.registerLazySingleton<UniversalGameControllerCubit>(()=> UniversalGameControllerCubit(
+      bleService: sl(),
+      bleMapper: sl(),
+      globalErrorCubit: sl()));
 
 
   //  ----- Error Cubit ---- ////

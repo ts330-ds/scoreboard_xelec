@@ -1,39 +1,47 @@
 class HandBallBleMapper {
+  // Team Names
+  String setTeam1Name(String name) => "HBN1$name";
+  String setTeam2Name(String name) => "HBN2$name";
 
-  // ================= TEAM NAMES =================
-  String setTeam1Name(String name) => "HBTM1:$name";
-  String setTeam2Name(String name) => "HBTM2:$name";
+  // Scores
+  String setTeam1Score(int score) => "HBS1$score";
+  String setTeam2Score(int score) => "HBS2$score";
 
-  // ================= TEAM SCORES =================
-  String setTeam1Score(int score) => "HBTM1SCORE:$score";
-  String setTeam2Score(int score) => "HBTM2SCORE:$score";
+  // Quarters (1-4)
+  String setQuarter1() => "HBQ1";
+  String setQuarter2() => "HBQ2";
+  String setQuarter3() => "HBQ3";
+  String setQuarter4() => "HBQ4";
+  String setQuarter(int q) => "HBQ$q";
 
-  // ================= TEAM COLORS =================
-  String setTeam1Color(String hex) => "HBTM1COLOR:$hex";
-  String setTeam2Color(String hex) => "HBTM2COLOR:$hex";
+  // Timer
+  String setTimerMinutes(int minutes) => "HBTN$minutes";
+  String startTimer() => "HBTS";
+  String pauseTimer() => "HBTP";
+  String resetTimer() => "HBTR";
 
-  // ================= QUARTER =================
-  String setQuarter(int qtr) => "HBQTR:$qtr";
+  // Timeout (Team 1: HBO1, HBO2, HBO3)
+  String setTeam1Timeout1() => "HBO1";
+  String setTeam1Timeout2() => "HBO2";
+  String setTeam1Timeout3() => "HBO3";
+  String setTeam1Timeout(int count) => "HBO$count";
 
-  // ================= TIMER =================
-  String startTimer() => "HBTIMERSTART";
-  String stopTimer() => "HBTIMERSTOP";
+  // Timeout (Team 2: HBo1, HBo2, HBo3) - lowercase 'o'
+  String setTeam2Timeout1() => "HBo1";
+  String setTeam2Timeout2() => "HBo2";
+  String setTeam2Timeout3() => "HBo3";
+  String setTeam2Timeout(int count) => "HBo$count";
 
-  // ================= TIMEOUT =================
-  String setTeam1Timeout(int count) => "HBTO1:$count";
-  String setTeam2Timeout(int count) => "HBTO2:$count";
+  // 7 Meter
+  String setTeam1SevenMeter(int value) => "HBSM$value";
+  String setTeam2SevenMeter(int value) => "HBSm$value";
 
-  // ================= 7 MINUTE PENALTY =================
-  String setTeam1SevenMinute(bool active) =>
-      "HB7M1:${active ? 1 : 0}";
+  // Suspension (1 = Red, 2 = Green)
+  String setTeam1Suspension(int value) => "HBU1$value";
+  String setTeam2Suspension(int value) => "HBU2$value";
 
-  String setTeam2SevenMinute(bool active) =>
-      "HB7M2:${active ? 1 : 0}";
+  // Reset
+  String resetScreen() => "HBRT";
 
-  // ================= SUSPENSION =================
-  String setTeam1Suspension(bool active) =>
-      "HBS1:${active ? 1 : 0}";
-
-  String setTeam2Suspension(bool active) =>
-      "HBS2:${active ? 1 : 0}";
+// NOTE: Brightness & Buzzer NOT supported in Handball firmware
 }

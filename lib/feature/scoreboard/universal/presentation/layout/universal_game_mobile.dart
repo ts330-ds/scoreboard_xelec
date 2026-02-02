@@ -3,17 +3,17 @@ import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/cubit/controller/table_tennis_controller_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/screen/table_tennis_config_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/widget/table_tennis_preview.dart';
+import 'package:xelex_esp/feature/scoreboard/universal/presentation/widgets/universal_game_board.dart';
+import 'package:xelex_esp/feature/scoreboard/universal/presentation/widgets/universal_game_control_panal_ui.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 
 import '../../../../../router/app_path.dart';
 import '../../../../../service/dependency_injection/di_service.dart';
-import '../widget/table_tennis_control_panal.dart';
 
-class TableTennisMobile extends StatelessWidget {
-  const TableTennisMobile({super.key});
+class UniversalGameMobile extends StatelessWidget {
+  const UniversalGameMobile({super.key});
 
   Future<bool?> _showExitDialog(BuildContext context) {
-    final cubit = sl<TableTennisControllerCubit>();
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -23,7 +23,6 @@ class TableTennisMobile extends StatelessWidget {
           TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('CANCEL')),
           TextButton(
             onPressed: () {
-              cubit.exit();
               context.pop(true);
             },
             child: const Text('EXIT', style: TextStyle(color: Colors.red)),
@@ -45,14 +44,18 @@ class TableTennisMobile extends StatelessWidget {
         }
       },
       child: AdaptiveScaffold(
-        title: "Table Tennis",
-        onSettingsPressed: (){
-          context.push(AppPaths.tableTennisConfig);
+        title: "Universal Game",
+        onSettingsPressed: () {
+          context.push(AppPaths.universalConfig);
         },
         body: Column(
+          mainAxisSize: MainAxisSize.max,
           children: [
-            Expanded(flex: 4, child: TableTennisPreview()),
-            Expanded(flex: 6,child: TableTennisControlPanal())
+            UniversalGameBoard(),
+            Expanded(
+              flex: 6,
+              child: UniversalGameControllerPanel()
+            ),
           ],
         ),
       ),

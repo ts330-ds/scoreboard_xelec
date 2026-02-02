@@ -83,20 +83,22 @@ class AdaptiveScaffold extends StatelessWidget {
     return Scaffold(
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       appBar: AppBar(
-        titleSpacing: 0,
+        titleSpacing: 10,
+        elevation: 0,
+        backgroundColor: appBarBackground,
         title: Text(
           title,
           style: context.text.titleSmall!
-              .copyWith(color: context.colors.surface),
+              .copyWith(color: textColor),
         ),
         actions: onSettingsPressed != null
             ? [
-                IconButton(
-                  icon: const Icon(Icons.settings),
-                  onPressed: onSettingsPressed,
-                  color: context.colors.surface,
-                ),
-              ]
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: onSettingsPressed,
+            color: context.colors.surface,
+          ),
+        ]
             : null,
       ),
       floatingActionButton: floatingActionButton,

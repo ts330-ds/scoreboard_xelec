@@ -91,7 +91,7 @@ class FootballControllerCubit extends Cubit<FootballControllerState> {
   }
 
   void triggerBuzzer() {
-    bleService.send(footballBleMapper.triggerBuzzer());
+   // bleService.send(footballBleMapper.triggerBuzzer());
   }
 
   // Brightness (0 - 255)

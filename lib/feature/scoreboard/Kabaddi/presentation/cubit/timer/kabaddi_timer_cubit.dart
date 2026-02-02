@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/feature/bluetooth/mapper/kabaddi_ble_mapper.dart';
 import '../../../../../bluetooth/mapper/handball_ble_mapper.dart';
 import '../../../../../bluetooth/service/ble_service.dart';
 import 'kabaddi_timer_state.dart';
@@ -7,7 +8,7 @@ import 'kabaddi_timer_state.dart';
 class KabaddiTimerCubit extends Cubit<KabaddiTimerState> {
   Timer? _timer;
   final BleService bleService;
-  final HandBallBleMapper ballBleMapper;
+  final KabaddiBleMapper ballBleMapper;
   KabaddiTimerCubit({
     int startMinutes = 20,
     required this.bleService,
@@ -48,7 +49,7 @@ class KabaddiTimerCubit extends Cubit<KabaddiTimerState> {
 
     _timer?.cancel();
     emit(state.copyWith(status: TimerStatus.paused));
-    bleService.send(ballBleMapper.stopTimer());
+    bleService.send(ballBleMapper.pauseTimer());
   }
 
   /// Resume timer
@@ -73,6 +74,7 @@ class KabaddiTimerCubit extends Cubit<KabaddiTimerState> {
         status: TimerStatus.initial,
       ),
     );
+    //bleService.send(ballBleMapper.setMinutes(totalSeconds));
   }
 
   /* =======================

@@ -29,7 +29,7 @@ class GameCard extends StatelessWidget {
               // 🧱 Card
               Positioned.fill(
                 child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 24),
+                  margin: const EdgeInsets.symmetric(horizontal: 24,vertical: 4),
                   padding: EdgeInsets.only(
                     left: iconRight ? 40 : 62,
                     right: iconRight ? 62 : 40,
@@ -39,9 +39,9 @@ class GameCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.12),
+                        color: Colors.black.withValues(alpha: 0.5),
                         blurRadius: 14,
-                        offset: const Offset(0, 6),
+                        offset: const Offset(0, 3),
                       ),
                     ],
                   ),

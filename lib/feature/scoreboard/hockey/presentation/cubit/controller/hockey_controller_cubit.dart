@@ -97,7 +97,7 @@ class HockeyControllerCubit extends Cubit<HockeyControllerState> {
   // ---------------- Buzzer ----------------
   void toggleBuzzer() {
     emit(state.copyWith(buzzerOn: !state.buzzerOn));
-    bleService.send(bleMapper.setBuzzer(!state.buzzerOn));
+    //bleService.send(bleMapper.setBuzzer(!state.buzzerOn));
   }
 
   // ---------------- SHOOTOUTS ----------------

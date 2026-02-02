@@ -6,6 +6,7 @@ import 'package:xelex_esp/feature/scoreboard/badminton/presentation/layout/badmi
 import 'package:xelex_esp/responsive/responsive_layout_wrapper.dart';
 
 import '../../../../../service/dependency_injection/di_service.dart';
+import '../cubit/controller/badminton_controller_cubit.dart';
 import '../layout/badminton_desktop.dart';
 import '../layout/badminton_tablet.dart';
 
@@ -14,10 +15,15 @@ class BadmintonScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ResponsiveLayout(
-        mobile: BadmintionMobile(),
-        tablet: BadmintionTablet(),
-        desktop: BadmintionDesktop()
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (context) => sl<BadmintonControllerCubit>()),
+      ],
+      child: ResponsiveLayout(
+          mobile: BadmintionMobile(),
+          tablet: BadmintionTablet(),
+          desktop: BadmintionDesktop()
+      ),
     );
   }
 }
