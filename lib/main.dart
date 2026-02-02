@@ -1,3 +1,4 @@
+import 'package:device_preview_plus/device_preview_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -28,14 +29,18 @@ void main() {
     DeviceOrientation.landscapeRight,
   ]);*/
 
-  runApp(MultiBlocProvider(
-      providers: [
-        BlocProvider(create: (context) => PermissionCubit(bluetoothPermission)..checkPermission()),
-        BlocProvider(create: (_) => sl<BleCubit>()),
-        BlocProvider(create: (_) => sl<GlobalErrorCubit>(),)
-      ],
-      child: const MyApp()
+  runApp(DevicePreview(
+    builder: (BuildContext context) {
+      return MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (context) => PermissionCubit(bluetoothPermission)..checkPermission()),
+            BlocProvider(create: (_) => sl<BleCubit>()),
+            BlocProvider(create: (_) => sl<GlobalErrorCubit>(),)
+          ],
+          child: const MyApp()
 
+      );
+    },
   ));
 }
 

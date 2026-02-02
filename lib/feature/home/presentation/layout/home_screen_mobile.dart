@@ -94,6 +94,15 @@ class HomeScreenMobile extends StatelessWidget {
           bleCubit.setGame("UG");
         },
       ),
+
+      GameCard(
+        name: 'Archery',
+        iconPath: "images/svg_icon/archery.svg",
+        onTap: () {
+          context.push(AppPaths.archery);
+          bleCubit.setGame("UG");
+        },
+      ),
     ];
 
     return AdaptiveScaffold(

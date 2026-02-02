@@ -23,8 +23,7 @@ abstract class AppPaths {
   static const String tableTennisConfig = '/table-tennis-config';
   static const String khabaddisConfig = '/khabaddis-config';
   static const String universalConfig = '/universal-config';
-
-
+  static const String archeryConfig = '/archery-config';
 
   /// Bluetooth
   static const String ble_permission = '/ble_scan';
@@ -40,8 +39,7 @@ abstract class AppPaths {
   static const String football = '/football';
   static const String khabaddi = '/khabaddi';
   static const String universal = '/universal';
-
-
+  static const String archery = '/archery';
 
   /// Settings
   static const String settings = '/settings';

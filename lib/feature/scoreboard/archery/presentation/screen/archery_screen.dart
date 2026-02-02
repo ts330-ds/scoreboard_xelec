@@ -1,0 +1,74 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/responsive/responsive_layout_wrapper.dart';
+import 'package:xelex_esp/service/dependency_injection/di_service.dart';
+
+import '../cubit/controller/archery_controller_cubit.dart';
+import '../cubit/timer/archery_timer_cubit.dart';
+import '../layout/archery_desktop.dart';
+import '../layout/archery_mobile.dart';
+import '../layout/archery_tablet.dart';
+import 'archery_idle_screen.dart';
+
+class ArcheryScreen extends StatefulWidget {
+  const ArcheryScreen({super.key});
+
+  @override
+  State<ArcheryScreen> createState() => _ArcheryScreenState();
+}
+
+class _ArcheryScreenState extends State<ArcheryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _setupTimerCallback();
+  }
+
+  void _setupTimerCallback() {
+    final timerCubit = sl<ArcheryTimerCubit>();
+    final controllerCubit = sl<ArcheryControllerCubit>();
+
+    timerCubit.onCycleComplete = () {
+      controllerCubit.onEndComplete();
+
+      // Auto-start for AB-CD mode
+      if (controllerCubit.state.mode == ArcheryMode.abCd &&
+          !controllerCubit.state.isMatchComplete) {
+        Future.delayed(const Duration(seconds: 2), () {
+          if (!controllerCubit.state.isMatchComplete) {
+            timerCubit.startCycle();
+          }
+        });
+      }
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: sl<ArcheryControllerCubit>()),
+        BlocProvider.value(value: sl<ArcheryTimerCubit>()),
+      ],
+      child: BlocBuilder<ArcheryControllerCubit, ArcheryControllerState>(
+        builder: (context, state) {
+          // Show Idle Screen with Time/Date
+          if (state.isIdleScreen) {
+            return ArcheryIdleScreen(
+              onLetsPlay: () {
+                context.read<ArcheryControllerCubit>().showGameScreen();
+              },
+            );
+          }
+
+          // Show Game Screen
+          return const ResponsiveLayout(
+            mobile: ArcheryMobile(),
+            tablet: ArcheryTablet(),
+            desktop: ArcheryDesktop(),
+          );
+        },
+      ),
+    );
+  }
+}

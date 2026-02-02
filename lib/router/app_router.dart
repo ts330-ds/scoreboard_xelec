@@ -20,6 +20,8 @@ import 'package:xelex_esp/feature/scoreboard/kho_kho/presentation/screen/khokho_
 import 'package:xelex_esp/feature/scoreboard/kho_kho/presentation/screen/khokho_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/universal/presentation/screen/universal_game_config_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/universal/presentation/screen/universal_game_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_config_screen.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/router/router_notifier.dart';
 
@@ -167,6 +169,7 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
 
+    /// Universal Game Screen
     GoRoute(
       path: AppPaths.universalConfig,
       pageBuilder: (context, state) => adaptivePage(
@@ -179,10 +182,26 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (context, state) => adaptivePage(
         state: state,
         child: const UniversalGameScreen(),
-
       ),
     ),
 
+    /// 🏹 Archery Screen
+    GoRoute(
+      path: AppPaths.archery,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: const ArcheryScreen(),
+      ),
+    ),
+
+    /// 🏹 Archery Config Screen
+    GoRoute(
+      path: AppPaths.archeryConfig,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: const ArcheryConfigScreen(),
+      ),
+    ),
 
     /// ⚙️ Login Screen
     GoRoute(
