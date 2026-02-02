@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
 import 'package:xelex_esp/responsive/responsive_layout_wrapper.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 
+import '../../../../bluetooth/mapper/archery_ble_mapper.dart';
 import '../cubit/controller/archery_controller_cubit.dart';
 import '../cubit/timer/archery_timer_cubit.dart';
 import '../layout/archery_desktop.dart';
@@ -58,6 +60,8 @@ class _ArcheryScreenState extends State<ArcheryScreen> {
               onLetsPlay: () {
                 context.read<ArcheryControllerCubit>().showGameScreen();
               },
+              archeryBleMapper: sl<ArcheryBleMapper>(),
+              bleService: sl<BleService>(),
             );
           }
 

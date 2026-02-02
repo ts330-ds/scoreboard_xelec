@@ -31,7 +31,7 @@ class BasketBallBleMapper {
   String setQuarter3() => "BBQ3";
   String setQuarter4() => "BBQ4";
 
-  // ======================
+  // ======================¯
   // TEAM COLORS (RGB565 HEX)
   // ======================
 

@@ -1,83 +1,107 @@
 class ArcheryBleMapper {
-  /* =======================
-   * Game Mode
-   * ABCD = 4 players
-   * ABC = 3 players
-   * AB-CD = 2 teams
-   * ======================= */
-  String setGameMode(String mode) => "ARMD:$mode";
 
-  /* =======================
-   * Timer Phase
-   * RED, GREEN, YELLOW
-   * ======================= */
-  String setTimerPhase(String phase) => "ARPH:$phase";
+  // ======================
+  // GAME CONTROLS
+  // ======================
 
-  /* =======================
-   * Timer Seconds
-   * ======================= */
-  String setTimerSeconds(int seconds) => "ARTS:$seconds";
+  /// Start game with specified time in seconds
+  String startGame(int seconds) {
+    assert(seconds > 0);
+    print("START_$seconds");
+    return "START_$seconds";
+  }
 
-  /* =======================
-   * Green Time Setting (60/90/120/180)
-   * ======================= */
-  String setGreenTime(int seconds) => "ARGT:$seconds";
+  String pauseGame() => "PAUSE";
+  String resumeGame() => "RESUME";
+  String resetGame() => "RESET";
 
-  /* =======================
-   * Current End Number
-   * ======================= */
-  String setEndNumber(int end) => "AREN:$end";
+  // ======================
+  // SCREEN MODES
+  // ======================
 
-  /* =======================
-   * Total Ends
-   * ======================= */
-  String setTotalEnds(int total) => "ARTE:$total";
+  /// Switch to clock display mode
+  String setModeClock() => "MODEC";
 
-  /* =======================
-   * Match Phase (PRACTICE / SCORING / SIGHTER)
-   * ======================= */
-  String setMatchPhase(String phase) => "ARMP:$phase";
+  /// Archery mode: A B C D all green
+  String setMode4Archers() => "MODE4";
 
-  /* =======================
-   * Current Team (for AB-CD mode)
-   * AB or CD
-   * ======================= */
-  String setCurrentTeam(String team) => "ARCT:$team";
+  /// Archery mode: A B C all green
+  String setMode3Archers() => "MODE3";
 
-  /* =======================
-   * Active Players (A, B, C, D)
-   * ======================= */
-  String setActivePlayers(String players) => "ARAP:$players";
+  // ======================
+  // SPLIT/GROUP MODES
+  // ======================
 
-  /* =======================
-   * Timer Controls
-   * ======================= */
-  String startTimer() => "ARSS";
-  String pauseTimer() => "ARSP";
-  String resetTimer() => "ARSR";
+  /// First Group: A B green, C D grey
+  String setFirstGroupAB() => "FG_AB";
 
-  /* =======================
-   * Buzzer
-   * ======================= */
-  String triggerBuzzer() => "ARBZ";
+  /// Second Group: C D green, A B grey
+  String setSecondGroupCD() => "SG_CD";
 
-  /* =======================
-   * Brightness (0–255)
-   * ======================= */
-  String setBrightness(int value) => "ARBS:$value";
+  // ======================
+  // CLOCK SETTINGS
+  // ======================
 
-  /* =======================
-   * Show Idle Screen (Time/Date)
-   * ======================= */
-  String showIdleScreen() => "ARID";
+  /// Set time (24-hour format: HH, MM, SS)
+  String setTime(int hour, int minute, int second) {
+    assert(hour >= 0 && hour <= 23);
+    assert(minute >= 0 && minute <= 59);
+    assert(second >= 0 && second <= 59);
+    String h = hour.toString().padLeft(2, '0');
+    String m = minute.toString().padLeft(2, '0');
+    String s = second.toString().padLeft(2, '0');
+    print("TIME$h$m$s");
+    return "TIME$h$m$s";
+  }
 
-  /* =======================
-   * Show Game Screen
-   * ======================= */
-  String showGameScreen() => "ARGS";
+  /// Set time from DateTime object
+  String setTimeFromDateTime(DateTime dateTime) {
+    return setTime(dateTime.hour, dateTime.minute, dateTime.second);
+  }
 
-  /* =======================
-   * Full Screen Reset
-   * ======================= */
-  String resetScreen() => "ARRT";
+  /// Sync current system time
+  String syncCurrentTime() {
+    return setTimeFromDateTime(DateTime.now());
+  }
+
+  // ======================
+  // DAY & DATE DISPLAY
+  // ======================
+
+  /// Set day text (e.g., "MONDAY", "TUESDAY")
+  String setDay(String day) {
+    print("DAY_${day.toUpperCase()}");
+    return "DAY_${day.toUpperCase()}";
+  }
+
+  /// Set date text (e.g., "25/12/2024")
+  String setDate(String date) {
+    print("DATE_${date.toUpperCase()}");
+    return "DATE_${date.toUpperCase()}";
+  }
+
+  // ======================
+  // ARCHERY INFO TEXT
+  // ======================
+
+  /// Set info text displayed on screen (e.g., "SIGHTER END 1")
+  String setInfoText(String text) {
+    print("TXT_${text.toUpperCase()}");
+    return "TXT_${text.toUpperCase()}";
+  }
+
+  // ======================
+  // BRIGHTNESS & HARDWARE
+  // ======================
+
+  String setBrightness(int value) {
+    assert(value >= 0 && value <= 255);
+    return "BRIGHT_$value";
+  }
+
+  // ======================
+  // SCREEN RESET
+  // ======================
+
+  String resetScreen() => "RESET";
 }

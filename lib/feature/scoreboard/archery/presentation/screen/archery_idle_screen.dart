@@ -2,13 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:xelex_esp/feature/bluetooth/mapper/archery_ble_mapper.dart';
+import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
 
 class ArcheryIdleScreen extends StatefulWidget {
   final VoidCallback onLetsPlay;
-
-  const ArcheryIdleScreen({
+  BleService bleService;
+  ArcheryBleMapper archeryBleMapper;
+   ArcheryIdleScreen({
     super.key,
     required this.onLetsPlay,
+    required this.bleService,
+     required this.archeryBleMapper
   });
 
   @override
@@ -27,6 +32,12 @@ class _ArcheryIdleScreenState extends State<ArcheryIdleScreen> {
         _currentTime = DateTime.now();
       });
     });
+    _sendTimeToBle(_currentTime);
+  }
+  void _sendTimeToBle(DateTime time) {
+    widget.bleService.send(
+      widget.archeryBleMapper.setTimeFromDateTime(time),
+    );
   }
 
   @override

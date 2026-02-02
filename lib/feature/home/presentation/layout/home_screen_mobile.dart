@@ -100,7 +100,7 @@ class HomeScreenMobile extends StatelessWidget {
         iconPath: "images/svg_icon/archery.svg",
         onTap: () {
           context.push(AppPaths.archery);
-          bleCubit.setGame("UG");
+          bleCubit.setGame("MODEC");
         },
       ),
     ];

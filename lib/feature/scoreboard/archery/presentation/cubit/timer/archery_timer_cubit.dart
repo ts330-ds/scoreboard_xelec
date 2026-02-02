@@ -31,7 +31,7 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
 
   void setGreenTime(int seconds) {
     _greenTime = seconds;
-    bleService.send(archeryBleMapper.setGreenTime(seconds));
+    //bleService.send(archeryBleMapper.setGreenTime(seconds));
   }
 
   int get greenTime => _greenTime;
@@ -49,8 +49,8 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
       isRunning: true,
       isPaused: false,
     ));
-    bleService.send(archeryBleMapper.setTimerPhase('RED'));
-    bleService.send(archeryBleMapper.startTimer());
+   // bleService.send(archeryBleMapper.setTimerPhase('RED'));
+   // bleService.send(archeryBleMapper.startTimer());
     _runTimer(() => _startGreenPhase());
   }
 
@@ -60,7 +60,7 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
       remainingSeconds: _greenTime,
       totalSeconds: _greenTime,
     ));
-    bleService.send(archeryBleMapper.setTimerPhase('GREEN'));
+   // bleService.send(archeryBleMapper.setTimerPhase('GREEN'));
     _runTimer(() => _startYellowPhase());
   }
 
@@ -70,7 +70,7 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
       remainingSeconds: yellowTime,
       totalSeconds: yellowTime,
     ));
-    bleService.send(archeryBleMapper.setTimerPhase('YELLOW'));
+   // bleService.send(archeryBleMapper.setTimerPhase('YELLOW'));
     _runTimer(() => _completeCycle());
   }
 
@@ -81,7 +81,7 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
       isRunning: false,
       remainingSeconds: 0,
     ));
-    bleService.send(archeryBleMapper.triggerBuzzer());
+    //bleService.send(archeryBleMapper.triggerBuzzer());
     onCycleComplete?.call();
   }
 
@@ -91,7 +91,7 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
       if (state.remainingSeconds > 1) {
         final newSeconds = state.remainingSeconds - 1;
         emit(state.copyWith(remainingSeconds: newSeconds));
-        bleService.send(archeryBleMapper.setTimerSeconds(newSeconds));
+   //     bleService.send(archeryBleMapper.setTimerSeconds(newSeconds));
       } else {
         _cancelTimer();
         onComplete();
@@ -103,14 +103,14 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
     if (state.isRunning && !state.isPaused) {
       _cancelTimer();
       emit(state.copyWith(isPaused: true, isRunning: false));
-      bleService.send(archeryBleMapper.pauseTimer());
+      //bleService.send(archeryBleMapper.pauseTimer());
     }
   }
 
   void resumeTimer() {
     if (state.isPaused) {
       emit(state.copyWith(isPaused: false, isRunning: true));
-      bleService.send(archeryBleMapper.startTimer());
+      //bleService.send(archeryBleMapper.startTimer());
 
       switch (state.phase) {
         case TimerPhase.red:
@@ -131,7 +131,7 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
   void stopTimer() {
     _cancelTimer();
     emit(const ArcheryTimerState());
-    bleService.send(archeryBleMapper.resetTimer());
+   // bleService.send(archeryBleMapper.resetTimer());
   }
 
   void _cancelTimer() {
