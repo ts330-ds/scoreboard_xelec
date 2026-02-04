@@ -1,12 +1,20 @@
+import 'package:flutter/foundation.dart';
+
 /// BLE Command Mapper for Archery Scoreboard
 /// Firmware: P6_Archery_Pro
 class ArcheryBleMapper {
+  // Helper method to log and return the command
+  String _log(String command) {
+    debugPrint('🎯 BLE Command: $command');
+    return command;
+  }
+
   // ======================
   // SCREEN MODE
   // ======================
 
   /// Switch to Clock display mode
-  String showClockScreen() => "AR";
+  String showClockScreen() => _log("AR");
 
   // ======================
   // GAME CONTROL
@@ -17,33 +25,35 @@ class ArcheryBleMapper {
   /// Example: startMatch(120) for 2 minutes
   String startMatch(int totalTimeSeconds) {
     assert(totalTimeSeconds > 0);
-    return "ARTN$totalTimeSeconds";
+    return _log("ARTN$totalTimeSeconds");
   }
 
   /// Pause the running timer
-  String pauseTimer() => "ARTP";
+  String pauseTimer() => _log("ARTP");
+
+  String startTimer() => _log("ARTS");
 
   /// Resume the paused timer
-  String resumeTimer() => "ARTR";
+  String resumeTimer() => _log("ARTR");
 
   /// Reset game to IDLE state (timer = 0, phase = IDLE)
-  String resetGame() => "ARRT";
+  String resetGame() => _log("ARRT");
 
   // ======================
   // TARGET/LANE MODES (Bottom Text)
   // ======================
 
   /// Mode 4: All targets active (A B C D - all green)
-  String setMode4Targets() => "ARM4";
+  String setMode4Targets() => _log("ARM4");
 
   /// Mode 3: Three targets active (A B C - all green)
-  String setMode3Targets() => "ARM3";
+  String setMode3Targets() => _log("ARM3");
 
   /// First Group: A B active (A B green, C D grey)
-  String setFirstGroupAB() => "FGAB";
+  String setFirstGroupAB() => _log("FGAB");
 
   /// Second Group: C D active (A B grey, C D green)
-  String setSecondGroupCD() => "SGCD";
+  String setSecondGroupCD() => _log("SGCD");
 
   // ======================
   // INFO TEXT (End/Round Display)
@@ -51,14 +61,14 @@ class ArcheryBleMapper {
 
   /// Set the info text displayed on screen
   /// Example: "SIGHTER END 1", "END 2", "PRACTICE"
-  String setInfoText(String text) => "ARED$text";
+  String setInfoText(String text) => _log("ARED$text");
 
   // ======================
   // BUZZER
   // ======================
 
   /// Trigger buzzer once (manual beep)
-  String triggerBuzzer() => "ARBZ";
+  String triggerBuzzer() => _log("ARBZ");
 
   // ======================
   // CLOCK SETTINGS
@@ -70,16 +80,16 @@ class ArcheryBleMapper {
     final h = hour.toString().padLeft(2, '0');
     final m = minute.toString().padLeft(2, '0');
     final s = second.toString().padLeft(2, '0');
-    return "TIME$h$m$s";
+    return _log("TIME$h$m$s");
   }
 
   /// Set day of week display
   /// Example: "MONDAY", "TUESDAY"
-  String setDayOfWeek(String day) => "DAY_$day";
+  String setDayOfWeek(String day) => _log("DAY_$day");
 
   /// Set date display
   /// Example: "01/01/2024", "25/12/2024"
-  String setDate(String date) => "DATE_$date";
+  String setDate(String date) => _log("DATE_$date");
 
   // ======================
   // CONVENIENCE METHODS
@@ -99,7 +109,7 @@ class ArcheryBleMapper {
       'THURSDAY',
       'FRIDAY',
       'SATURDAY',
-      'SUNDAY'
+      'SUNDAY',
     ];
     return days[dateTime.weekday - 1];
   }

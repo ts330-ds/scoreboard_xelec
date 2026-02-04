@@ -13,6 +13,7 @@ class ArcheryControllerState extends Equatable {
   final MatchPhase matchPhase;
   final int currentEndNumber;
   final String currentTeam; // 'AB' or 'CD' for AB-CD mode
+  final int currentTurnInRound; // 1 = first turn (AB), 2 = second turn (CD) for AB-CD mode
 
   final bool isMatchComplete;
   final bool isPracticeSkipped;
@@ -31,6 +32,7 @@ class ArcheryControllerState extends Equatable {
     this.matchPhase = MatchPhase.sighter,
     this.currentEndNumber = 1,
     this.currentTeam = 'AB',
+    this.currentTurnInRound = 1,
     this.isMatchComplete = false,
     this.isPracticeSkipped = false,
     this.isIdleScreen = true,
@@ -79,13 +81,13 @@ class ArcheryControllerState extends Equatable {
     MatchPhase? matchPhase,
     int? currentEndNumber,
     String? currentTeam,
+    int? currentTurnInRound,
     bool? isMatchComplete,
     bool? isPracticeSkipped,
     bool? isIdleScreen,
     int? brightness,
     int? setTempBrightness,
     bool? buzzerOn,
-
   }) {
     return ArcheryControllerState(
       mode: mode ?? this.mode,
@@ -95,6 +97,7 @@ class ArcheryControllerState extends Equatable {
       matchPhase: matchPhase ?? this.matchPhase,
       currentEndNumber: currentEndNumber ?? this.currentEndNumber,
       currentTeam: currentTeam ?? this.currentTeam,
+      currentTurnInRound: currentTurnInRound ?? this.currentTurnInRound,
       isMatchComplete: isMatchComplete ?? this.isMatchComplete,
       isPracticeSkipped: isPracticeSkipped ?? this.isPracticeSkipped,
       isIdleScreen: isIdleScreen ?? this.isIdleScreen,
@@ -113,6 +116,7 @@ class ArcheryControllerState extends Equatable {
         matchPhase,
         currentEndNumber,
         currentTeam,
+        currentTurnInRound,
         isMatchComplete,
         isPracticeSkipped,
         isIdleScreen,

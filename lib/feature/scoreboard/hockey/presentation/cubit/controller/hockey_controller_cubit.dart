@@ -3,150 +3,237 @@ import 'dart:ui';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/hockey_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
+import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'hockey_controller_state.dart';
 
 class HockeyControllerCubit extends Cubit<HockeyControllerState> {
   final BleService bleService;
   final HockeyBleMapper bleMapper;
+  final GlobalErrorCubit globalErrorCubit;
 
   HockeyControllerCubit({
     required this.bleService,
     required this.bleMapper,
+    required this.globalErrorCubit,
   }) : super(HockeyControllerState.initial());
 
   // ---------------- TEAM NAMES ----------------
   void setTeam1Name(String name) {
-    emit(state.copyWith(team1Name: name));
-    bleService.send(bleMapper.setTeam1Name(name));
+    try {
+      emit(state.copyWith(team1Name: name));
+      bleService.send(bleMapper.setTeam1Name(name));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set team 1 name: $e');
+    }
   }
 
   void setTeam2Name(String name) {
-    emit(state.copyWith(team2Name: name));
-    bleService.send(bleMapper.setTeam2Name(name));
+    try {
+      emit(state.copyWith(team2Name: name));
+      bleService.send(bleMapper.setTeam2Name(name));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set team 2 name: $e');
+    }
   }
 
   // ---------------- SCORES ----------------
   void incTeam1Score() {
-    final newValue = state.team1Score + 1;
-    emit(state.copyWith(team1Score: newValue));
-    bleService.send(bleMapper.setTeam1Score(newValue));
+    try {
+      final newValue = state.team1Score + 1;
+      emit(state.copyWith(team1Score: newValue));
+      bleService.send(bleMapper.setTeam1Score(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 1 score: $e');
+    }
   }
 
   void decTeam1Score() {
-    if (state.team1Score > 0) {
-      final newValue = state.team1Score - 1;
-      emit(state.copyWith(team1Score: newValue));
-      bleService.send(bleMapper.setTeam1Score(newValue));
+    try {
+      if (state.team1Score > 0) {
+        final newValue = state.team1Score - 1;
+        emit(state.copyWith(team1Score: newValue));
+        bleService.send(bleMapper.setTeam1Score(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 1 score: $e');
     }
   }
 
   void incTeam2Score() {
-    final newValue = state.team2Score + 1;
-    emit(state.copyWith(team2Score: newValue));
-    bleService.send(bleMapper.setTeam2Score(newValue));
+    try {
+      final newValue = state.team2Score + 1;
+      emit(state.copyWith(team2Score: newValue));
+      bleService.send(bleMapper.setTeam2Score(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 2 score: $e');
+    }
   }
 
   void decTeam2Score() {
-    if (state.team2Score > 0) {
-      final newValue = state.team2Score - 1;
-      emit(state.copyWith(team2Score: newValue));
-      bleService.send(bleMapper.setTeam2Score(newValue));
+    try {
+      if (state.team2Score > 0) {
+        final newValue = state.team2Score - 1;
+        emit(state.copyWith(team2Score: newValue));
+        bleService.send(bleMapper.setTeam2Score(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 2 score: $e');
     }
   }
 
   // ---------------- PENALTY CORNERS ----------------
   void incTeam1PenaltyCorner() {
-    final newValue = state.team1PenaltyCorner + 1;
-    emit(state.copyWith(team1PenaltyCorner: newValue));
-    bleService.send(bleMapper.setTeam1PenaltyCorner(newValue));
+    try {
+      final newValue = state.team1PenaltyCorner + 1;
+      emit(state.copyWith(team1PenaltyCorner: newValue));
+      bleService.send(bleMapper.setTeam1PenaltyCorner(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 1 penalty corner: $e');
+    }
   }
 
   void decTeam1PenaltyCorner() {
-    if (state.team1PenaltyCorner > 0) {
-      final newValue = state.team1PenaltyCorner - 1;
-      emit(state.copyWith(team1PenaltyCorner: newValue));
-      bleService.send(bleMapper.setTeam1PenaltyCorner(newValue));
+    try {
+      if (state.team1PenaltyCorner > 0) {
+        final newValue = state.team1PenaltyCorner - 1;
+        emit(state.copyWith(team1PenaltyCorner: newValue));
+        bleService.send(bleMapper.setTeam1PenaltyCorner(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 1 penalty corner: $e');
     }
   }
 
   void incTeam2PenaltyCorner() {
-    final newValue = state.team2PenaltyCorner + 1;
-    emit(state.copyWith(team2PenaltyCorner: newValue));
-    bleService.send(bleMapper.setTeam2PenaltyCorner(newValue));
+    try {
+      final newValue = state.team2PenaltyCorner + 1;
+      emit(state.copyWith(team2PenaltyCorner: newValue));
+      bleService.send(bleMapper.setTeam2PenaltyCorner(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 2 penalty corner: $e');
+    }
   }
 
   void decTeam2PenaltyCorner() {
-    if (state.team2PenaltyCorner > 0) {
-      final newValue = state.team2PenaltyCorner - 1;
-      emit(state.copyWith(team2PenaltyCorner: newValue));
-      bleService.send(bleMapper.setTeam2PenaltyCorner(newValue));
+    try {
+      if (state.team2PenaltyCorner > 0) {
+        final newValue = state.team2PenaltyCorner - 1;
+        emit(state.copyWith(team2PenaltyCorner: newValue));
+        bleService.send(bleMapper.setTeam2PenaltyCorner(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 2 penalty corner: $e');
     }
   }
 
   // ---------------- Brightness ----------------
   void setBrightness(int value) {
-    final clampedValue = value.clamp(0, 220);
-    emit(state.copyWith(brightness: clampedValue));
-   // bleService.send(bleMapper.setBrightness(clampedValue));
+    try {
+      final clampedValue = value.clamp(0, 220);
+      emit(state.copyWith(brightness: clampedValue));
+     // bleService.send(bleMapper.setBrightness(clampedValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set brightness: $e');
+    }
   }
 
   void setTempBrightness(int value) {
-    emit(state.copyWith(tempbrightness: value.clamp(0, 220)));
+    try {
+      emit(state.copyWith(tempbrightness: value.clamp(0, 220)));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set temp brightness: $e');
+    }
   }
 
   // ---------------- Buzzer ----------------
   void toggleBuzzer() {
-    emit(state.copyWith(buzzerOn: !state.buzzerOn));
-    //bleService.send(bleMapper.setBuzzer(!state.buzzerOn));
+    try {
+      emit(state.copyWith(buzzerOn: !state.buzzerOn));
+      //bleService.send(bleMapper.setBuzzer(!state.buzzerOn));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to toggle buzzer: $e');
+    }
   }
 
   // ---------------- SHOOTOUTS ----------------
   void incTeam1Shootout() {
-    final newValue = state.team1Shootout + 1;
-    emit(state.copyWith(team1Shootout: newValue));
-    bleService.send(bleMapper.setTeam1ShootOut(newValue));
+    try {
+      final newValue = state.team1Shootout + 1;
+      emit(state.copyWith(team1Shootout: newValue));
+      bleService.send(bleMapper.setTeam1ShootOut(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 1 shootout: $e');
+    }
   }
 
   void decTeam1Shootout() {
-    if (state.team1Shootout > 0) {
-      final newValue = state.team1Shootout - 1;
-      emit(state.copyWith(team1Shootout: newValue));
-      bleService.send(bleMapper.setTeam1ShootOut(newValue));
+    try {
+      if (state.team1Shootout > 0) {
+        final newValue = state.team1Shootout - 1;
+        emit(state.copyWith(team1Shootout: newValue));
+        bleService.send(bleMapper.setTeam1ShootOut(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 1 shootout: $e');
     }
   }
 
   void incTeam2Shootout() {
-    final newValue = state.team2Shootout + 1;
-    emit(state.copyWith(team2Shootout: newValue));
-    bleService.send(bleMapper.setTeam2ShootOut(newValue));
+    try {
+      final newValue = state.team2Shootout + 1;
+      emit(state.copyWith(team2Shootout: newValue));
+      bleService.send(bleMapper.setTeam2ShootOut(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 2 shootout: $e');
+    }
   }
 
   void decTeam2Shootout() {
-    if (state.team2Shootout > 0) {
-      final newValue = state.team2Shootout - 1;
-      emit(state.copyWith(team2Shootout: newValue));
-      bleService.send(bleMapper.setTeam2ShootOut(newValue));
+    try {
+      if (state.team2Shootout > 0) {
+        final newValue = state.team2Shootout - 1;
+        emit(state.copyWith(team2Shootout: newValue));
+        bleService.send(bleMapper.setTeam2ShootOut(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 2 shootout: $e');
     }
   }
 
   void exit() {
-    emit(HockeyControllerState.initial());
-    bleService.send(bleMapper.resetScreen());
+    try {
+      emit(HockeyControllerState.initial());
+      bleService.send(bleMapper.resetScreen());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to exit: $e');
+    }
   }
 
   // ------- Color ----------
   void setTeam1Color(Color color) {
-    emit(state.copyWith(team1Color: color));
-    // Implementation for sending color if needed by mapper
+    try {
+      emit(state.copyWith(team1Color: color));
+      // Implementation for sending color if needed by mapper
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set team 1 color: $e');
+    }
   }
 
   void setTeam2Color(Color color) {
-    emit(state.copyWith(team2Color: color));
+    try {
+      emit(state.copyWith(team2Color: color));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set team 2 color: $e');
+    }
   }
 
   // ---------------- RESET ----------------
   void reset() {
-    emit(HockeyControllerState.initial());
-    bleService.send(bleMapper.resetScreen());
+    try {
+      emit(HockeyControllerState.initial());
+      bleService.send(bleMapper.resetScreen());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to reset: $e');
+    }
   }
 }

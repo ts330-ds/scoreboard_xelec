@@ -31,13 +31,14 @@ class _ArcheryScreenState extends State<ArcheryScreen> {
     final controllerCubit = sl<ArcheryControllerCubit>();
 
     timerCubit.onCycleComplete = () {
-      controllerCubit.onEndComplete();
+      controllerCubit.onTimerCycleComplete();
 
-      // Auto-start for AB-CD mode
-      if (controllerCubit.state.mode == ArcheryMode.abCd &&
-          !controllerCubit.state.isMatchComplete) {
+      // Auto-start next cycle for all modes if match is not complete
+      if (!controllerCubit.state.isMatchComplete &&
+          controllerCubit.state.matchPhase != MatchPhase.completed) {
         Future.delayed(const Duration(seconds: 2), () {
-          if (!controllerCubit.state.isMatchComplete) {
+          if (!controllerCubit.state.isMatchComplete &&
+              controllerCubit.state.matchPhase != MatchPhase.completed) {
             timerCubit.startCycle();
           }
         });

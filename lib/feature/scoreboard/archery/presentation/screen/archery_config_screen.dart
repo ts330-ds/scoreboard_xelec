@@ -20,6 +20,19 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
   int _greenTime = 90;
 
   final List<int> _greenTimeOptions = [60, 90, 120, 180];
+  late TextEditingController _greenTimeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _greenTimeController = TextEditingController(text: _greenTime.toString());
+  }
+
+  @override
+  void dispose() {
+    _greenTimeController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -62,7 +75,7 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
             const SizedBox(height: 24),
 
             // Green Time
-            _buildSectionTitle('Green Time (Shooting Time)'),
+            _buildSectionTitle('Total Time (Shooting Time)'),
             const SizedBox(height: 8),
             _buildGreenTimeSelection(),
 
@@ -195,33 +208,68 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
 
   Widget _buildGreenTimeSelection() {
     return Row(
-      children: _greenTimeOptions.map((time) {
-        final isSelected = _greenTime == time;
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: GestureDetector(
-              onTap: () => setState(() => _greenTime = time),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: isSelected ? Colors.green : Colors.grey[200],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${time}s',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: isSelected ? Colors.white : Colors.black,
-                  ),
-                ),
+      children: [
+        IconButton(
+          onPressed: _greenTime > 1
+              ? () {
+                  setState(() {
+                    _greenTime--;
+                    _greenTimeController.text = _greenTime.toString();
+                  });
+                }
+              : null,
+          icon: const Icon(Icons.remove_circle_outline),
+          iconSize: 32,
+        ),
+        SizedBox(
+          width: 80,
+          child: TextField(
+            controller: _greenTimeController,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            decoration: InputDecoration(
+              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
+              suffixText: 's',
             ),
+            onChanged: (value) {
+              final parsed = int.tryParse(value);
+              if (parsed != null && parsed >= 1 && parsed <= 999) {
+                setState(() => _greenTime = parsed);
+              }
+            },
+            onSubmitted: (value) {
+              final parsed = int.tryParse(value);
+              if (parsed == null || parsed < 1) {
+                setState(() {
+                  _greenTime = 1;
+                  _greenTimeController.text = '1';
+                });
+              } else if (parsed > 999) {
+                setState(() {
+                  _greenTime = 999;
+                  _greenTimeController.text = '999';
+                });
+              }
+            },
           ),
-        );
-      }).toList(),
+        ),
+        IconButton(
+          onPressed: _greenTime < 999
+              ? () {
+                  setState(() {
+                    _greenTime++;
+                    _greenTimeController.text = _greenTime.toString();
+                  });
+                }
+              : null,
+          icon: const Icon(Icons.add_circle_outline),
+          iconSize: 32,
+        ),
+      ],
     );
   }
 

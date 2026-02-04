@@ -75,7 +75,7 @@ class HomeScreenMobile extends StatelessWidget {
         iconPath: "images/svg_icon/kabaddi.svg",
         onTap: () {
           context.push(AppPaths.khabaddi);
-          bleCubit.setGame("FB");
+          bleCubit.setGame("KA");
         },
       ),
       GameCard(

@@ -29,72 +29,104 @@ class UniversalGameControllerCubit extends Cubit<UniversalGameControllerState> {
   // TEAM NAME SETTERS
   // ------------------------------------------------
   void setTeam1Name(String name) {
-    emit(state.copyWith(team1Name: name));
-    bleService.send(bleMapper.setPlayer1Name(name));
+    try {
+      emit(state.copyWith(team1Name: name));
+      bleService.send(bleMapper.setPlayer1Name(name));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set team 1 name: $e');
+    }
   }
 
   void setTeam2Name(String name) {
-    emit(state.copyWith(team2Name: name));
-    bleService.send(bleMapper.setPlayer2Name(name));
+    try {
+      emit(state.copyWith(team2Name: name));
+      bleService.send(bleMapper.setPlayer2Name(name));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set team 2 name: $e');
+    }
   }
 
   // ------------------------------------------------
   // TEAM COLOR SETTERS
   // ------------------------------------------------
   void setTeam1Color(Color color) {
-    emit(state.copyWith(team1Color: color));
-    // Note: No BLE command for color in firmware
+    try {
+      emit(state.copyWith(team1Color: color));
+      // Note: No BLE command for color in firmware
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set team 1 color: $e');
+    }
   }
 
   void setTeam2Color(Color color) {
-    emit(state.copyWith(team2Color: color));
-    // Note: No BLE command for color in firmware
+    try {
+      emit(state.copyWith(team2Color: color));
+      // Note: No BLE command for color in firmware
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set team 2 color: $e');
+    }
   }
 
   // ------------------------------------------------
   // TOTAL SETS (3 or 5)
   // ------------------------------------------------
   void setTotalSets(TotalSets sets) {
-    emit(state.copyWith(
-      totalSets: sets,
-      selectedSet: 1,
-    ));
-    bleService.send(bleMapper.setTotalSets(sets.count));
+    try {
+      emit(state.copyWith(
+        totalSets: sets,
+        selectedSet: 1,
+      ));
+      bleService.send(bleMapper.setTotalSets(sets.count));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set total sets: $e');
+    }
   }
 
   // ------------------------------------------------
   // SELECT SET (S1..S5)
   // ------------------------------------------------
   void selectSet(int setNo) {
-    if (setNo < 1 || setNo > state.maxSets) return;
-    emit(state.copyWith(selectedSet: setNo));
+    try {
+      if (setNo < 1 || setNo > state.maxSets) return;
+      emit(state.copyWith(selectedSet: setNo));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to select set: $e');
+    }
   }
 
   // ------------------------------------------------
   // SELECT ACTIVE PLAYER
   // ------------------------------------------------
   void selectPlayer(PlayerType player) {
-    emit(state.copyWith(activePlayer: player));
+    try {
+      emit(state.copyWith(activePlayer: player));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to select player: $e');
+    }
   }
 
   // ------------------------------------------------
   // INCREMENT SCORE (selectedSet + activePlayer)
   // ------------------------------------------------
   void incrementScore() {
-    final idx = state.selectedSet - 1;
+    try {
+      final idx = state.selectedSet - 1;
 
-    if (state.activePlayer == PlayerType.player1) {
-      final list = List<int>.from(state.p1Scores);
-      list[idx]++;
-      emit(state.copyWith(p1Scores: list));
-      bleService.send(bleMapper.setPlayer1SetScore(state.selectedSet, list[idx]));
-      bleService.send(bleMapper.setPlayer1Score(list[idx]));
-    } else {
-      final list = List<int>.from(state.p2Scores);
-      list[idx]++;
-      emit(state.copyWith(p2Scores: list));
-      bleService.send(bleMapper.setPlayer2SetScore(state.selectedSet, list[idx]));
-      bleService.send(bleMapper.setPlayer2Score(list[idx]));
+      if (state.activePlayer == PlayerType.player1) {
+        final list = List<int>.from(state.p1Scores);
+        list[idx]++;
+        emit(state.copyWith(p1Scores: list));
+        bleService.send(bleMapper.setPlayer1SetScore(state.selectedSet, list[idx]));
+        bleService.send(bleMapper.setPlayer1Score(list[idx]));
+      } else {
+        final list = List<int>.from(state.p2Scores);
+        list[idx]++;
+        emit(state.copyWith(p2Scores: list));
+        bleService.send(bleMapper.setPlayer2SetScore(state.selectedSet, list[idx]));
+        bleService.send(bleMapper.setPlayer2Score(list[idx]));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment score: $e');
     }
   }
 
@@ -102,22 +134,26 @@ class UniversalGameControllerCubit extends Cubit<UniversalGameControllerState> {
   // DECREMENT SCORE (guarded)
   // ------------------------------------------------
   void decrementScore() {
-    final idx = state.selectedSet - 1;
+    try {
+      final idx = state.selectedSet - 1;
 
-    if (state.activePlayer == PlayerType.player1) {
-      final list = List<int>.from(state.p1Scores);
-      if (list[idx] == 0) return;
-      list[idx]--;
-      emit(state.copyWith(p1Scores: list));
-      bleService.send(bleMapper.setPlayer1SetScore(state.selectedSet, list[idx]));
-      bleService.send(bleMapper.setPlayer1Score(list[idx]));
-    } else {
-      final list = List<int>.from(state.p2Scores);
-      if (list[idx] == 0) return;
-      list[idx]--;
-      emit(state.copyWith(p2Scores: list));
-      bleService.send(bleMapper.setPlayer2SetScore(state.selectedSet, list[idx]));
-      bleService.send(bleMapper.setPlayer2Score(list[idx]));
+      if (state.activePlayer == PlayerType.player1) {
+        final list = List<int>.from(state.p1Scores);
+        if (list[idx] == 0) return;
+        list[idx]--;
+        emit(state.copyWith(p1Scores: list));
+        bleService.send(bleMapper.setPlayer1SetScore(state.selectedSet, list[idx]));
+        bleService.send(bleMapper.setPlayer1Score(list[idx]));
+      } else {
+        final list = List<int>.from(state.p2Scores);
+        if (list[idx] == 0) return;
+        list[idx]--;
+        emit(state.copyWith(p2Scores: list));
+        bleService.send(bleMapper.setPlayer2SetScore(state.selectedSet, list[idx]));
+        bleService.send(bleMapper.setPlayer2Score(list[idx]));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement score: $e');
     }
   }
 
@@ -125,39 +161,59 @@ class UniversalGameControllerCubit extends Cubit<UniversalGameControllerState> {
   // SET WINNER
   // ------------------------------------------------
   void setWinner(int setNo, PlayerType winner) {
-    final winners = List<PlayerType?>.from(state.setWinners);
-    winners[setNo - 1] = winner;
-    emit(state.copyWith(setWinners: winners));
-    bleService.send(bleMapper.setSetWinner(setNo, _playerTypeToInt(winner)));
+    try {
+      final winners = List<PlayerType?>.from(state.setWinners);
+      winners[setNo - 1] = winner;
+      emit(state.copyWith(setWinners: winners));
+      bleService.send(bleMapper.setSetWinner(setNo, _playerTypeToInt(winner)));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set winner: $e');
+    }
   }
 
   // ------------------------------------------------
   // CLEAR WINNER
   // ------------------------------------------------
   void clearWinner(int setNo) {
-    final winners = List<PlayerType?>.from(state.setWinners);
-    winners[setNo - 1] = null;
-    emit(state.copyWith(setWinners: winners));
-    bleService.send(bleMapper.setSetWinner(setNo, 0));
+    try {
+      final winners = List<PlayerType?>.from(state.setWinners);
+      winners[setNo - 1] = null;
+      emit(state.copyWith(setWinners: winners));
+      bleService.send(bleMapper.setSetWinner(setNo, 0));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to clear winner: $e');
+    }
   }
 
   // ------------------------------------------------
   // BUZZER
   // ------------------------------------------------
   void triggerBuzzer() {
-    bleService.send(bleMapper.triggerBuzzer());
+    try {
+      bleService.send(bleMapper.triggerBuzzer());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to trigger buzzer: $e');
+    }
   }
 
   // ------------------------------------------------
   // BRIGHTNESS (0-255)
   // ------------------------------------------------
   void setBrightness(int value) {
-    final clampedValue = value.clamp(0, 220);
-    bleService.send(bleMapper.setBrightness(clampedValue));
+    try {
+      final clampedValue = value.clamp(0, 220);
+      bleService.send(bleMapper.setBrightness(clampedValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set brightness: $e');
+    }
   }
 
   void setTempBrightness(int value) {
-    emit(state.copyWith(tempBrightness: value.clamp(0, 220)));
+    try {
+      emit(state.copyWith(tempBrightness: value.clamp(0, 220)));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set temp brightness: $e');
+    }
   }
 
 
@@ -165,32 +221,40 @@ class UniversalGameControllerCubit extends Cubit<UniversalGameControllerState> {
   // RESET MATCH
   // ------------------------------------------------
   void resetMatch() {
-    emit(UniversalGameControllerState.initial());
-    bleService.send(bleMapper.resetScreen());
+    try {
+      emit(UniversalGameControllerState.initial());
+      bleService.send(bleMapper.resetScreen());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to reset match: $e');
+    }
   }
 
   // ------------------------------------------------
   // SYNC ALL STATE TO BLE (after reconnection)
   // ------------------------------------------------
   void syncAllToBle() {
-    // Total sets
-    bleService.send(bleMapper.setTotalSets(state.totalSets.count));
+    try {
+      // Total sets
+      bleService.send(bleMapper.setTotalSets(state.totalSets.count));
 
-    // Names
-    bleService.send(bleMapper.setPlayer1Name(state.team1Name));
-    bleService.send(bleMapper.setPlayer2Name(state.team2Name));
+      // Names
+      bleService.send(bleMapper.setPlayer1Name(state.team1Name));
+      bleService.send(bleMapper.setPlayer2Name(state.team2Name));
 
-    // Current scores (from selected set)
-    final p1CurrentScore = state.p1Scores[state.selectedSet - 1];
-    final p2CurrentScore = state.p2Scores[state.selectedSet - 1];
-    bleService.send(bleMapper.setPlayer1Score(p1CurrentScore));
-    bleService.send(bleMapper.setPlayer2Score(p2CurrentScore));
+      // Current scores (from selected set)
+      final p1CurrentScore = state.p1Scores[state.selectedSet - 1];
+      final p2CurrentScore = state.p2Scores[state.selectedSet - 1];
+      bleService.send(bleMapper.setPlayer1Score(p1CurrentScore));
+      bleService.send(bleMapper.setPlayer2Score(p2CurrentScore));
 
-    // All set scores
-    for (int i = 0; i < state.maxSets; i++) {
-      bleService.send(bleMapper.setPlayer1SetScore(i + 1, state.p1Scores[i]));
-      bleService.send(bleMapper.setPlayer2SetScore(i + 1, state.p2Scores[i]));
-      bleService.send(bleMapper.setSetWinner(i + 1, _playerTypeToInt(state.setWinners[i])));
+      // All set scores
+      for (int i = 0; i < state.maxSets; i++) {
+        bleService.send(bleMapper.setPlayer1SetScore(i + 1, state.p1Scores[i]));
+        bleService.send(bleMapper.setPlayer2SetScore(i + 1, state.p2Scores[i]));
+        bleService.send(bleMapper.setSetWinner(i + 1, _playerTypeToInt(state.setWinners[i])));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to sync all to BLE: $e');
     }
   }
 
@@ -201,6 +265,10 @@ class UniversalGameControllerCubit extends Cubit<UniversalGameControllerState> {
   // EXIT / DISPOSE
   // ------------------------------------------------
   void exit() {
-    emit(UniversalGameControllerState.initial());
+    try {
+      emit(UniversalGameControllerState.initial());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to exit: $e');
+    }
   }
 }

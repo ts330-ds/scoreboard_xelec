@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/timer/archery_timer_state.dart';
 
 import '../../../../../common_widget/brightness_slider_widget.dart';
 import '../../../../../common_widget/buzzerWidget.dart';
@@ -109,14 +110,14 @@ class ArcheryControlPanel extends StatelessWidget {
                   const ControllerHeading(text: "Display Settings"),
                   widgetGap(),
                   BlocSelector<ArcheryControllerCubit, ArcheryControllerState, int>(
-                    selector: (state) => state.brightness,
+                    selector: (state) => state.setTempBrightness,
                     builder: (context, brightness) {
                       return BrightnessSliderMinimal(
                         value: brightness.toDouble(),
                         onChanged: (value) {
                           context.read<ArcheryControllerCubit>().setTempBrightness(value.toInt());
                         },
-                        onChangedEnd: (double value) {
+                        onChangedEnd: (value) {
                           context.read<ArcheryControllerCubit>().setBrightness(value.toInt());
                         },
                       );

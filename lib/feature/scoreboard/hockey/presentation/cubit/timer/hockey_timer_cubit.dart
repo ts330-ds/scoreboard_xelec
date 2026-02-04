@@ -2,103 +2,146 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/hockey_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
+import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/hockey/presentation/cubit/timer/hockey_timer_state.dart';
 
 class HockeyTimerCubit extends Cubit<HockeyTimerState> {
   Timer? _timer;
+
   /// Base duration for each quarter (user configurable)
   int totalSeconds;
-  BleService bleService;
-  HockeyBleMapper hockeyBleMapper;
+
+  final BleService bleService;
+  final HockeyBleMapper hockeyBleMapper;
+  final GlobalErrorCubit globalErrorCubit;
+
   /// Default = 15 minutes (900 seconds)
-  HockeyTimerCubit({required this.bleService, required this.hockeyBleMapper,int initialSeconds = 900})
-      : totalSeconds = initialSeconds,
+  HockeyTimerCubit({
+    required this.bleService,
+    required this.hockeyBleMapper,
+    required this.globalErrorCubit,
+    int initialSeconds = 900,
+  })  : totalSeconds = initialSeconds,
         super(HockeyTimerState.initial(initialSeconds));
 
   /// Set match/quarter time manually (from user input)
   void setTime(int seconds) {
-    _timer?.cancel();
+    try {
+      _timer?.cancel();
 
-    totalSeconds = seconds;
+      totalSeconds = seconds;
 
-    emit(
-      state.copyWith(
-        seconds: seconds,
-        initialSeconds: seconds,
-        status: TimerStatus.initial,
-      ),
-    );
-    bleService.send(hockeyBleMapper.setTimerMinutes(seconds ~/ 60));
+      emit(
+        state.copyWith(
+          seconds: seconds,
+          initialSeconds: seconds,
+          status: TimerStatus.initial,
+        ),
+      );
+
+      bleService.send(hockeyBleMapper.setTimerMinutes(seconds ~/ 60));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set time: $e');
+    }
   }
 
   /// Start timer
   void start() {
-    if (state.status == TimerStatus.running) return;
+    try {
+      if (state.status == TimerStatus.running) return;
 
-    emit(state.copyWith(status: TimerStatus.running));
+      emit(state.copyWith(status: TimerStatus.running));
 
-    _timer?.cancel();
-    _timer = Timer.periodic(
-      const Duration(seconds: 1),
-          (timer) {
-        if (state.seconds <= 1) {
-          timer.cancel();
-          emit(
-            state.copyWith(
-              seconds: 0,
-              status: TimerStatus.finished,
-            ),
-          );
-        } else {
-          emit(state.copyWith(seconds: state.seconds - 1));
-        }
-      },
-    );
-    bleService.send(hockeyBleMapper.startTimer());
+      _timer?.cancel();
+      _timer = Timer.periodic(
+        const Duration(seconds: 1),
+        (timer) {
+          try {
+            if (state.seconds <= 1) {
+              timer.cancel();
+              emit(
+                state.copyWith(
+                  seconds: 0,
+                  status: TimerStatus.finished,
+                ),
+              );
+            } else {
+              emit(state.copyWith(seconds: state.seconds - 1));
+            }
+          } catch (e) {
+            globalErrorCubit.showError('Timer tick error: $e');
+          }
+        },
+      );
+
+      bleService.send(hockeyBleMapper.startTimer());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to start timer: $e');
+    }
   }
 
   /// Pause timer
   void pause() {
-    if (state.status != TimerStatus.running) return;
+    try {
+      if (state.status != TimerStatus.running) return;
 
-    _timer?.cancel();
-    emit(state.copyWith(status: TimerStatus.paused));
-    bleService.send(hockeyBleMapper.pauseTimer());
+      _timer?.cancel();
+      emit(state.copyWith(status: TimerStatus.paused));
+      bleService.send(hockeyBleMapper.pauseTimer());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to pause timer: $e');
+    }
   }
 
   /// Resume timer
   void resume() {
-    if (state.status != TimerStatus.paused) return;
-    start();
+    try {
+      if (state.status != TimerStatus.paused) return;
+      start();
+    } catch (e) {
+      globalErrorCubit.showError('Failed to resume timer: $e');
+    }
   }
 
   /// Reset timer to initial configured duration
   void reset() {
-    _timer?.cancel();
-    emit(HockeyTimerState.initial(totalSeconds));
-    bleService.send(hockeyBleMapper.resetTimer());
+    try {
+      _timer?.cancel();
+      emit(HockeyTimerState.initial(totalSeconds));
+      bleService.send(hockeyBleMapper.resetTimer());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to reset timer: $e');
+    }
   }
 
   /// Set quarter (1–4)
   /// Allowed only when timer is NOT running
   bool setQuarter(int quarter) {
-    if (quarter < 1 || quarter > 4) return false;
-    if (state.status == TimerStatus.running) return false;
+    try {
+      if (quarter < 1 || quarter > 4) return false;
+      if (state.status == TimerStatus.running) return false;
 
-    emit(
-      state.copyWith(
-        quarter: quarter,
-        seconds: totalSeconds,
-        status: TimerStatus.initial,
-      ),
-    );
-    bleService.send(hockeyBleMapper.setQuarter(quarter));
-    return true;
+      emit(
+        state.copyWith(
+          quarter: quarter,
+          seconds: totalSeconds,
+          status: TimerStatus.initial,
+        ),
+      );
+
+      bleService.send(hockeyBleMapper.setQuarter(quarter));
+      return true;
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set quarter: $e');
+      return false;
+    }
   }
 
   @override
   Future<void> close() {
-    _timer?.cancel();
+    try {
+      _timer?.cancel();
+    } catch (_) {}
     return super.close();
   }
 }

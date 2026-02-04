@@ -1,201 +1,314 @@
-import 'package:bloc/bloc.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/kabaddi_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
+import 'package:xelex_esp/error/cubit/error_cubit.dart';
+import 'package:xelex_esp/utility/universal_method.dart';
 import 'kabaddi_controller_state.dart';
 import 'package:flutter/material.dart';
 
 class KabaddiControllerCubit extends Cubit<KabaddiControllerState> {
   final BleService bleService;
   final KabaddiBleMapper kabaddiBleMapper;
+  final GlobalErrorCubit globalErrorCubit;
 
   KabaddiControllerCubit({
     required this.bleService,
     required this.kabaddiBleMapper,
+    required this.globalErrorCubit,
   }) : super(KabaddiControllerState.initial());
 
   void setTeam1Name(String name) {
-    emit(state.copyWith(team1Name: name));
-    bleService.send(kabaddiBleMapper.setTeam1Name(name));
+    try {
+      emit(state.copyWith(team1Name: name));
+      bleService.send(kabaddiBleMapper.setTeam1Name(name));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set team 1 name: $e');
+    }
   }
 
   void setTeam2Name(String name) {
-    emit(state.copyWith(team2Name: name));
-    bleService.send(kabaddiBleMapper.setTeam2Name(name));
+    try {
+      emit(state.copyWith(team2Name: name));
+      bleService.send(kabaddiBleMapper.setTeam2Name(name));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set team 2 name: $e');
+    }
   }
 
 
   // Team colors
   void setTeam1Color(Color color) {
-    emit(state.copyWith(team1Color: color));
-   // bleService.send(basketBallBleMapper.setHomeTeamColor(toRgb565(color).toRadixString(16).padLeft(4, '0')
-      //  .toUpperCase()));
+    try {
+      emit(state.copyWith(team1Color: color));
+   bleService.send(kabaddiBleMapper.setTeam1Color(toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase()));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set team 1 color: $e');
+    }
   }
 
   void setTeam2Color(Color color) {
-    emit(state.copyWith(team2Color: color));
-    ///bleService.send(basketBallBleMapper.setAwayTeamColor(toRgb565(color).toRadixString(16).padLeft(4, '0')
-      //  .toUpperCase()));
+    try {
+      emit(state.copyWith(team2Color: color));
+      bleService.send(kabaddiBleMapper.setTeam2Color(toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase()));
+          
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set team 2 color: $e');
+    }
   }
 
   void incrementTeam1Score() {
-    final newScore = state.team1Score + 1;
-    emit(state.copyWith(team1Score: newScore));
-    bleService.send(kabaddiBleMapper.setTeam1Score(newScore));
+    try {
+      final newScore = state.team1Score + 1;
+      emit(state.copyWith(team1Score: newScore));
+      bleService.send(kabaddiBleMapper.setTeam1Score(newScore));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 1 score: $e');
+    }
   }
 
   void decrementTeam1Score() {
-    if (state.team1Score > 0) {
-      final newScore = state.team1Score - 1;
-      emit(state.copyWith(team1Score: newScore));
-      bleService.send(kabaddiBleMapper.setTeam1Score(newScore));
+    try {
+      if (state.team1Score > 0) {
+        final newScore = state.team1Score - 1;
+        emit(state.copyWith(team1Score: newScore));
+        bleService.send(kabaddiBleMapper.setTeam1Score(newScore));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 1 score: $e');
     }
   }
 
   void incrementTeam2Score() {
-    final newScore = state.team2Score + 1;
-    emit(state.copyWith(team2Score: newScore));
-    bleService.send(kabaddiBleMapper.setTeam2Score(newScore));
+    try {
+      final newScore = state.team2Score + 1;
+      emit(state.copyWith(team2Score: newScore));
+      bleService.send(kabaddiBleMapper.setTeam2Score(newScore));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 2 score: $e');
+    }
   }
 
   void decrementTeam2Score() {
-    if (state.team2Score > 0) {
-      final newScore = state.team2Score - 1;
-      emit(state.copyWith(team2Score: newScore));
-      bleService.send(kabaddiBleMapper.setTeam2Score(newScore));
+    try {
+      if (state.team2Score > 0) {
+        final newScore = state.team2Score - 1;
+        emit(state.copyWith(team2Score: newScore));
+        bleService.send(kabaddiBleMapper.setTeam2Score(newScore));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 2 score: $e');
     }
   }
 
   void incrementTeam1Touch() {
-    final newValue = state.team1Touch + 1;
-    emit(state.copyWith(team1Touch: newValue));
-    bleService.send(kabaddiBleMapper.setTeam1Touch(newValue));
+    try {
+      final newValue = state.team1Touch + 1;
+      emit(state.copyWith(team1Touch: newValue));
+      bleService.send(kabaddiBleMapper.setTeam1Touch(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 1 touch: $e');
+    }
   }
 
   void decrementTeam1Touch() {
-    if (state.team1Touch > 0) {
-      final newValue = state.team1Touch - 1;
-      emit(state.copyWith(team1Touch: newValue));
-      bleService.send(kabaddiBleMapper.setTeam1Touch(newValue));
+    try {
+      if (state.team1Touch > 0) {
+        final newValue = state.team1Touch - 1;
+        emit(state.copyWith(team1Touch: newValue));
+        bleService.send(kabaddiBleMapper.setTeam1Touch(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 1 touch: $e');
     }
   }
 
   void incrementTeam2Touch() {
-    final newValue = state.team2Touch + 1;
-    emit(state.copyWith(team2Touch: newValue));
-    bleService.send(kabaddiBleMapper.setTeam2Touch(newValue));
+    try {
+      final newValue = state.team2Touch + 1;
+      emit(state.copyWith(team2Touch: newValue));
+      bleService.send(kabaddiBleMapper.setTeam2Touch(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 2 touch: $e');
+    }
   }
 
   void decrementTeam2Touch() {
-    if (state.team2Touch > 0) {
-      final newValue = state.team2Touch - 1;
-      emit(state.copyWith(team2Touch: newValue));
-      bleService.send(kabaddiBleMapper.setTeam2Touch(newValue));
+    try {
+      if (state.team2Touch > 0) {
+        final newValue = state.team2Touch - 1;
+        emit(state.copyWith(team2Touch: newValue));
+        bleService.send(kabaddiBleMapper.setTeam2Touch(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 2 touch: $e');
     }
   }
 
   void incrementTeam1Bonus() {
-    final newValue = state.team1Bonus + 1;
-    emit(state.copyWith(team1Bonus: newValue));
-    bleService.send(kabaddiBleMapper.setTeam1Bonus(newValue));
+    try {
+      final newValue = state.team1Bonus + 1;
+      emit(state.copyWith(team1Bonus: newValue));
+      bleService.send(kabaddiBleMapper.setTeam1Bonus(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 1 bonus: $e');
+    }
   }
 
   void decrementTeam1Bonus() {
-    if (state.team1Bonus > 0) {
-      final newValue = state.team1Bonus - 1;
-      emit(state.copyWith(team1Bonus: newValue));
-      bleService.send(kabaddiBleMapper.setTeam1Bonus(newValue));
+    try {
+      if (state.team1Bonus > 0) {
+        final newValue = state.team1Bonus - 1;
+        emit(state.copyWith(team1Bonus: newValue));
+        bleService.send(kabaddiBleMapper.setTeam1Bonus(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 1 bonus: $e');
     }
   }
 
   void incrementTeam2Bonus() {
-    final newValue = state.team2Bonus + 1;
-    emit(state.copyWith(team2Bonus: newValue));
-    bleService.send(kabaddiBleMapper.setTeam2Bonus(newValue));
+    try {
+      final newValue = state.team2Bonus + 1;
+      emit(state.copyWith(team2Bonus: newValue));
+      bleService.send(kabaddiBleMapper.setTeam2Bonus(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 2 bonus: $e');
+    }
   }
 
   void decrementTeam2Bonus() {
-    if (state.team2Bonus > 0) {
-      final newValue = state.team2Bonus - 1;
-      emit(state.copyWith(team2Bonus: newValue));
-      bleService.send(kabaddiBleMapper.setTeam2Bonus(newValue));
+    try {
+      if (state.team2Bonus > 0) {
+        final newValue = state.team2Bonus - 1;
+        emit(state.copyWith(team2Bonus: newValue));
+        bleService.send(kabaddiBleMapper.setTeam2Bonus(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 2 bonus: $e');
     }
   }
 
   void incrementTeam1AllOut() {
-    final newValue = state.team1AllOut + 1;
-    emit(state.copyWith(team1AllOut: newValue));
-    bleService.send(kabaddiBleMapper.setTeam1AllOut(newValue));
+    try {
+      final newValue = state.team1AllOut + 1;
+      emit(state.copyWith(team1AllOut: newValue));
+      bleService.send(kabaddiBleMapper.setTeam1AllOut(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 1 all out: $e');
+    }
   }
 
   void decrementTeam1AllOut() {
-    if (state.team1AllOut > 0) {
-      final newValue = state.team1AllOut - 1;
-      emit(state.copyWith(team1AllOut: newValue));
-      bleService.send(kabaddiBleMapper.setTeam1AllOut(newValue));
+    try {
+      if (state.team1AllOut > 0) {
+        final newValue = state.team1AllOut - 1;
+        emit(state.copyWith(team1AllOut: newValue));
+        bleService.send(kabaddiBleMapper.setTeam1AllOut(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 1 all out: $e');
     }
   }
 
   void incrementTeam2AllOut() {
-    final newValue = state.team2AllOut + 1;
-    emit(state.copyWith(team2AllOut: newValue));
-    bleService.send(kabaddiBleMapper.setTeam2AllOut(newValue));
+    try {
+      final newValue = state.team2AllOut + 1;
+      emit(state.copyWith(team2AllOut: newValue));
+      bleService.send(kabaddiBleMapper.setTeam2AllOut(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment team 2 all out: $e');
+    }
   }
 
   void decrementTeam2AllOut() {
-    if (state.team2AllOut > 0) {
-      final newValue = state.team2AllOut - 1;
-      emit(state.copyWith(team2AllOut: newValue));
-      bleService.send(kabaddiBleMapper.setTeam2AllOut(newValue));
+    try {
+      if (state.team2AllOut > 0) {
+        final newValue = state.team2AllOut - 1;
+        emit(state.copyWith(team2AllOut: newValue));
+        bleService.send(kabaddiBleMapper.setTeam2AllOut(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement team 2 all out: $e');
     }
   }
 
   void incrementRaidNumber() {
-    final newValue = state.raidNumber + 1;
-    emit(state.copyWith(raidNumber: newValue));
-    bleService.send(kabaddiBleMapper.setRaidNumber(newValue));
+    try {
+      final newValue = state.raidNumber + 1;
+      emit(state.copyWith(raidNumber: newValue));
+      bleService.send(kabaddiBleMapper.setRaidNumber(newValue));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to increment raid number: $e');
+    }
   }
 
   void decrementRaidNumber() {
-    if (state.raidNumber > 1) {
-      final newValue = state.raidNumber - 1;
-      emit(state.copyWith(raidNumber: newValue));
-      bleService.send(kabaddiBleMapper.setRaidNumber(newValue));
+    try {
+      if (state.raidNumber > 1) {
+        final newValue = state.raidNumber - 1;
+        emit(state.copyWith(raidNumber: newValue));
+        bleService.send(kabaddiBleMapper.setRaidNumber(newValue));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to decrement raid number: $e');
     }
   }
 
   void setQuarter(int quarter) {
-    emit(state.copyWith(currentQuarter: quarter));
-    bleService.send(kabaddiBleMapper.setQuarter(quarter));
+    try {
+      emit(state.copyWith(currentQuarter: quarter));
+      bleService.send(kabaddiBleMapper.setQuarter(quarter));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set quarter: $e');
+    }
   }
 
   void toggleRaider() {
-    final newValue = !state.isRaiderOnTeam1;
-    emit(state.copyWith(isRaiderOnTeam1: newValue));
-    if (newValue) {
-      bleService.send(kabaddiBleMapper.showRaiderOnTeam1());
-    } else {
-      bleService.send(kabaddiBleMapper.showRaiderOnTeam2());
+    try {
+      final newValue = !state.isRaiderOnTeam1;
+      emit(state.copyWith(isRaiderOnTeam1: newValue));
+      if (newValue) {
+        bleService.send(kabaddiBleMapper.showRaiderOnTeam1());
+      } else {
+        bleService.send(kabaddiBleMapper.showRaiderOnTeam2());
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to toggle raider: $e');
     }
   }
 
   void resetScreen() {
-    bleService.send(kabaddiBleMapper.resetScreen());
+    try {
+      bleService.send(kabaddiBleMapper.resetScreen());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to reset screen: $e');
+    }
   }
 
   // Brightness (0 - 255)
   void setBrightness(int value) {
-    emit(state.copyWith(brightness: value.clamp(0, 220)));
-
+    try {
+      emit(state.copyWith(brightness: value.clamp(0, 220)));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set brightness: $e');
+    }
   }
 
   void setTempBrightness(int value) {
-    emit(state.copyWith(tempBrightness: value.clamp(0, 220)));
+    try {
+      emit(state.copyWith(tempBrightness: value.clamp(0, 220)));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set temp brightness: $e');
+    }
   }
 
   // Buzzer toggle
   void toggleBuzzer() {
-    emit(state.copyWith(buzzerOn: !state.buzzerOn));
-
+    try {
+      emit(state.copyWith(buzzerOn: !state.buzzerOn));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to toggle buzzer: $e');
+    }
   }
 
 }

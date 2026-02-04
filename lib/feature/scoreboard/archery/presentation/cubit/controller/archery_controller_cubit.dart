@@ -2,404 +2,344 @@ import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/archery_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
+import 'package:xelex_esp/error/cubit/error_cubit.dart';
 
 part 'archery_controller_state.dart';
 
 class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
   final BleService bleService;
   final ArcheryBleMapper archeryBleMapper;
+  final GlobalErrorCubit globalErrorCubit;
 
   ArcheryControllerCubit({
     required this.bleService,
     required this.archeryBleMapper,
+    required this.globalErrorCubit,
   }) : super(const ArcheryControllerState());
 
   // ============ IDLE SCREEN ============
 
   void showIdleScreen() {
-    emit(state.copyWith(isIdleScreen: true));
-   // bleService.send(archeryBleMapper.showIdleScreen());
+    try {
+      emit(state.copyWith(isIdleScreen: true));
+      // bleService.send(archeryBleMapper.showIdleScreen());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to show idle screen: $e');
+    }
   }
 
   void showGameScreen() {
-    emit(state.copyWith(isIdleScreen: false));
-    bleService.send("AR");
+    try {
+      emit(state.copyWith(isIdleScreen: false));
+      bleService.send("AR");
+    } catch (e) {
+      globalErrorCubit.showError('Failed to show game screen: $e');
+    }
   }
 
   // ============ SETUP ============
 
   void setMode(ArcheryMode mode) {
-    emit(state.copyWith(mode: mode));
-    String modeString;
-    if (mode == ArcheryMode.abcd) {
-      modeString = 'ABCD';
-      bleService.send(
-        archeryBleMapper.setMode4Targets()
-      );
+    try {
+      emit(state.copyWith(mode: mode));
+      String modeString;
+      if (mode == ArcheryMode.abcd) {
+        modeString = 'ABCD';
+        bleService.send(archeryBleMapper.setMode4Targets());
+      } else if (mode == ArcheryMode.abc) {
+        modeString = 'ABC';
+        bleService.send(archeryBleMapper.setMode3Targets());
+      } else {
+        modeString = 'AB-CD';
+        bleService.send(archeryBleMapper.setFirstGroupAB());
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set mode: $e');
     }
-    else if (mode == ArcheryMode.abc) {
-      modeString = 'ABC';
-      bleService.send(
-          archeryBleMapper.setMode3Targets()
-      );
-    }
-    else {
-      modeString = 'AB-CD';
-      bleService.send(
-          archeryBleMapper.setFirstGroupAB()
-      );
-    }
-
   }
 
   void setPracticeEnds(int ends) {
-    emit(state.copyWith(practiceEnds: ends));
-    bleService.send(archeryBleMapper.setInfoText(ends.toString()));
+    try {
+      emit(state.copyWith(practiceEnds: ends));
+      bleService.send(archeryBleMapper.setInfoText("SIGHTER END $ends"));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set practice ends: $e');
+    }
   }
 
   void setScoringEnds(int ends) {
-    emit(state.copyWith(scoringEnds: ends));
-    bleService.send(archeryBleMapper.setInfoText(ends.toString()));
-
+    try {
+      emit(state.copyWith(scoringEnds: ends));
+      bleService.send(archeryBleMapper.setInfoText("SCORING END $ends"));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set scoring ends: $e');
+    }
   }
 
   void setGreenTime(int seconds) {
-    emit(state.copyWith(greenTime: seconds));
-
+    try {
+      emit(state.copyWith(greenTime: seconds));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set green time: $e');
+    }
   }
 
   // ============ MATCH CONTROL ============
 
   void initializeMatch() {
-    final initialPhase =
-        state.practiceEnds > 0 ? MatchPhase.sighter : MatchPhase.scoring;
+    try {
+      final initialPhase = state.practiceEnds > 0
+          ? MatchPhase.sighter
+          : MatchPhase.scoring;
 
-    emit(state.copyWith(
-      matchPhase: initialPhase,
-      currentEndNumber: 1,
-      currentTeam: 'AB',
-      isMatchComplete: false,
-      isPracticeSkipped: false,
-      isIdleScreen: false,
-    ));
+      // Round 1 always starts with AB
+      final firstTeam = _getFirstTeamForRound(1);
 
-  }
+      emit(
+        state.copyWith(
+          matchPhase: initialPhase,
+          currentEndNumber: 1,
+          currentTeam: firstTeam,
+          currentTurnInRound: 1,
+          isMatchComplete: false,
+          isPracticeSkipped: false,
+          isIdleScreen: false,
+        ),
+      );
 
-  void onEndComplete() {
-    if (state.matchPhase == MatchPhase.sighter) {
-      _handlePracticeEndComplete();
-    } else if (state.matchPhase == MatchPhase.scoring) {
-      _handleScoringEndComplete();
+      // Send initial team for AB-CD mode
+      if (state.mode == ArcheryMode.abCd) {
+        _sendTeamBleCommand(firstTeam);
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to initialize match: $e');
     }
   }
 
-  void _handlePracticeEndComplete() {
-    if (state.currentEndNumber >= state.practiceEnds) {
-      // Practice complete, move to scoring
-      _transitionToScoring();
-    } else {
-      // Next practice end
-      _advanceToNextEnd();
+  /// Called when a timer cycle completes (one team finishes their time)
+  void onTimerCycleComplete() {
+    try {
+      if (state.mode == ArcheryMode.abCd) {
+        _handleAbCdTimerComplete();
+      } else {
+        // For ABCD and ABC modes, one timer cycle = one round complete
+        _handleRoundComplete();
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed on timer cycle complete: $e');
     }
   }
 
-  void _handleScoringEndComplete() {
-    if (state.currentEndNumber >= state.scoringEnds) {
-      // Match complete
-      _completeMatch();
-    } else {
-      // Next scoring end
-      _advanceToNextEnd();
+  /// Handle AB-CD mode: a round requires both AB and CD to complete
+  /// Teams alternate who goes first each round:
+  /// Round 1: AB -> CD
+  /// Round 2: CD -> AB
+  /// Round 3: AB -> CD
+  /// ...
+  void _handleAbCdTimerComplete() {
+    try {
+      if (state.currentTurnInRound == 1) {
+        // First turn completed, now switch to second turn
+        final secondTeam = _getSecondTeamForRound(state.currentEndNumber);
+        emit(state.copyWith(
+          currentTurnInRound: 2,
+          currentTeam: secondTeam,
+        ));
+        _sendTeamBleCommand(secondTeam);
+      } else {
+        // Second turn completed, round is complete
+        _handleRoundComplete();
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to handle AB-CD timer complete: $e');
     }
   }
 
-  void _advanceToNextEnd() {
-    final nextEnd = state.currentEndNumber + 1;
-    String nextTeam = state.currentTeam;
-
-    // AB-CD rotation: AB, CD, CD, AB, AB, CD, CD, AB...
-    if (state.mode == ArcheryMode.abCd) {
-      nextTeam = _getTeamForEnd(nextEnd);
-    }
-
-    emit(state.copyWith(
-      currentEndNumber: nextEnd,
-      currentTeam: nextTeam,
-    ));
-
+  /// Get which team starts first for a given round
+  /// Odd rounds (1, 3, 5...): AB starts first
+  /// Even rounds (2, 4, 6...): CD starts first
+  String _getFirstTeamForRound(int roundNumber) {
+    return roundNumber.isOdd ? 'AB' : 'CD';
   }
 
-  String _getTeamForEnd(int endNumber) {
-    // Pattern: AB, CD, CD, AB, AB, CD, CD, AB ...
-    final pattern = ['AB', 'CD', 'CD', 'AB'];
-    final index = (endNumber - 1) % pattern.length;
-    return pattern[index];
+  /// Get which team goes second for a given round
+  String _getSecondTeamForRound(int roundNumber) {
+    return roundNumber.isOdd ? 'CD' : 'AB';
+  }
+
+  /// Send appropriate BLE command based on team
+  void _sendTeamBleCommand(String team) {
+    try {
+      if (team == 'AB') {
+        bleService.send(archeryBleMapper.setFirstGroupAB());
+      } else {
+        bleService.send(archeryBleMapper.setSecondGroupCD());
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to send team BLE command: $e');
+    }
+  }
+
+  /// Called when a full round is complete (both teams finished in AB-CD mode)
+  void _handleRoundComplete() {
+    try {
+      if (state.matchPhase == MatchPhase.sighter) {
+        _handlePracticeRoundComplete();
+      } else if (state.matchPhase == MatchPhase.scoring) {
+        _handleScoringRoundComplete();
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to handle round complete: $e');
+    }
+  }
+
+  void _handlePracticeRoundComplete() {
+    try {
+      if (state.currentEndNumber >= state.practiceEnds) {
+        // Practice complete, move to scoring
+        _transitionToScoring();
+      } else {
+        // Next practice round
+        _advanceToNextRound();
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to handle practice round complete: $e');
+    }
+  }
+
+  void _handleScoringRoundComplete() {
+    try {
+      if (state.currentEndNumber >= state.scoringEnds) {
+        // Match complete
+        _completeMatch();
+      } else {
+        // Next scoring round
+        _advanceToNextRound();
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to handle scoring round complete: $e');
+    }
+  }
+
+  void _advanceToNextRound() {
+    try {
+      final nextRound = state.currentEndNumber + 1;
+
+      if (state.mode == ArcheryMode.abCd) {
+        // AB-CD mode: start new round with alternating first team
+        final firstTeam = _getFirstTeamForRound(nextRound);
+        emit(state.copyWith(
+          currentEndNumber: nextRound,
+          currentTeam: firstTeam,
+          currentTurnInRound: 1,
+        ));
+        _sendTeamBleCommand(firstTeam);
+      } else {
+        // ABCD/ABC mode: just advance round
+        emit(state.copyWith(currentEndNumber: nextRound));
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to advance to next round: $e');
+    }
   }
 
   void _transitionToScoring() {
-    emit(state.copyWith(
-      matchPhase: MatchPhase.scoring,
-      currentEndNumber: 1,
-      currentTeam: 'AB',
-    ));
+    try {
+      // Scoring phase round 1 always starts with AB
+      final firstTeam = _getFirstTeamForRound(1);
+
+      emit(
+        state.copyWith(
+          matchPhase: MatchPhase.scoring,
+          currentEndNumber: 1,
+          currentTeam: firstTeam,
+          currentTurnInRound: 1,
+        ),
+      );
+
+      // Send team for AB-CD mode
+      if (state.mode == ArcheryMode.abCd) {
+        _sendTeamBleCommand(firstTeam);
+      }
+    } catch (e) {
+      globalErrorCubit.showError('Failed to transition to scoring: $e');
+    }
   }
 
   void skipPractice() {
-    emit(state.copyWith(isPracticeSkipped: true));
-    _transitionToScoring();
+    try {
+      emit(state.copyWith(isPracticeSkipped: true));
+      _transitionToScoring();
+    } catch (e) {
+      globalErrorCubit.showError('Failed to skip practice: $e');
+    }
   }
 
   void _completeMatch() {
-    emit(state.copyWith(
-      matchPhase: MatchPhase.completed,
-      isMatchComplete: true,
-    ));
+    try {
+      emit(
+        state.copyWith(matchPhase: MatchPhase.completed, isMatchComplete: true),
+      );
+    } catch (e) {
+      globalErrorCubit.showError('Failed to complete match: $e');
+    }
+  }
 
+  // Legacy method - keeping for backward compatibility, redirects to new method
+  void onEndComplete() {
+    onTimerCycleComplete();
   }
 
   // ============ SETTINGS ============
 
   void setBrightness(int value) {
-    final clampedValue = value.clamp(0, 220);
-    emit(state.copyWith(brightness: clampedValue));
-    bleService.send("BRIG$clampedValue");
+    try {
+      final clampedValue = value.clamp(0, 220);
+      emit(state.copyWith(brightness: clampedValue));
+      bleService.send("BRIG$clampedValue");
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set brightness: $e');
+    }
   }
 
   void setTempBrightness(int value) {
-    emit(state.copyWith(setTempBrightness: value.clamp(0, 220)));
+    try {
+      emit(state.copyWith(setTempBrightness: value.clamp(0, 220)));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to set temp brightness: $e');
+    }
   }
 
-
   void toggleBuzzer() {
-    emit(state.copyWith(buzzerOn: !state.buzzerOn));
+    try {
+      emit(state.copyWith(buzzerOn: !state.buzzerOn));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to toggle buzzer: $e');
+    }
   }
 
   void triggerBuzzer() {
-    if (state.buzzerOn) {
-
+    try {
+      if (state.buzzerOn) {}
+    } catch (e) {
+      globalErrorCubit.showError('Failed to trigger buzzer: $e');
     }
   }
 
   void resetScreen() {
-    //bleService.send(archeryBleMapper.resetScreen());
+    try {
+      //bleService.send(archeryBleMapper.resetScreen());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to reset screen: $e');
+    }
   }
 
   void resetMatch() {
-    emit(const ArcheryControllerState());
-   // bleService.send(archeryBleMapper.resetScreen());
+    try {
+      emit(const ArcheryControllerState());
+      // bleService.send(archeryBleMapper.resetScreen());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to reset match: $e');
+    }
   }
 }
-
-/*import 'package:bloc/bloc.dart';
-import 'package:equatable/equatable.dart';
-import 'package:xelex_esp/feature/bluetooth/mapper/archery_ble_mapper.dart';
-import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
-
-part 'archery_controller_state.dart';
-
-class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
-  final BleService bleService;
-  final ArcheryBleMapper archeryBleMapper;
-
-  ArcheryControllerCubit({
-    required this.bleService,
-    required this.archeryBleMapper,
-  }) : super(const ArcheryControllerState());
-
-  // ============ IDLE SCREEN ============
-
-  void showIdleScreen() {
-    emit(state.copyWith(isIdleScreen: true));
-    // bleService.send(archeryBleMapper.showIdleScreen());
-  }
-
-  void showGameScreen() {
-    emit(state.copyWith(isIdleScreen: false));
-    bleService.send("AR");
-  }
-
-  // ============ SETUP ============
-
-  void setMode(ArcheryMode mode) {
-    emit(state.copyWith(mode: mode));
-    String modeString;
-    if (mode == ArcheryMode.abcd) {
-      modeString = 'ABCD';
-      bleService.send(
-          archeryBleMapper.setFirstGroupAB()
-      );
-      bleService.send(
-          archeryBleMapper.setSecondGroupCD()
-      );
-    }
-    else if (mode == ArcheryMode.abc) {
-      modeString = 'ABC';
-      bleService.send(
-          archeryBleMapper.setFirstGroupAB()
-      );
-      bleService.send(
-          archeryBleMapper.setSecondGroupCD()
-      );
-    }
-    else {
-      modeString = 'AB-CD';
-      bleService.send(
-        archeryBleMapper.setGameMode(modeString),
-      );
-    }
-
-  }
-
-  void setPracticeEnds(int ends) {
-    emit(state.copyWith(practiceEnds: ends));
-  }
-
-  void setScoringEnds(int ends) {
-    emit(state.copyWith(scoringEnds: ends));
-    bleService.send(archeryBleMapper.setTotalEnds(ends));
-  }
-
-  void setGreenTime(int seconds) {
-    emit(state.copyWith(greenTime: seconds));
-    bleService.send(archeryBleMapper.setGreenTime(seconds));
-  }
-
-  // ============ MATCH CONTROL ============
-
-  void initializeMatch() {
-    final initialPhase =
-    state.practiceEnds > 0 ? MatchPhase.sighter : MatchPhase.scoring;
-
-    emit(state.copyWith(
-      matchPhase: initialPhase,
-      currentEndNumber: 1,
-      currentTeam: 'AB',
-      isMatchComplete: false,
-      isPracticeSkipped: false,
-      isIdleScreen: false,
-    ));
-
-    bleService.send(archeryBleMapper
-        .setMatchPhase(initialPhase == MatchPhase.sighter ? 'SIGHTER' : 'SCORING'));
-    bleService.send(archeryBleMapper.setEndNumber(1));
-    bleService.send(archeryBleMapper.showGameScreen());
-
-    if (state.mode == ArcheryMode.abCd) {
-      bleService.send(archeryBleMapper.setCurrentTeam('AB'));
-      bleService.send(archeryBleMapper.setActivePlayers('AB'));
-    } else {
-      bleService.send(archeryBleMapper.setActivePlayers(state.activePlayers.join('')));
-    }
-  }
-
-  void onEndComplete() {
-    if (state.matchPhase == MatchPhase.sighter) {
-      _handlePracticeEndComplete();
-    } else if (state.matchPhase == MatchPhase.scoring) {
-      _handleScoringEndComplete();
-    }
-  }
-
-  void _handlePracticeEndComplete() {
-    if (state.currentEndNumber >= state.practiceEnds) {
-      // Practice complete, move to scoring
-      _transitionToScoring();
-    } else {
-      // Next practice end
-      _advanceToNextEnd();
-    }
-  }
-
-  void _handleScoringEndComplete() {
-    if (state.currentEndNumber >= state.scoringEnds) {
-      // Match complete
-      _completeMatch();
-    } else {
-      // Next scoring end
-      _advanceToNextEnd();
-    }
-  }
-
-  void _advanceToNextEnd() {
-    final nextEnd = state.currentEndNumber + 1;
-    String nextTeam = state.currentTeam;
-
-    // AB-CD rotation: AB, CD, CD, AB, AB, CD, CD, AB...
-    if (state.mode == ArcheryMode.abCd) {
-      nextTeam = _getTeamForEnd(nextEnd);
-    }
-
-    emit(state.copyWith(
-      currentEndNumber: nextEnd,
-      currentTeam: nextTeam,
-    ));
-
-    bleService.send(archeryBleMapper.setEndNumber(nextEnd));
-    if (state.mode == ArcheryMode.abCd) {
-      bleService.send(archeryBleMapper.setCurrentTeam(nextTeam));
-      bleService.send(archeryBleMapper.setActivePlayers(nextTeam));
-    }
-  }
-
-  String _getTeamForEnd(int endNumber) {
-    // Pattern: AB, CD, CD, AB, AB, CD, CD, AB ...
-    final pattern = ['AB', 'CD', 'CD', 'AB'];
-    final index = (endNumber - 1) % pattern.length;
-    return pattern[index];
-  }
-
-  void _transitionToScoring() {
-    emit(state.copyWith(
-      matchPhase: MatchPhase.scoring,
-      currentEndNumber: 1,
-      currentTeam: 'AB',
-    ));
-
-    bleService.send(archeryBleMapper.setMatchPhase('SCORING'));
-    bleService.send(archeryBleMapper.setEndNumber(1));
-    if (state.mode == ArcheryMode.abCd) {
-      bleService.send(archeryBleMapper.setCurrentTeam('AB'));
-      bleService.send(archeryBleMapper.setActivePlayers('AB'));
-    }
-  }
-
-  void skipPractice() {
-    emit(state.copyWith(isPracticeSkipped: true));
-    _transitionToScoring();
-  }
-
-  void _completeMatch() {
-    emit(state.copyWith(
-      matchPhase: MatchPhase.completed,
-      isMatchComplete: true,
-    ));
-    bleService.send(archeryBleMapper.setMatchPhase('COMPLETED'));
-  }
-
-  // ============ SETTINGS ============
-
-  void setBrightness(int value) {
-    final clampedValue = value.clamp(0, 255);
-    emit(state.copyWith(brightness: clampedValue));
-    bleService.send(archeryBleMapper.setBrightness(clampedValue));
-  }
-
-  void toggleBuzzer() {
-    emit(state.copyWith(buzzerOn: !state.buzzerOn));
-  }
-
-  void triggerBuzzer() {
-    if (state.buzzerOn) {
-      bleService.send(archeryBleMapper.triggerBuzzer());
-    }
-  }
-
-  void resetScreen() {
-    bleService.send(archeryBleMapper.resetScreen());
-  }
-
-  void resetMatch() {
-    emit(const ArcheryControllerState());
-    bleService.send(archeryBleMapper.resetScreen());
-  }
-}*/

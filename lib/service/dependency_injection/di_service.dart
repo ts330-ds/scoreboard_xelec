@@ -1,6 +1,5 @@
 import 'package:get_it/get_it.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
-import 'package:xelex_esp/error/screen/global_error_screen.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/archery_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/badminton_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/football_ble_mapper.dart';
@@ -68,37 +67,42 @@ void setupDI() {
     () => BasketControlPanelCubit(bleService: sl(), basketBallBleMapper: sl(), globalErrorCubit: sl()),
   );
   sl.registerLazySingleton<ShotClockCubit>(() => ShotClockCubit(bleService: sl(), ballBleMapper: sl()));
-  sl.registerLazySingleton<BasketBallTimerCubit>(() => BasketBallTimerCubit(bleService: sl(), ballBleMapper: sl()));
+  sl.registerLazySingleton<BasketBallTimerCubit>(() => BasketBallTimerCubit(bleService: sl(), ballBleMapper: sl(),globalErrorCubit: sl()));
 
   // Football Cubits
   sl.registerLazySingleton<FootballControllerCubit>(
-    () => FootballControllerCubit(bleService: sl(), footballBleMapper: sl()),
+    () => FootballControllerCubit(bleService: sl(), footballBleMapper: sl(), globalErrorCubit: sl()),
   );
-  sl.registerLazySingleton<FootballTimerCubit>(() => FootballTimerCubit(bleService: sl(), footballBleMapper: sl()));
+  
+  sl.registerLazySingleton<FootballTimerCubit>(() => FootballTimerCubit(
+    bleService: sl(), footballBleMapper: sl(), globalErrorCubit: sl()));
 
   // Handball Cubits
-  sl.registerLazySingleton<HandBallControlCubit>(() => HandBallControlCubit(bleService: sl(), ballBleMapper: sl()));
-  sl.registerLazySingleton<HandBallTimerCubit>(() => HandBallTimerCubit(bleService: sl(), ballBleMapper: sl()));
+  sl.registerLazySingleton<HandBallControlCubit>(() => HandBallControlCubit(bleService: sl(), ballBleMapper: sl(), globalErrorCubit: sl()));
+  sl.registerLazySingleton<HandBallTimerCubit>(() => HandBallTimerCubit(bleService: sl(), ballBleMapper: sl(), globalErrorCubit: sl()));
 
   // Hockey Cubits
-  sl.registerLazySingleton<HockeyControllerCubit>(() => HockeyControllerCubit(bleService: sl(), bleMapper: sl()));
-  sl.registerLazySingleton<HockeyTimerCubit>(() => HockeyTimerCubit(bleService: sl(), hockeyBleMapper: sl()));
+  sl.registerLazySingleton<HockeyControllerCubit>(() => HockeyControllerCubit(bleService: sl(), bleMapper: sl(), globalErrorCubit: sl()));
+  sl.registerLazySingleton<HockeyTimerCubit>(() => HockeyTimerCubit(
+    bleService: sl(), hockeyBleMapper: sl(), globalErrorCubit: sl()));
 
   // Kho Kho Cubits
-  sl.registerLazySingleton<KhokhoControllerCubit>(() => KhokhoControllerCubit(bleService: sl(), khoBleMapper: sl()));
+  sl.registerLazySingleton<KhokhoControllerCubit>(() => KhokhoControllerCubit(bleService: sl(), khoBleMapper: sl(), globalErrorCubit: sl()));
   sl.registerLazySingleton<MatchTimerCubit>(() => MatchTimerCubit(bleService: sl(), khoBleMapper: sl()));
-  sl.registerLazySingleton<KhokhoTimerCubit>(() => KhokhoTimerCubit(bleService: sl(), khoBleMapper: sl()));
+  sl.registerLazySingleton<KhokhoTimerCubit>(() => KhokhoTimerCubit(
+    bleService: sl(), khoBleMapper: sl(), globalErrorCubit: sl()));
 
   // Table Tennis Cubits
   sl.registerLazySingleton<TableTennisControllerCubit>(
-    () => TableTennisControllerCubit(bleService: sl(), tableTennisBleMapper: sl()),
+    () => TableTennisControllerCubit(bleService: sl(), tableTennisBleMapper: sl(), globalErrorCubit: sl()),
   );
 
   // Kabaddi Cubits
   sl.registerLazySingleton<KabaddiControllerCubit>(
-    () => KabaddiControllerCubit(bleService: sl(), kabaddiBleMapper: sl()),
+    () => KabaddiControllerCubit(bleService: sl(), kabaddiBleMapper: sl(), globalErrorCubit: sl()),
   );
-  sl.registerLazySingleton<KabaddiTimerCubit>(() => KabaddiTimerCubit(bleService: sl(), ballBleMapper: sl()));
+  sl.registerLazySingleton<KabaddiTimerCubit>(() => KabaddiTimerCubit(
+    bleService: sl(), ballBleMapper: sl(), globalErrorCubit: sl()));
 
   sl.registerLazySingleton<BadmintonControllerCubit>(
     () => BadmintonControllerCubit(bleService: sl(), badmintonBleMapper: sl(), globalErrorCubit: sl()),
@@ -110,7 +114,7 @@ void setupDI() {
 
   // Archery Cubits
   sl.registerLazySingleton<ArcheryControllerCubit>(
-    () => ArcheryControllerCubit(bleService: sl(), archeryBleMapper: sl()),
+    () => ArcheryControllerCubit(bleService: sl(), archeryBleMapper: sl(), globalErrorCubit: sl()),
   );
   sl.registerLazySingleton<ArcheryTimerCubit>(
     () => ArcheryTimerCubit(bleService: sl(), archeryBleMapper: sl(), globalErrorToastListener: sl()),

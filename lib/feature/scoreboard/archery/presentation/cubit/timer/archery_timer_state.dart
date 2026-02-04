@@ -1,4 +1,5 @@
-part of 'archery_timer_cubit.dart';
+import 'package:equatable/equatable.dart';
+import 'package:flutter/material.dart';
 
 enum TimerPhase { red, green, yellow, stopped }
 
