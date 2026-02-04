@@ -18,7 +18,7 @@ class ResponsiveLayout extends StatelessWidget {
     if (Breakpoints.isDesktop(context)) {
       return desktop;
     } else if (Breakpoints.isTablet(context)) {
-      return tablet;
+      return mobile; // Use mobile layout for tablet
     } else {
       return mobile;
     }

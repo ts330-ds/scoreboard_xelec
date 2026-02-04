@@ -34,34 +34,32 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
     if (mode == ArcheryMode.abcd) {
       modeString = 'ABCD';
       bleService.send(
-        archeryBleMapper.setFirstGroupAB()
-      );
-      bleService.send(
-        archeryBleMapper.setSecondGroupCD()
+        archeryBleMapper.setMode4Targets()
       );
     }
     else if (mode == ArcheryMode.abc) {
       modeString = 'ABC';
       bleService.send(
-          archeryBleMapper.setFirstGroupAB()
-      );
-      bleService.send(
-          archeryBleMapper.setSecondGroupCD()
+          archeryBleMapper.setMode3Targets()
       );
     }
     else {
       modeString = 'AB-CD';
-
+      bleService.send(
+          archeryBleMapper.setFirstGroupAB()
+      );
     }
 
   }
 
   void setPracticeEnds(int ends) {
     emit(state.copyWith(practiceEnds: ends));
+    bleService.send(archeryBleMapper.setInfoText(ends.toString()));
   }
 
   void setScoringEnds(int ends) {
     emit(state.copyWith(scoringEnds: ends));
+    bleService.send(archeryBleMapper.setInfoText(ends.toString()));
 
   }
 
@@ -162,10 +160,15 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
   // ============ SETTINGS ============
 
   void setBrightness(int value) {
-    final clampedValue = value.clamp(0, 255);
+    final clampedValue = value.clamp(0, 220);
     emit(state.copyWith(brightness: clampedValue));
-    bleService.send(archeryBleMapper.setBrightness(clampedValue));
+    bleService.send("BRIG$clampedValue");
   }
+
+  void setTempBrightness(int value) {
+    emit(state.copyWith(setTempBrightness: value.clamp(0, 220)));
+  }
+
 
   void toggleBuzzer() {
     emit(state.copyWith(buzzerOn: !state.buzzerOn));
@@ -178,12 +181,12 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
   }
 
   void resetScreen() {
-    bleService.send(archeryBleMapper.resetScreen());
+    //bleService.send(archeryBleMapper.resetScreen());
   }
 
   void resetMatch() {
     emit(const ArcheryControllerState());
-    bleService.send(archeryBleMapper.resetScreen());
+   // bleService.send(archeryBleMapper.resetScreen());
   }
 }
 

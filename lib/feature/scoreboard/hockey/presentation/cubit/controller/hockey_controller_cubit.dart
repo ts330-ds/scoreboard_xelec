@@ -85,13 +85,13 @@ class HockeyControllerCubit extends Cubit<HockeyControllerState> {
 
   // ---------------- Brightness ----------------
   void setBrightness(int value) {
-    final clampedValue = value.clamp(0, 255);
+    final clampedValue = value.clamp(0, 220);
     emit(state.copyWith(brightness: clampedValue));
    // bleService.send(bleMapper.setBrightness(clampedValue));
   }
 
   void setTempBrightness(int value) {
-    emit(state.copyWith(tempbrightness: value.clamp(0, 255)));
+    emit(state.copyWith(tempbrightness: value.clamp(0, 220)));
   }
 
   // ---------------- Buzzer ----------------

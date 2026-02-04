@@ -62,7 +62,7 @@ class AdaptiveScaffold extends StatelessWidget {
           middle: Text(
             title,
             style: context.text.titleSmall!
-                .copyWith(color: context.colors.surface),
+                .copyWith(color: context.colors.primary),
           ),
           trailing: onSettingsPressed != null
               ? CupertinoButton(
@@ -70,7 +70,7 @@ class AdaptiveScaffold extends StatelessWidget {
                   onPressed: onSettingsPressed,
                   child: Icon(
                     CupertinoIcons.settings,
-                    color: context.colors.surface,
+                    color: context.colors.primary,
                   ),
                 )
               : null,

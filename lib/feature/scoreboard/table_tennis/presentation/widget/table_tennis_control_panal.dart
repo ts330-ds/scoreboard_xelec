@@ -5,9 +5,13 @@ import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/cubit/con
 import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/widget/timeout_switch.dart';
 import 'package:xelex_esp/utility/universal_method.dart';
 
+import '../../../../../common_widget/brightness_slider_widget.dart';
+import '../../../../../common_widget/buzzerWidget.dart';
 import '../../../../../common_widget/controller_heading.dart';
 import '../../../../../common_widget/quarter_select_row.dart';
+import '../../../../../service/dependency_injection/di_service.dart';
 import '../../../../../utility/appColor.dart';
+import '../../../../bluetooth/service/ble_service.dart';
 
 class TableTennisControlPanal extends StatelessWidget {
   const TableTennisControlPanal({super.key});
@@ -210,43 +214,25 @@ class TableTennisControlPanal extends StatelessWidget {
 
           widgetGap(),
           const ControllerHeading(text: "Display Settings"),
-
-
+          widgetGap(),
           BlocSelector<TableTennisControllerCubit, TableTennisControllerState, int>(
             selector: (state) => state.tempBrightness,
             builder: (context, brightness) {
-              return Row(
-                children: [
-                  const ControllerHeading(text: "Brightness",),
-                  Expanded(
-                    child: Slider(
-                      min: 0,
-                      max: 1,
-                      value: brightness / 255,
-                      onChangeEnd: (value) {
-                        context
-                            .read<TableTennisControllerCubit>()
-                            .setBrightness((value * 255).toInt());
-                      }, onChanged: (value) {
-                      context
-                          .read<TableTennisControllerCubit>()
-                          .setTempBrightness((value * 255).toInt());
-                    },
-                    ),
-                  ),
-                ],
+              return BrightnessSliderMinimal(
+                value: brightness.toDouble(),
+                onChanged: (value) {
+                  context.read<TableTennisControllerCubit>().setTempBrightness(value.toInt());
+                },
+                onChangedEnd: (double value) {
+                  context.read<TableTennisControllerCubit>().setBrightness(value.toInt());
+                },
               );
             },
           ),
-
-
-          BlocSelector<TableTennisControllerCubit, TableTennisControllerState, bool>(
-              selector: (state) => state.buzzerOn,
-              builder: (context,buzzer) {
-                return SwitchListTile(title: const ControllerHeading(text: "Buzzer"), value: buzzer, onChanged: (value) {
-                  context.read<TableTennisControllerCubit>().toggleBuzzer();
-                });
-              }
+          widgetGap(),
+          Align(
+            alignment: Alignment.centerRight,
+            child: BuzzerButton(bleService: sl<BleService>()),
           ),
 
         ],

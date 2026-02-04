@@ -198,12 +198,12 @@ class HandBallControlCubit extends Cubit<HandballControlState> {
 
   /* ===== BRIGHTNESS ===== */
   void setBrightness(int value) {
-    emit(state.copyWith(brightness: value.clamp(0, 255)));
+    emit(state.copyWith(brightness: value.clamp(0, 220)));
     // Note: Brightness NOT supported in Handball firmware
   }
 
   void setTempBrightness(int value) {
-    emit(state.copyWith(tempBrightness: value.clamp(0, 255)));
+    emit(state.copyWith(tempBrightness: value.clamp(0, 220)));
   }
 
   /* ===== BUZZER ===== */

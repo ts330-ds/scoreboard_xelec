@@ -66,8 +66,8 @@ class KabaddiControllerState {
       isRaiderOnTeam1: true,
       team1Color: Colors.blue,
       team2Color: Colors.red,
-      brightness: 255,
-      tempBrightness: 255,
+      brightness: 220,
+      tempBrightness: 220,
       buzzerOn: false,
     );
   }

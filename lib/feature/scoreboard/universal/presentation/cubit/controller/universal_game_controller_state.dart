@@ -28,6 +28,9 @@ class UniversalGameControllerState {
   final List<int> p2Scores;
   final List<PlayerType?> setWinners;
 
+  final int brightness;
+  final int tempBrightness;
+
   const UniversalGameControllerState({
     required this.totalSets,
     required this.selectedSet,
@@ -39,6 +42,8 @@ class UniversalGameControllerState {
     required this.p1Scores,
     required this.p2Scores,
     this.setWinners = const [],
+    this.brightness = 220,
+    this.tempBrightness = 220,
   });
 
   factory UniversalGameControllerState.initial() {
@@ -53,6 +58,8 @@ class UniversalGameControllerState {
       p1Scores: [0, 0, 0, 0, 0],
       p2Scores: [0, 0, 0, 0, 0],
       setWinners: [null, null, null, null, null],
+      brightness: 220,
+      tempBrightness: 220,
     );
   }
 
@@ -67,6 +74,8 @@ class UniversalGameControllerState {
     List<int>? p1Scores,
     List<int>? p2Scores,
     List<PlayerType?>? setWinners,
+    int? brightness,
+    int? tempBrightness,
   }) {
     return UniversalGameControllerState(
       totalSets: totalSets ?? this.totalSets,
@@ -79,6 +88,8 @@ class UniversalGameControllerState {
       p1Scores: p1Scores ?? this.p1Scores,
       p2Scores: p2Scores ?? this.p2Scores,
       setWinners: setWinners ?? this.setWinners,
+      brightness: brightness ?? this.brightness,
+      tempBrightness: tempBrightness ?? this.tempBrightness,
     );
   }
 

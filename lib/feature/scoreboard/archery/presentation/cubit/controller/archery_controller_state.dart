@@ -20,6 +20,7 @@ class ArcheryControllerState extends Equatable {
   final bool isIdleScreen; // Show time/date or game screen
 
   final int brightness;
+  final int setTempBrightness;
   final bool buzzerOn;
 
   const ArcheryControllerState({
@@ -33,7 +34,8 @@ class ArcheryControllerState extends Equatable {
     this.isMatchComplete = false,
     this.isPracticeSkipped = false,
     this.isIdleScreen = true,
-    this.brightness = 255,
+    this.brightness = 220,
+    this.setTempBrightness = 220,
     this.buzzerOn = true,
   });
 
@@ -81,7 +83,9 @@ class ArcheryControllerState extends Equatable {
     bool? isPracticeSkipped,
     bool? isIdleScreen,
     int? brightness,
+    int? setTempBrightness,
     bool? buzzerOn,
+
   }) {
     return ArcheryControllerState(
       mode: mode ?? this.mode,
@@ -96,6 +100,7 @@ class ArcheryControllerState extends Equatable {
       isIdleScreen: isIdleScreen ?? this.isIdleScreen,
       brightness: brightness ?? this.brightness,
       buzzerOn: buzzerOn ?? this.buzzerOn,
+      setTempBrightness: setTempBrightness ?? this.setTempBrightness,
     );
   }
 
@@ -113,5 +118,6 @@ class ArcheryControllerState extends Equatable {
         isIdleScreen,
         brightness,
         buzzerOn,
+        setTempBrightness,
       ];
 }

@@ -7,9 +7,9 @@ import '../../../../../bluetooth/service/ble_service.dart';
 import 'package:flutter/material.dart';
 
 class UniversalGameControllerCubit extends Cubit<UniversalGameControllerState> {
-  BleService bleService;
-  UniversalGameBleMapper bleMapper;
-  GlobalErrorCubit globalErrorCubit;
+  final BleService bleService;
+  final UniversalGameBleMapper bleMapper;
+  final GlobalErrorCubit globalErrorCubit;
 
   UniversalGameControllerCubit({
     required this.bleService,
@@ -152,9 +152,14 @@ class UniversalGameControllerCubit extends Cubit<UniversalGameControllerState> {
   // BRIGHTNESS (0-255)
   // ------------------------------------------------
   void setBrightness(int value) {
-    final clampedValue = value.clamp(0, 255);
+    final clampedValue = value.clamp(0, 220);
     bleService.send(bleMapper.setBrightness(clampedValue));
   }
+
+  void setTempBrightness(int value) {
+    emit(state.copyWith(tempBrightness: value.clamp(0, 220)));
+  }
+
 
   // ------------------------------------------------
   // RESET MATCH
@@ -188,6 +193,9 @@ class UniversalGameControllerCubit extends Cubit<UniversalGameControllerState> {
       bleService.send(bleMapper.setSetWinner(i + 1, _playerTypeToInt(state.setWinners[i])));
     }
   }
+
+
+
 
   // ------------------------------------------------
   // EXIT / DISPOSE

@@ -90,7 +90,7 @@ class BleService {
 
   Future<void> send(String data) async {
     if (rxChar == null) {
-      sl<GlobalErrorCubit>().showError("Cannot send: RX Characteristic is null");
+      sl<GlobalErrorCubit>().showError("Cannot send: RX Characteristic is null and Data is ${data}");
       return;
     }
     try {

@@ -15,7 +15,9 @@ class UniversalGameScreen extends StatelessWidget {
   Widget build(BuildContext context) {
    return MultiBlocProvider(
      providers: [
-       BlocProvider.value(value: sl<UniversalGameControllerCubit>())
+       BlocProvider.value(value: sl<UniversalGameControllerCubit>(
+
+       ))
      ],
      child: ResponsiveLayout(
         mobile: UniversalGameMobile(),

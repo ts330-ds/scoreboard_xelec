@@ -4,9 +4,13 @@ import 'package:xelex_esp/feature/scoreboard/hockey/presentation/cubit/controlle
 import 'package:xelex_esp/feature/scoreboard/hockey/presentation/cubit/controller/hockey_controller_state.dart';
 import 'package:xelex_esp/utility/universal_method.dart';
 
+import '../../../../../common_widget/brightness_slider_widget.dart';
+import '../../../../../common_widget/buzzerWidget.dart';
 import '../../../../../common_widget/controller_heading.dart';
 import '../../../../../common_widget/quarter_select_row.dart';
+import '../../../../../service/dependency_injection/di_service.dart';
 import '../../../../../utility/appColor.dart';
+import '../../../../bluetooth/service/ble_service.dart';
 import '../cubit/timer/hockey_timer_cubit.dart';
 import '../cubit/timer/hockey_timer_state.dart';
 
@@ -261,44 +265,27 @@ class HockeyControlPanal extends StatelessWidget {
 
           widgetGap(),
           controllerHeading(label: "Display Settings", context: context),
-          buttonGap(),
-
+          widgetGap(),
           BlocSelector<HockeyControllerCubit, HockeyControllerState, int>(
             selector: (state) => state.tempbrightness,
             builder: (context, brightness) {
-              return Row(
-                children: [
-                  const ControllerHeading(text: "Brightness",),
-                  Expanded(
-                    child: Slider(
-                      min: 0,
-                      max: 1,
-                      value: brightness / 255,
-                      onChangeEnd: (value) {
-                        context
-                            .read<HockeyControllerCubit>()
-                            .setBrightness((value * 255).toInt());
-                      }, onChanged: (value) {
-                      context
-                          .read<HockeyControllerCubit>()
-                          .setTempBrightness((value * 255).toInt());
-                    },
-                    ),
-                  ),
-                ],
+              return BrightnessSliderMinimal(
+                value: brightness.toDouble(),
+                onChanged: (value) {
+                  context.read<HockeyControllerCubit>().setTempBrightness(value.toInt());
+                },
+                onChangedEnd: (double value) {
+                  context.read<HockeyControllerCubit>().setBrightness(value.toInt());
+                },
               );
             },
           ),
-
-
-          BlocSelector<HockeyControllerCubit, HockeyControllerState, bool>(
-              selector: (state) => state.buzzerOn,
-              builder: (context,buzzer) {
-                return SwitchListTile(title: const ControllerHeading(text: "Buzzer"), value: buzzer, onChanged: (value) {
-                  context.read<HockeyControllerCubit>().toggleBuzzer();
-                });
-              }
+          widgetGap(),
+          Align(
+            alignment: Alignment.centerRight,
+            child: BuzzerButton(bleService: sl<BleService>()),
           ),
+
         ],
       ),
     );

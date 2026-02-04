@@ -3,6 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/common_widget/controller_heading.dart';
 import 'package:xelex_esp/utility/appColor.dart';
 import 'package:xelex_esp/utility/universal_method.dart';
+import '../../../../../common_widget/brightness_slider_widget.dart';
+import '../../../../../common_widget/buzzerWidget.dart';
+import '../../../../../service/dependency_injection/di_service.dart';
+import '../../../../bluetooth/service/ble_service.dart';
 import '../cubit/controller/khokho_controller_cubit.dart';
 import '../cubit/timer/khokho_timer_cubit.dart';
 import '../cubit/match_timer/match_timer_cubit.dart';
@@ -214,43 +218,25 @@ class KhokhoControlPanel extends StatelessWidget {
           const SizedBox(height: 20),
 
           const ControllerHeading(text: "Display Settings"),
-
-
+          widgetGap(),
           BlocSelector<KhokhoControllerCubit, KhokhoControllerState, int>(
             selector: (state) => state.tempBrightness,
             builder: (context, brightness) {
-              return Row(
-                children: [
-                  const ControllerHeading(text: "Brightness",),
-                  Expanded(
-                    child: Slider(
-                      min: 0,
-                      max: 1,
-                      value: brightness / 255,
-                      onChangeEnd: (value) {
-                        context
-                            .read<KhokhoControllerCubit>()
-                            .setBrightness((value * 255).toInt());
-                      }, onChanged: (value) {
-                      context
-                          .read<KhokhoControllerCubit>()
-                          .setTempBrightness((value * 255).toInt());
-                    },
-                    ),
-                  ),
-                ],
+              return BrightnessSliderMinimal(
+                value: brightness.toDouble(),
+                onChanged: (value) {
+                  context.read<KhokhoControllerCubit>().setTempBrightness(value.toInt());
+                },
+                onChangedEnd: (double value) {
+                  context.read<KhokhoControllerCubit>().setBrightness(value.toInt());
+                },
               );
             },
           ),
-
-
-          BlocSelector<KhokhoControllerCubit, KhokhoControllerState, bool>(
-              selector: (state) => state.buzzerOn,
-              builder: (context,buzzer) {
-                return SwitchListTile(title: const ControllerHeading(text: "Buzzer"), value: buzzer, onChanged: (value) {
-                  context.read<KhokhoControllerCubit>().toggleBuzzer();
-                });
-              }
+          widgetGap(),
+          Align(
+            alignment: Alignment.centerRight,
+            child: BuzzerButton(bleService: sl<BleService>()),
           ),
 
         ],

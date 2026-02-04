@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../../common_widget/brightness_slider_widget.dart';
+import '../../../../../common_widget/buzzerWidget.dart';
+import '../../../../../common_widget/controller_heading.dart';
+import '../../../../../service/dependency_injection/di_service.dart';
+import '../../../../../utility/universal_method.dart';
+import '../../../../bluetooth/service/ble_service.dart';
 import '../cubit/controller/archery_controller_cubit.dart';
 import '../cubit/timer/archery_timer_cubit.dart';
 
@@ -97,6 +103,29 @@ class ArcheryControlPanel extends StatelessWidget {
                       'Back to Idle',
                       style: TextStyle(color: Colors.grey),
                     ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  const ControllerHeading(text: "Display Settings"),
+                  widgetGap(),
+                  BlocSelector<ArcheryControllerCubit, ArcheryControllerState, int>(
+                    selector: (state) => state.brightness,
+                    builder: (context, brightness) {
+                      return BrightnessSliderMinimal(
+                        value: brightness.toDouble(),
+                        onChanged: (value) {
+                          context.read<ArcheryControllerCubit>().setTempBrightness(value.toInt());
+                        },
+                        onChangedEnd: (double value) {
+                          context.read<ArcheryControllerCubit>().setBrightness(value.toInt());
+                        },
+                      );
+                    },
+                  ),
+                  widgetGap(),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: BuzzerButton(bleService: sl<BleService>()),
                   ),
                 ],
               ),

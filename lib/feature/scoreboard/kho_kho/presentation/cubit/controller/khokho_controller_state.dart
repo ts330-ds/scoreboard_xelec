@@ -27,8 +27,8 @@ class KhokhoControllerState extends Equatable {
     this.isTeam1Chasing = true,
     this.team1Color = Colors.blue,
     this.team2Color = Colors.red,
-    this.brightness = 255,
-    this.tempBrightness = 255,
+    this.brightness = 220,
+    this.tempBrightness = 220,
     this.buzzerOn = false,
 
   });

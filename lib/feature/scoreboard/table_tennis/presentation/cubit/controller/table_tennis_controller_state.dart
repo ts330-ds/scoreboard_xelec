@@ -45,8 +45,8 @@ class TableTennisControllerState {
     required this.matchNumber,
     this.gameStart = false,
     this.servingTeam = 0,
-    this.brightness = 255,
-    this.tempBrightness = 255,
+    this.brightness = 220,
+    this.tempBrightness = 220,
     this.buzzerOn = false,
   });
 
@@ -67,8 +67,8 @@ class TableTennisControllerState {
       servingTeam: 0,
       team1Color: Colors.red,
       team2Color: Colors.blue,
-      brightness: 255,
-      tempBrightness: 255,
+      brightness: 220,
+      tempBrightness: 220,
       buzzerOn: false,
     );
   }

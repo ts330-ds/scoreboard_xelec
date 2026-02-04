@@ -3,6 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/common_widget/controller_heading.dart';
 import 'package:xelex_esp/utility/appColor.dart';
 import 'package:xelex_esp/utility/universal_method.dart';
+import '../../../../../common_widget/brightness_slider_widget.dart';
+import '../../../../../common_widget/buzzerWidget.dart';
+import '../../../../../service/dependency_injection/di_service.dart';
+import '../../../../bluetooth/service/ble_service.dart';
 import '../cubit/controller/kabaddi_controller_cubit.dart';
 import '../cubit/controller/kabaddi_controller_state.dart';
 import '../cubit/timer/kabaddi_timer_cubit.dart';
@@ -14,7 +18,6 @@ class KabaddiControlPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controlCubit = context.read<KabaddiControllerCubit>();
-    final timerCubit = context.read<KabaddiTimerCubit>();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(8),
@@ -176,44 +179,27 @@ class KabaddiControlPanel extends StatelessWidget {
           const ControllerHeading(text: "Display Settings"),
 
 
+          widgetGap(),
           BlocSelector<KabaddiControllerCubit, KabaddiControllerState, int>(
             selector: (state) => state.tempBrightness,
             builder: (context, brightness) {
-              return Row(
-                children: [
-                  const ControllerHeading(text: "Brightness",),
-                  Expanded(
-                    child: Slider(
-                      min: 0,
-                      max: 1,
-                      value: brightness / 255,
-                      onChangeEnd: (value) {
-                        context
-                            .read<KabaddiControllerCubit>()
-                            .setBrightness((value * 255).toInt());
-                      }, onChanged: (value) {
-                      context
-                          .read<KabaddiControllerCubit>()
-                          .setTempBrightness((value * 255).toInt());
-                    },
-                    ),
-                  ),
-                ],
+              return BrightnessSliderMinimal(
+                value: brightness.toDouble(),
+                onChanged: (value) {
+                  context.read<KabaddiControllerCubit>().setTempBrightness(value.toInt());
+                },
+                onChangedEnd: (double value) {
+                  context.read<KabaddiControllerCubit>().setBrightness(value.toInt());
+                },
               );
             },
           ),
-
-
-          BlocSelector<KabaddiControllerCubit, KabaddiControllerState, bool>(
-              selector: (state) => state.buzzerOn,
-              builder: (context,buzzer) {
-                return SwitchListTile(title: const ControllerHeading(text: "Buzzer"), value: buzzer, onChanged: (value) {
-                  context.read<KabaddiControllerCubit>().toggleBuzzer();
-                });
-              }
+          widgetGap(),
+          Align(
+            alignment: Alignment.centerRight,
+            child: BuzzerButton(bleService: sl<BleService>()),
           ),
 
-          const SizedBox(height: 20),
         ],
       ),
     );

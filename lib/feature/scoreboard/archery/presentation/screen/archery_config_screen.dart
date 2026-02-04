@@ -292,9 +292,8 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
     controllerCubit.setMode(_selectedMode);
     controllerCubit.setPracticeEnds(_practiceEnds);
     controllerCubit.setScoringEnds(_scoringEnds);
-    controllerCubit.setGreenTime(_greenTime);
 
-    timerCubit.setGreenTime(_greenTime);
+    timerCubit.setMatchTime(_greenTime);
 
     // Initialize match
     controllerCubit.initializeMatch();

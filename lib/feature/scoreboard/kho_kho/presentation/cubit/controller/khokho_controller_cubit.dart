@@ -123,12 +123,12 @@ class KhokhoControllerCubit extends Cubit<KhokhoControllerState> {
 
   // Brightness (0 - 255)
   void setBrightness(int value) {
-    emit(state.copyWith(brightness: value.clamp(0, 255)));
+    emit(state.copyWith(brightness: value.clamp(0, 220)));
    // bleService.send(basketBallBleMapper.setBrightness(value));
   }
 
   void setTempBrightness(int value) {
-    emit(state.copyWith(tempBrightness: value.clamp(0, 255)));
+    emit(state.copyWith(tempBrightness: value.clamp(0, 220)));
   }
 
   // Buzzer toggle

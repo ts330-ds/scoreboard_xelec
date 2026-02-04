@@ -24,8 +24,8 @@ class FootballControllerState extends Equatable {
     this.team2Color = Colors.blue,
     this.extraTime = 0,
     this.currentHalf = 1,
-    this.brightness = 255,
-    this.tempBrightness = 255,
+    this.brightness = 220,
+    this.tempBrightness = 220,
     this.buzzerOn = false
 
   });

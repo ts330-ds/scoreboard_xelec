@@ -1,107 +1,125 @@
+/// BLE Command Mapper for Archery Scoreboard
+/// Firmware: P6_Archery_Pro
 class ArcheryBleMapper {
+  // ======================
+  // SCREEN MODE
+  // ======================
+
+  /// Switch to Clock display mode
+  String showClockScreen() => "AR";
 
   // ======================
-  // GAME CONTROLS
+  // GAME CONTROL
   // ======================
 
-  /// Start game with specified time in seconds
-  String startGame(int seconds) {
-    assert(seconds > 0);
-    print("START_$seconds");
-    return "START_$seconds";
+  /// Start a new archery match with specified total time in seconds
+  /// This triggers: 10 second RED countdown → GREEN phase → ORANGE (last 30s) → RED end
+  /// Example: startMatch(120) for 2 minutes
+  String startMatch(int totalTimeSeconds) {
+    assert(totalTimeSeconds > 0);
+    return "ARTN$totalTimeSeconds";
   }
 
-  String pauseGame() => "PAUSE";
-  String resumeGame() => "RESUME";
-  String resetGame() => "RESET";
+  /// Pause the running timer
+  String pauseTimer() => "ARTP";
+
+  /// Resume the paused timer
+  String resumeTimer() => "ARTR";
+
+  /// Reset game to IDLE state (timer = 0, phase = IDLE)
+  String resetGame() => "ARRT";
 
   // ======================
-  // SCREEN MODES
+  // TARGET/LANE MODES (Bottom Text)
   // ======================
 
-  /// Switch to clock display mode
-  String setModeClock() => "MODEC";
+  /// Mode 4: All targets active (A B C D - all green)
+  String setMode4Targets() => "ARM4";
 
-  /// Archery mode: A B C D all green
-  String setMode4Archers() => "MODE4";
+  /// Mode 3: Three targets active (A B C - all green)
+  String setMode3Targets() => "ARM3";
 
-  /// Archery mode: A B C all green
-  String setMode3Archers() => "MODE3";
+  /// First Group: A B active (A B green, C D grey)
+  String setFirstGroupAB() => "FGAB";
+
+  /// Second Group: C D active (A B grey, C D green)
+  String setSecondGroupCD() => "SGCD";
 
   // ======================
-  // SPLIT/GROUP MODES
+  // INFO TEXT (End/Round Display)
   // ======================
 
-  /// First Group: A B green, C D grey
-  String setFirstGroupAB() => "FG_AB";
+  /// Set the info text displayed on screen
+  /// Example: "SIGHTER END 1", "END 2", "PRACTICE"
+  String setInfoText(String text) => "ARED$text";
 
-  /// Second Group: C D green, A B grey
-  String setSecondGroupCD() => "SG_CD";
+  // ======================
+  // BUZZER
+  // ======================
+
+  /// Trigger buzzer once (manual beep)
+  String triggerBuzzer() => "ARBZ";
 
   // ======================
   // CLOCK SETTINGS
   // ======================
 
-  /// Set time (24-hour format: HH, MM, SS)
+  /// Set internal clock time
+  /// [hour] 0-23, [minute] 0-59, [second] 0-59
   String setTime(int hour, int minute, int second) {
-    assert(hour >= 0 && hour <= 23);
-    assert(minute >= 0 && minute <= 59);
-    assert(second >= 0 && second <= 59);
-    String h = hour.toString().padLeft(2, '0');
-    String m = minute.toString().padLeft(2, '0');
-    String s = second.toString().padLeft(2, '0');
-    print("TIME$h$m$s");
+    final h = hour.toString().padLeft(2, '0');
+    final m = minute.toString().padLeft(2, '0');
+    final s = second.toString().padLeft(2, '0');
     return "TIME$h$m$s";
   }
 
-  /// Set time from DateTime object
-  String setTimeFromDateTime(DateTime dateTime) {
+  /// Set day of week display
+  /// Example: "MONDAY", "TUESDAY"
+  String setDayOfWeek(String day) => "DAY_$day";
+
+  /// Set date display
+  /// Example: "01/01/2024", "25/12/2024"
+  String setDate(String date) => "DATE_$date";
+
+  // ======================
+  // CONVENIENCE METHODS
+  // ======================
+
+  /// Set current DateTime to the display
+  String syncDateTime(DateTime dateTime) {
     return setTime(dateTime.hour, dateTime.minute, dateTime.second);
   }
 
-  /// Sync current system time
-  String syncCurrentTime() {
-    return setTimeFromDateTime(DateTime.now());
+  /// Get day name from DateTime
+  String getDayName(DateTime dateTime) {
+    const days = [
+      'MONDAY',
+      'TUESDAY',
+      'WEDNESDAY',
+      'THURSDAY',
+      'FRIDAY',
+      'SATURDAY',
+      'SUNDAY'
+    ];
+    return days[dateTime.weekday - 1];
   }
 
-  // ======================
-  // DAY & DATE DISPLAY
-  // ======================
+  /// Sync full date and time
+  List<String> syncFullDateTime(DateTime dateTime) {
+    final day = getDayName(dateTime);
+    final date =
+        "${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}/${dateTime.year}";
 
-  /// Set day text (e.g., "MONDAY", "TUESDAY")
-  String setDay(String day) {
-    print("DAY_${day.toUpperCase()}");
-    return "DAY_${day.toUpperCase()}";
+    return [
+      setTime(dateTime.hour, dateTime.minute, dateTime.second),
+      setDayOfWeek(day),
+      setDate(date),
+    ];
   }
 
-  /// Set date text (e.g., "25/12/2024")
-  String setDate(String date) {
-    print("DATE_${date.toUpperCase()}");
-    return "DATE_${date.toUpperCase()}";
-  }
+  /// Start a standard 2-minute (120s) match
+  String startStandardMatch() => startMatch(120);
 
-  // ======================
-  // ARCHERY INFO TEXT
-  // ======================
-
-  /// Set info text displayed on screen (e.g., "SIGHTER END 1")
-  String setInfoText(String text) {
-    print("TXT_${text.toUpperCase()}");
-    return "TXT_${text.toUpperCase()}";
-  }
-
-  // ======================
-  // BRIGHTNESS & HARDWARE
-  // ======================
-
-  String setBrightness(int value) {
-    assert(value >= 0 && value <= 255);
-    return "BRIGHT_$value";
-  }
-
-  // ======================
-  // SCREEN RESET
-  // ======================
-
-  String resetScreen() => "RESET";
+  /// Start a 4-minute (240s) match
+  String start4MinuteMatch() => startMatch(240);
 }

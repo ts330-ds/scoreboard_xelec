@@ -24,6 +24,20 @@ class _ArcheryIdleScreenState extends State<ArcheryIdleScreen> {
   late Timer _timer;
   DateTime _currentTime = DateTime.now();
 
+
+  String getDayName(DateTime dateTime) {
+    const days = [
+      'MONDAY',
+      'TUESDAY',
+      'WEDNESDAY',
+      'THURSDAY',
+      'FRIDAY',
+      'SATURDAY',
+      'SUNDAY'
+    ];
+    return days[dateTime.weekday - 1];
+  }
+
   @override
   void initState() {
     super.initState();
@@ -34,9 +48,20 @@ class _ArcheryIdleScreenState extends State<ArcheryIdleScreen> {
     });
     _sendTimeToBle(_currentTime);
   }
-  void _sendTimeToBle(DateTime time) {
+  void _sendTimeToBle(DateTime dateTime) {
+    final date =
+        "${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}/${dateTime.year}";
+
+    final day = getDayName(dateTime);
+
     widget.bleService.send(
-      widget.archeryBleMapper.setTimeFromDateTime(time),
+      widget.archeryBleMapper.syncDateTime(dateTime)
+    );
+    widget.bleService.send(
+      widget.archeryBleMapper.setDate(date),
+    );
+    widget.bleService.send(
+      widget.archeryBleMapper.setDayOfWeek(day)
     );
   }
 

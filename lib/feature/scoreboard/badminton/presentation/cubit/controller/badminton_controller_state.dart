@@ -66,8 +66,8 @@ class BadmintonControllerState {
       set3Winner: 0,
       team1Color: Colors.blue,
       team2Color: Colors.red,
-      brightness: 255,
-      tempBrightness: 255,
+      brightness: 220,
+      tempBrightness: 220,
       buzzerOn: false,
 
       /// Team 1 starts serving

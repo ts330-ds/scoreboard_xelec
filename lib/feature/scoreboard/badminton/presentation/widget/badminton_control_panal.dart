@@ -3,7 +3,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/common_widget/controller_heading.dart';
 import 'package:xelex_esp/utility/appColor.dart';
 
+import '../../../../../common_widget/brightness_slider_widget.dart';
+import '../../../../../common_widget/buzzerWidget.dart';
+import '../../../../../service/dependency_injection/di_service.dart';
 import '../../../../../utility/universal_method.dart';
+import '../../../../bluetooth/service/ble_service.dart';
 import '../cubit/controller/badminton_controller_cubit.dart';
 import '../cubit/controller/badminton_controller_state.dart';
 
@@ -178,46 +182,29 @@ class BadmintonControlPanelUI extends StatelessWidget {
           // DISPLAY SETTINGS
           // =========================
           const ControllerHeading(text: "Display Settings"),
-          const SizedBox(height: 6),
 
+          widgetGap(),
           BlocSelector<BadmintonControllerCubit, BadmintonControllerState, int>(
             selector: (state) => state.tempBrightness,
             builder: (context, brightness) {
-              return Row(
-                children: [
-                  const ControllerHeading(text: "Brightness",),
-                  Expanded(
-                    child: Slider(
-                      min: 0,
-                      max: 1,
-                      value: brightness / 255,
-                      onChangeEnd: (value) {
-                        context
-                            .read<BadmintonControllerCubit>()
-                            .setBrightness((value * 255).toInt());
-                      }, onChanged: (value) {
-                      context
-                          .read<BadmintonControllerCubit>()
-                          .setTempBrightness((value * 255).toInt());
-                    },
-                    ),
-                  ),
-                ],
+              return BrightnessSliderMinimal(
+                value: brightness.toDouble(),
+                onChanged: (value) {
+                  context.read<BadmintonControllerCubit>().setTempBrightness(value.toInt());
+                },
+                onChangedEnd: (double value) {
+                  context.read<BadmintonControllerCubit>().setBrightness(value.toInt());
+                },
               );
             },
           ),
-
-
-          BlocSelector<BadmintonControllerCubit, BadmintonControllerState, bool>(
-              selector: (state) => state.buzzerOn,
-              builder: (context,buzzer) {
-                return SwitchListTile(title: const ControllerHeading(text: "Buzzer"), value: buzzer, onChanged: (value) {
-                  context.read<BadmintonControllerCubit>().toggleBuzzer();
-                });
-              }
+          widgetGap(),
+          Align(
+            alignment: Alignment.centerRight,
+            child: BuzzerButton(bleService: sl<BleService>()),
           ),
 
-      ],
+        ],
       ),
     );
   }

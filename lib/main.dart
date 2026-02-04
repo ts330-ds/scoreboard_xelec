@@ -20,7 +20,7 @@ import 'feature/permission/bluetooth/cubit/bluetooth_cubit.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   setupDI();
-  FlutterBluePlus.setLogLevel(LogLevel.verbose, color: true);
+  FlutterBluePlus.setLogLevel(LogLevel.warning, color: false);
   final bluetoothPermission = BluetoothPermissionService();
   final bleService = BleService();
  // SocketService().connect("ws://scoreboard.local:81");
@@ -29,7 +29,17 @@ void main() {
     DeviceOrientation.landscapeRight,
   ]);*/
 
-  runApp(DevicePreview(
+  runApp(MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (context) => PermissionCubit(bluetoothPermission)..checkPermission()),
+        BlocProvider(create: (_) => sl<BleCubit>()),
+        BlocProvider(create: (_) => sl<GlobalErrorCubit>(),)
+      ],
+      child: const MyApp()
+
+  ));
+
+  /*runApp(DevicePreview(
     builder: (BuildContext context) {
       return MultiBlocProvider(
           providers: [
@@ -41,7 +51,7 @@ void main() {
 
       );
     },
-  ));
+  ));*/
 }
 
 class MyApp extends StatelessWidget {
@@ -55,8 +65,12 @@ class MyApp extends StatelessWidget {
       theme: lightTheme(context),
       themeMode: ThemeMode.system,
       builder: (context, child) {
-        return GlobalErrorToastListener(
-          child: child!,
+        return ScaffoldMessenger(
+          child: GlobalErrorToastListener(
+            child: Scaffold(
+              body: child!,
+            ),
+          ),
         );
       },
     );

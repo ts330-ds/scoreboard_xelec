@@ -44,8 +44,8 @@ class HockeyControllerState extends Equatable {
       team2PenaltyCorner: 0,
       team1Shootout: 0,
       team2Shootout: 0,
-      brightness: 255,
-      tempbrightness: 255,
+      brightness: 220,
+      tempbrightness: 220,
       buzzerOn: false,
     );
   }

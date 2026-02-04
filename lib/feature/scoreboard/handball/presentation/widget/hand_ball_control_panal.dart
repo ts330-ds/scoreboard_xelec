@@ -7,7 +7,11 @@ import 'package:xelex_esp/feature/scoreboard/handball/presentation/widget/score_
 import 'package:xelex_esp/utility/appColor.dart';
 import 'package:xelex_esp/utility/universal_method.dart';
 
+import '../../../../../common_widget/brightness_slider_widget.dart';
+import '../../../../../common_widget/buzzerWidget.dart';
 import '../../../../../common_widget/quarter_select_row.dart';
+import '../../../../../service/dependency_injection/di_service.dart';
+import '../../../../bluetooth/service/ble_service.dart';
 import '../cubit/controller/hand_ball_controller_state.dart';
 import '../cubit/timer/hand_ball_timer_cubit.dart';
 import '../cubit/timer/hand_ball_timer_state.dart';
@@ -346,41 +350,25 @@ class HandBallControlPanal extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const ControllerHeading(text: "Display Settings"),
-
+          widgetGap(),
           BlocSelector<HandBallControlCubit, HandballControlState, int>(
             selector: (state) => state.tempBrightness,
             builder: (context, brightness) {
-              return Row(
-                children: [
-                  const ControllerHeading(text: "Brightness",),
-                  Expanded(
-                    child: Slider(
-                      min: 0,
-                      max: 1,
-                      value: brightness / 255,
-                      onChangeEnd: (value) {
-                        context
-                            .read<HandBallControlCubit>()
-                            .setBrightness((value * 255).toInt());
-                      }, onChanged: (value) {
-                      context
-                          .read<HandBallControlCubit>()
-                          .setTempBrightness((value * 255).toInt());
-                    },
-                    ),
-                  ),
-                ],
+              return BrightnessSliderMinimal(
+                value: brightness.toDouble(),
+                onChanged: (value) {
+                  context.read<HandBallControlCubit>().setTempBrightness(value.toInt());
+                }, onChangedEnd: (double value) {
+                context.read<HandBallControlCubit>().setBrightness(value.toInt());
+              },
               );
             },
           ),
-          BlocSelector<HandBallControlCubit, HandballControlState, bool>(
-              selector: (state) => state.buzzerOn,
-              builder: (context,buzzer) {
-                return SwitchListTile(title: const ControllerHeading(text: "Buzzer"), value: buzzer, onChanged: (value) {
-                  context.read<HandBallControlCubit>().toggleBuzzer();
-                });
-              }
-          ),
+          widgetGap(),
+          Align(
+              alignment: Alignment.centerRight,
+              child: BuzzerButton(bleService: sl<BleService>())),
+
 
         ],
       ),

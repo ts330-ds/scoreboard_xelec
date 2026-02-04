@@ -7,6 +7,11 @@ import 'package:xelex_esp/feature/scoreboard/football/presentation/cubit/timer/f
 import 'package:xelex_esp/utility/appColor.dart';
 import 'package:xelex_esp/utility/universal_method.dart';
 
+import '../../../../../common_widget/brightness_slider_widget.dart';
+import '../../../../../common_widget/buzzerWidget.dart';
+import '../../../../../service/dependency_injection/di_service.dart';
+import '../../../../bluetooth/service/ble_service.dart';
+
 class FootballControlPanel extends StatelessWidget {
   const FootballControlPanel({super.key});
 
@@ -175,42 +180,25 @@ class FootballControlPanel extends StatelessWidget {
 
           const ControllerHeading(text: "Display Settings"),
 
-
+          widgetGap(),
           BlocSelector<FootballControllerCubit, FootballControllerState, int>(
             selector: (state) => state.tempBrightness,
             builder: (context, brightness) {
-              return Row(
-                children: [
-                  const ControllerHeading(text: "Brightness",),
-                  Expanded(
-                    child: Slider(
-                      min: 0,
-                      max: 1,
-                      value: brightness / 255,
-                      onChangeEnd: (value) {
-                        context
-                            .read<FootballControllerCubit>()
-                            .setBrightness((value * 255).toInt());
-                      }, onChanged: (value) {
-                      context
-                          .read<FootballControllerCubit>()
-                          .setTempBrightness((value * 255).toInt());
-                    },
-                    ),
-                  ),
-                ],
+              return BrightnessSliderMinimal(
+                value: brightness.toDouble(),
+                onChanged: (value) {
+                  context.read<FootballControllerCubit>().setTempBrightness(value.toInt());
+                },
+                onChangedEnd: (double value) {
+                  context.read<FootballControllerCubit>().setBrightness(value.toInt());
+                },
               );
             },
           ),
-
-
-          BlocSelector<FootballControllerCubit, FootballControllerState, bool>(
-              selector: (state) => state.buzzerOn,
-              builder: (context,buzzer) {
-                return SwitchListTile(title: const ControllerHeading(text: "Buzzer"), value: buzzer, onChanged: (value) {
-                  context.read<FootballControllerCubit>().toggleBuzzer();
-                });
-              }
+          widgetGap(),
+          Align(
+            alignment: Alignment.centerRight,
+            child: BuzzerButton(bleService: sl<BleService>()),
           ),
 
 

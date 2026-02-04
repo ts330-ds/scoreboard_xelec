@@ -3,6 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/scoreboard/universal/presentation/widgets/winner_set_selector.dart';
 import 'package:xelex_esp/utility/universal_method.dart';
 
+import '../../../../../common_widget/brightness_slider_widget.dart';
+import '../../../../../common_widget/buzzerWidget.dart';
+import '../../../../../service/dependency_injection/di_service.dart';
+import '../../../../bluetooth/service/ble_service.dart';
 import '../cubit/controller/universal_game_controller_cubit.dart';
 import '../cubit/controller/universal_game_controller_state.dart';
 
@@ -26,6 +30,25 @@ class UniversalGameControllerPanel extends StatelessWidget {
           widgetGap(),
           SetWinnerSelector(),
           widgetGap(),
+          BlocSelector<UniversalGameControllerCubit, UniversalGameControllerState, int>(
+            selector: (state) => state.tempBrightness,
+            builder: (context, brightness) {
+              return BrightnessSliderMinimal(
+                value: brightness.toDouble(),
+                onChanged: (value) {
+                  context.read<UniversalGameControllerCubit>().setTempBrightness(value.toInt());
+                },
+                onChangedEnd: (double value) {
+                  context.read<UniversalGameControllerCubit>().setBrightness(value.toInt());
+                },
+              );
+            },
+          ),
+          widgetGap(),
+          Align(
+            alignment: Alignment.centerRight,
+            child: BuzzerButton(bleService: sl<BleService>()),
+          ),
         ],
       ),
     );

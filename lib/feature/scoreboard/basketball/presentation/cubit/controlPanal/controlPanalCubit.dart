@@ -97,12 +97,13 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
 
   // Brightness (0 - 255)
   void setBrightness(int value) {
-    emit(state.copyWith(brightness: value.clamp(0, 255)));
-    bleService.send(basketBallBleMapper.setBrightness(value));
+    emit(state.copyWith(brightness: value.clamp(0, 220)));
+    print("Code is ${"BRIG${value.clamp(0, 220)}"}");
+    bleService.send("BRIG${value.clamp(0, 220)}");
   }
 
   void setTempBrightness(int value) {
-    emit(state.copyWith(tempBrightness: value.clamp(0, 255)));
+    emit(state.copyWith(tempBrightness: value.clamp(0, 220)));
   }
 
   // Buzzer toggle

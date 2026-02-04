@@ -15,8 +15,24 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+
+// Helper to load properties from local.properties
+val localProperties = java.util.Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
+val flutterSdkPath = localProperties.getProperty("flutter.sdk") ?: "/Users/tusharsoni/Software/flutter3.27.3"
+
 subprojects {
-    project.evaluationDependsOn(":app")
+    // This allows plugins using the old 'flutter.compileSdkVersion' syntax to find the values
+    project.extensions.extraProperties.set("flutter", object {
+        val compileSdkVersion = (localProperties.getProperty("flutter.compileSdkVersion") ?: "34").toInt()
+        val minSdkVersion = (localProperties.getProperty("flutter.minSdkVersion") ?: "21").toInt()
+        val targetSdkVersion = (localProperties.getProperty("flutter.targetSdkVersion") ?: "34").toInt()
+        val ndkVersion = localProperties.getProperty("flutter.ndkVersion") ?: "25.1.8937393"
+    })
 }
 
 tasks.register<Delete>("clean") {
