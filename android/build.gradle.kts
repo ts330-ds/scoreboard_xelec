@@ -33,6 +33,17 @@ subprojects {
         val targetSdkVersion = (localProperties.getProperty("flutter.targetSdkVersion") ?: "34").toInt()
         val ndkVersion = localProperties.getProperty("flutter.ndkVersion") ?: "25.1.8937393"
     })
+
+    // Add flutter.jar and androidx dependencies to plugin subprojects for compilation
+    afterEvaluate {
+        if (project.plugins.hasPlugin("com.android.library")) {
+            project.dependencies {
+                add("compileOnly", files("$flutterSdkPath/bin/cache/artifacts/engine/android-arm-release/flutter.jar"))
+                add("implementation", "androidx.annotation:annotation:1.7.1")
+                add("implementation", "androidx.core:core:1.12.0")
+            }
+        }
+    }
 }
 
 tasks.register<Delete>("clean") {

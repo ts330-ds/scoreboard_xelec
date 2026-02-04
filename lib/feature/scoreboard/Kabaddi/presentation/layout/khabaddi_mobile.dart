@@ -52,7 +52,7 @@ class KhabaddiMobile extends StatelessWidget {
         }
       },
       child: AdaptiveScaffold(
-        title: "Khabaddi",
+        title: "Kabaddi",
         resizeToAvoidBottomInset: false,
         onSettingsPressed: (){
           context.push(AppPaths.khabaddisConfig);

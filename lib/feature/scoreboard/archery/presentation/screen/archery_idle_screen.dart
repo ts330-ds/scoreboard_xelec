@@ -111,6 +111,17 @@ class _ArcheryIdleScreenState extends State<ArcheryIdleScreen> {
                     letterSpacing: 12,
                   ),
                 ),
+                Text("${_currentTime.day.toString().padLeft(2, '0')}/"
+                    "${_currentTime.month.toString().padLeft(2, '0')}/"
+                    "${_currentTime.year}",
+                  style: const TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFFFFF00), // Yellow like LED
+                    fontFamily: 'monospace',
+                    letterSpacing: 8,
+                  ),
+                ),
                 const SizedBox(height: 60),
                 // Let's Play Button
                 ElevatedButton(

@@ -60,7 +60,7 @@ class _HandBallConfigScreenState extends State<HandBallConfigScreen> {
         BlocProvider.value(value: sl<HandBallTimerCubit>())
       ],
       child: AdaptiveScaffold(
-        title: 'Handball Config',
+        title: 'Handball Configuration',
         body: Padding(
           padding: const EdgeInsets.all(8.0),
           child: Column(

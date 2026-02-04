@@ -11,6 +11,7 @@ class AdaptiveScaffold extends StatelessWidget {
   final bool resizeToAvoidBottomInset;
   final VoidCallback? onSettingsPressed;
   final Color appBarBackground;
+  final Color bodyBackground;
   final Color textColor;
 
   const AdaptiveScaffold({
@@ -22,6 +23,7 @@ class AdaptiveScaffold extends StatelessWidget {
     this.onSettingsPressed,
     this.appBarBackground = Colors.blue,
     this.textColor = Colors.white,
+    this.bodyBackground = Colors.white,
   });
 
   @override
@@ -30,14 +32,14 @@ class AdaptiveScaffold extends StatelessWidget {
     if (kIsWeb) {
       return Scaffold(
         resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+        backgroundColor: bodyBackground,
         appBar: AppBar(
           titleSpacing: 10,
           elevation: 0,
           backgroundColor: appBarBackground,
           title: Text(
             title,
-            style: context.text.titleSmall!
-                .copyWith(color: textColor),
+            style: context.text.titleSmall!.copyWith(color: textColor),
           ),
           actions: onSettingsPressed != null
               ? [
@@ -61,8 +63,9 @@ class AdaptiveScaffold extends StatelessWidget {
         navigationBar: CupertinoNavigationBar(
           middle: Text(
             title,
-            style: context.text.titleSmall!
-                .copyWith(color: context.colors.primary),
+            style: context.text.titleSmall!.copyWith(
+              color: context.colors.primary,
+            ),
           ),
           trailing: onSettingsPressed != null
               ? CupertinoButton(
@@ -88,17 +91,16 @@ class AdaptiveScaffold extends StatelessWidget {
         backgroundColor: appBarBackground,
         title: Text(
           title,
-          style: context.text.titleSmall!
-              .copyWith(color: textColor),
+          style: context.text.titleSmall!.copyWith(color: textColor),
         ),
         actions: onSettingsPressed != null
             ? [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: onSettingsPressed,
-            color: context.colors.surface,
-          ),
-        ]
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  onPressed: onSettingsPressed,
+                  color: context.colors.surface,
+                ),
+              ]
             : null,
       ),
       floatingActionButton: floatingActionButton,

@@ -62,7 +62,7 @@ class _KhabaddiConfigScreenState extends State<KhabaddiConfigScreen> {
         BlocProvider.value(value: sl<KabaddiTimerCubit>())
       ],
       child: AdaptiveScaffold(
-        title: 'Handball Config',
+        title: 'Kabaddi Configuration',
         body: Padding(
           padding: const EdgeInsets.all(8.0),
           child: Column(
