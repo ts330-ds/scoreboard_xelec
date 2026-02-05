@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 class HockeyBleMapper {
-  // Helper method to log and return the command
   String _log(String command) {
     debugPrint('🏑 BLE Command: $command');
     return command;
@@ -15,12 +14,8 @@ class HockeyBleMapper {
   String setTeam1Score(int score) => _log("HOS1$score");
   String setTeam2Score(int score) => _log("HOS2$score");
 
-  // Quarters (1-4)
-  String setQuarter1() => _log("HOQ1");
-  String setQuarter2() => _log("HOQ2");
-  String setQuarter3() => _log("HOQ3");
-  String setQuarter4() => _log("HOQ4");
-  String setQuarter(int q) => _log("HOQ$q");
+  // Quarter (1-4)
+  String setQuarter(int quarter) => _log("HOQ$quarter");
 
   // Timer
   String setTimerMinutes(int minutes) => _log("HOTN$minutes");
@@ -28,20 +23,18 @@ class HockeyBleMapper {
   String pauseTimer() => _log("HOTP");
   String resetTimer() => _log("HOTR");
 
-  // Penalty Corner
-  String setTeam1PenaltyCorner(int value) => _log("HOP1$value");
-  String setTeam2PenaltyCorner(int value) => _log("HOP2$value");
+  // Penalty Corners
+  String setTeam1PenaltyCorner(int count) => _log("HOP1$count");
+  String setTeam2PenaltyCorner(int count) => _log("HOP2$count");
 
-  // Shoot Out
-  String setTeam1ShootOut(int value) => _log("HOO1$value");
-  String setTeam2ShootOut(int value) => _log("HOO2$value");
+  // Shoot Outs
+  String setTeam1ShootOut(int count) => _log("HOO1$count");
+  String setTeam2ShootOut(int count) => _log("HOO2$count");
 
-  // Team Colors (RGB565 HEX)
-  String setTeam1Color(String hex565) => _log("HOC1$hex565");
-  String setTeam2Color(String hex565) => _log("HOC2$hex565");
+  // Team Name Colors (RGB565 HEX)
+  String setTeam1NameColor(String rgb565) => _log("HOC1$rgb565");
+  String setTeam2NameColor(String rgb565) => _log("HOC2$rgb565");
 
   // Reset
   String resetScreen() => _log("HORT");
-
-  // NOTE: Brightness & Buzzer NOT supported in Hockey firmware
 }

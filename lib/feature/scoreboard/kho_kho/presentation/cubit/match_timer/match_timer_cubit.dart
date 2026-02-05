@@ -33,6 +33,10 @@ class MatchTimerCubit extends Cubit<MatchTimerState> {
     _timer?.cancel();
     emit(state.copyWith(status: MatchTimerStatus.inProgress));
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (isClosed) {
+        timer.cancel();
+        return;
+      }
       if (state.duration > 0) {
         emit(state.copyWith(duration: state.duration - 1));
       } else {
@@ -57,6 +61,12 @@ class MatchTimerCubit extends Cubit<MatchTimerState> {
   void resetTimer(int duration) {
     _timer?.cancel();
     emit(MatchTimerState(duration: duration, status: MatchTimerStatus.initial));
+  }
+
+  /// Reset to default state (called on exit)
+  void resetToDefault() {
+    _timer?.cancel();
+    emit(const MatchTimerState(duration: 18, status: MatchTimerStatus.initial));
   }
 
   @override

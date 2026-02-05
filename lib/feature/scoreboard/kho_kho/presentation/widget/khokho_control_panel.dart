@@ -211,7 +211,7 @@ class KhokhoControlPanel extends StatelessWidget {
           const SizedBox(height: 6),
           CustomButton(
             backgroundColor: Colors.deepPurple,
-            label: "Toggle Chase/Defend",
+            label: " Toggle Chase/Defend ",
             onPressed: () => controlCubit.toggleChasingTeam(),
             height: 44,
           ),

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
@@ -87,7 +89,9 @@ class KhokhoControllerCubit extends Cubit<KhokhoControllerState> {
   void updateTeam1Color(Color color) {
     try {
       emit(state.copyWith(team1Color: color));
-      bleService.send(khoBleMapper.setTeam1Color(toRgb565(color)));
+      bleService.send(khoBleMapper.setTeam1Color(
+        toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase()
+        ));
     } catch (e) {
       globalErrorCubit.showError('Failed to update team 1 color: $e');
     }
@@ -96,7 +100,9 @@ class KhokhoControllerCubit extends Cubit<KhokhoControllerState> {
   void updateTeam2Color(Color color) {
     try {
       emit(state.copyWith(team2Color: color));
-      bleService.send(khoBleMapper.setTeam2Color(toRgb565(color)));
+      bleService.send(khoBleMapper.setTeam2Color(
+        toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase()
+        ));
     } catch (e) {
       globalErrorCubit.showError('Failed to update team 2 color: $e');
     }
@@ -158,7 +164,7 @@ class KhokhoControllerCubit extends Cubit<KhokhoControllerState> {
       if (parts.length == 2) {
         final minutes = int.tryParse(parts[0]);
         if (minutes != null) {
-          bleService.send(khoBleMapper.setMatchMinutes(minutes));
+          bleService.send(khoBleMapper.setMatchTimerMinutes(minutes));
         }
       }
     } catch (e) {
@@ -170,7 +176,7 @@ class KhokhoControllerCubit extends Cubit<KhokhoControllerState> {
     try {
       final newState = !state.isTeam1Chasing;
       emit(state.copyWith(isTeam1Chasing: newState));
-      bleService.send(khoBleMapper.setChaseTeam(newState ? 1 : 2));
+      bleService.send(khoBleMapper.setChasingTeam(newState ? 1 : 2));
     } catch (e) {
       globalErrorCubit.showError('Failed to toggle chasing team: $e');
     }
@@ -178,6 +184,7 @@ class KhokhoControllerCubit extends Cubit<KhokhoControllerState> {
 
   void resetScreen() {
     try {
+      emit(const KhokhoControllerState());
       bleService.send(khoBleMapper.resetScreen());
     } catch (e) {
       globalErrorCubit.showError('Failed to reset screen: $e');
@@ -188,7 +195,7 @@ class KhokhoControllerCubit extends Cubit<KhokhoControllerState> {
   void setBrightness(int value) {
     try {
       emit(state.copyWith(brightness: value.clamp(0, 220)));
-     // bleService.send(basketBallBleMapper.setBrightness(value));
+      bleService.send("BRIG${value.clamp(0, 220)}");
     } catch (e) {
       globalErrorCubit.showError('Failed to set brightness: $e');
     }
@@ -202,13 +209,4 @@ class KhokhoControllerCubit extends Cubit<KhokhoControllerState> {
     }
   }
 
-  // Buzzer toggle
-  void toggleBuzzer() {
-    try {
-      emit(state.copyWith(buzzerOn: !state.buzzerOn));
-      //bleService.send(state.buzzerOn ? "BBBUZZERON" : "BBBUZZEROFF");
-    } catch (e) {
-      globalErrorCubit.showError('Failed to toggle buzzer: $e');
-    }
-  }
 }

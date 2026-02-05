@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/utility/universal_method.dart';
 
 import '../../../../../responsive/adaptive_scaffold.dart';
@@ -143,7 +144,7 @@ class _UniversalGameConfigScreenState
 
                       // (future) yahin team name / color state me add ho sakta hai
 
-                      context.pop();
+                      context.pushReplacement(AppPaths.universal);
                     },
                     child: const Text('SAVE'),
                   );

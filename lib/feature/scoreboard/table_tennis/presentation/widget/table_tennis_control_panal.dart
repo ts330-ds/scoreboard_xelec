@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/cubit/controller/table_tennis_controller_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/cubit/controller/table_tennis_controller_state.dart';
 import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/widget/timeout_switch.dart';
+import 'package:xelex_esp/utility/theme_extension.dart';
 import 'package:xelex_esp/utility/universal_method.dart';
 
 import '../../../../../common_widget/brightness_slider_widget.dart';
@@ -180,6 +181,39 @@ class TableTennisControlPanal extends StatelessWidget {
           ),
 
           widgetGap(),
+          controllerHeading(label: "Serve", context: context),
+          buttonGap(),
+          BlocSelector<TableTennisControllerCubit, TableTennisControllerState,
+              ({int servingTeam, String team1Name, String team2Name})>(
+            selector: (state) => (
+              servingTeam: state.servingTeam,
+              team1Name: state.team1Name,
+              team2Name: state.team2Name,
+            ),
+            builder: (context, data) {
+              return Row(
+                children: [
+                  Expanded(
+                    child: _ServeToggleButton(
+                      label: data.team1Name,
+                      isSelected: data.servingTeam == 1,
+                      onPressed: () => controlCubit.setInitialServe(1),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _ServeToggleButton(
+                      label: data.team2Name,
+                      isSelected: data.servingTeam == 2,
+                      onPressed: () => controlCubit.setInitialServe(2),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+
+          widgetGap(),
           controllerHeading(label: "Timeout", context: context),
           TimeoutSwitches(),
 
@@ -236,6 +270,51 @@ class TableTennisControlPanal extends StatelessWidget {
           ),
 
         ],
+      ),
+    );
+  }
+}
+
+class _ServeToggleButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onPressed;
+
+  const _ServeToggleButton({
+    required this.label,
+    required this.isSelected,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 42,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(
+          isSelected ? Icons.sports_tennis : Icons.sports_tennis_outlined,
+          size: 20,
+          color: isSelected ? Colors.yellow : Colors.white70,
+        ),
+        label: Text(
+          label,
+          style: context.text.headlineMedium!.copyWith(
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.white : Colors.white70,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isSelected ? AppColors.lakersGreen : Colors.grey.shade700,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: isSelected
+                ? const BorderSide(color: Colors.yellow, width: 2)
+                : BorderSide.none,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
       ),
     );
   }

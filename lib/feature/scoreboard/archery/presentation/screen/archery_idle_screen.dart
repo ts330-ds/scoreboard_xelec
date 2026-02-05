@@ -55,13 +55,13 @@ class _ArcheryIdleScreenState extends State<ArcheryIdleScreen> {
     final day = getDayName(dateTime);
 
     widget.bleService.send(
-      widget.archeryBleMapper.syncDateTime(dateTime)
+      widget.archeryBleMapper.setTime(dateTime.hour, dateTime.minute, dateTime.second),
     );
     widget.bleService.send(
       widget.archeryBleMapper.setDate(date),
     );
     widget.bleService.send(
-      widget.archeryBleMapper.setDayOfWeek(day)
+      widget.archeryBleMapper.setDay(day)
     );
   }
 

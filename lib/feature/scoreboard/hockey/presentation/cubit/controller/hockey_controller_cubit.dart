@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/hockey_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
+import 'package:xelex_esp/feature/scoreboard/basketball/presentation/isolates/image_preprocessor.dart';
+import 'package:xelex_esp/utility/universal_method.dart';
 import 'hockey_controller_state.dart';
 
 class HockeyControllerCubit extends Cubit<HockeyControllerState> {
@@ -88,7 +90,9 @@ class HockeyControllerCubit extends Cubit<HockeyControllerState> {
       emit(state.copyWith(team1PenaltyCorner: newValue));
       bleService.send(bleMapper.setTeam1PenaltyCorner(newValue));
     } catch (e) {
-      globalErrorCubit.showError('Failed to increment team 1 penalty corner: $e');
+      globalErrorCubit.showError(
+        'Failed to increment team 1 penalty corner: $e',
+      );
     }
   }
 
@@ -100,7 +104,9 @@ class HockeyControllerCubit extends Cubit<HockeyControllerState> {
         bleService.send(bleMapper.setTeam1PenaltyCorner(newValue));
       }
     } catch (e) {
-      globalErrorCubit.showError('Failed to decrement team 1 penalty corner: $e');
+      globalErrorCubit.showError(
+        'Failed to decrement team 1 penalty corner: $e',
+      );
     }
   }
 
@@ -110,7 +116,9 @@ class HockeyControllerCubit extends Cubit<HockeyControllerState> {
       emit(state.copyWith(team2PenaltyCorner: newValue));
       bleService.send(bleMapper.setTeam2PenaltyCorner(newValue));
     } catch (e) {
-      globalErrorCubit.showError('Failed to increment team 2 penalty corner: $e');
+      globalErrorCubit.showError(
+        'Failed to increment team 2 penalty corner: $e',
+      );
     }
   }
 
@@ -122,7 +130,9 @@ class HockeyControllerCubit extends Cubit<HockeyControllerState> {
         bleService.send(bleMapper.setTeam2PenaltyCorner(newValue));
       }
     } catch (e) {
-      globalErrorCubit.showError('Failed to decrement team 2 penalty corner: $e');
+      globalErrorCubit.showError(
+        'Failed to decrement team 2 penalty corner: $e',
+      );
     }
   }
 
@@ -131,7 +141,8 @@ class HockeyControllerCubit extends Cubit<HockeyControllerState> {
     try {
       final clampedValue = value.clamp(0, 220);
       emit(state.copyWith(brightness: clampedValue));
-     // bleService.send(bleMapper.setBrightness(clampedValue));
+      // bleService.send(bleMapper.setBrightness(clampedValue));
+      bleService.send("BRIG${value.clamp(0, 220)}");
     } catch (e) {
       globalErrorCubit.showError('Failed to set brightness: $e');
     }
@@ -213,7 +224,7 @@ class HockeyControllerCubit extends Cubit<HockeyControllerState> {
   void setTeam1Color(Color color) {
     try {
       emit(state.copyWith(team1Color: color));
-      // Implementation for sending color if needed by mapper
+      bleService.send(bleMapper.setTeam1NameColor(toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase()));
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 1 color: $e');
     }
@@ -222,6 +233,8 @@ class HockeyControllerCubit extends Cubit<HockeyControllerState> {
   void setTeam2Color(Color color) {
     try {
       emit(state.copyWith(team2Color: color));
+      bleService.send(bleMapper.setTeam2NameColor(toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase()));
+   
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 2 color: $e');
     }

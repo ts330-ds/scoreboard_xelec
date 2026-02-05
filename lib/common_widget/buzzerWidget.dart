@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:xelex_esp/feature/bluetooth/mapper/archery_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
 
 class BuzzerButton extends StatelessWidget {
@@ -13,12 +12,17 @@ class BuzzerButton extends StatelessWidget {
 
   void _onPress() {
     _isPressed.value = true;
-    bleService.send("BUZZON");
+    bleService.send(_log("BUZZON"));
   }
 
   void _onRelease() {
     _isPressed.value = false;
-    bleService.send("BUZZOFF");
+    bleService.send(_log("BUZZOFF"));
+  }
+
+String _log(String command) {
+    debugPrint('🏑 BLE Command: $command');
+    return command;
   }
 
   @override

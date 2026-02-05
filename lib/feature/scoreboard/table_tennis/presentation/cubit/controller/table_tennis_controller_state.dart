@@ -44,7 +44,7 @@ class TableTennisControllerState {
     required this.roundPlayed,
     required this.matchNumber,
     this.gameStart = false,
-    this.servingTeam = 0,
+    this.servingTeam = 1,
     this.brightness = 220,
     this.tempBrightness = 220,
     this.buzzerOn = false,
@@ -64,7 +64,7 @@ class TableTennisControllerState {
       roundPlayed: 0, // 👈 start from 0
       matchNumber: 1,
       gameStart: false,
-      servingTeam: 0,
+      servingTeam: 1,
       team1Color: Colors.red,
       team2Color: Colors.blue,
       brightness: 220,

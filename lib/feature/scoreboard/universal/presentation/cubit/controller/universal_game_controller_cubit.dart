@@ -186,23 +186,13 @@ class UniversalGameControllerCubit extends Cubit<UniversalGameControllerState> {
   }
 
   // ------------------------------------------------
-  // BUZZER
-  // ------------------------------------------------
-  void triggerBuzzer() {
-    try {
-      bleService.send(bleMapper.triggerBuzzer());
-    } catch (e) {
-      globalErrorCubit.showError('Failed to trigger buzzer: $e');
-    }
-  }
-
-  // ------------------------------------------------
   // BRIGHTNESS (0-255)
   // ------------------------------------------------
   void setBrightness(int value) {
     try {
       final clampedValue = value.clamp(0, 220);
-      bleService.send(bleMapper.setBrightness(clampedValue));
+      emit(state.copyWith(brightness: clampedValue));
+      bleService.send("BRIG$clampedValue");
     } catch (e) {
       globalErrorCubit.showError('Failed to set brightness: $e');
     }

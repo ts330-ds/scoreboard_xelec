@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 class KabaddiBleMapper {
-  // Helper method to log and return the command
   String _log(String command) {
     debugPrint('🤼 BLE Command: $command');
     return command;
@@ -17,8 +16,7 @@ class KabaddiBleMapper {
 
   // Team Colors (RGB565 HEX)
   String setTeam1Color(String rgb565) => _log("KAC1$rgb565");
-  String setTeam2Color(String rgb565) =>
-      _log("KAC2$rgb565");
+  String setTeam2Color(String rgb565) => _log("KAC2$rgb565");
 
   // Quarter (1 or 2)
   String setQuarter(int quarter) => _log(quarter == 1 ? "KAQ1" : "KAQ2");

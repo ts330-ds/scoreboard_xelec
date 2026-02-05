@@ -114,8 +114,8 @@ class _KhoKhoConfigScreenState extends State<KhoKhoConfigScreen> {
                       controlCubit.updateTeam2Color(team2Color!);
 
                       timerCubit.resetTimer(int.parse(timerController.text) * 60);
-                      
-                      context.pop();
+
+                      context.pushReplacement(AppPaths.kho_kho);
                     },
                     child: const Text('SAVE'),
                   );

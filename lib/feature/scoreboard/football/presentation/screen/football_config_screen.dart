@@ -18,9 +18,9 @@ class FootballConfigScreen extends StatefulWidget {
 }
 
 class _FootballConfigScreenState extends State<FootballConfigScreen> {
-  late final TextEditingController team1Controller;
-  late final TextEditingController team2Controller;
-  late final TextEditingController timerController;
+  TextEditingController? team1Controller;
+  TextEditingController? team2Controller;
+  TextEditingController? timerController;
 
   Color? team1Color;
   Color? team2Color;
@@ -33,22 +33,25 @@ class _FootballConfigScreenState extends State<FootballConfigScreen> {
 
     team1Controller = TextEditingController(text: controlState.team1Name);
     team2Controller = TextEditingController(text: controlState.team2Name);
-    timerController = TextEditingController(text: (timerState.duration ~/ 60).toString());
+    // Football timer duration is in seconds, convert to minutes for display
+    // Default to 45 if duration is 0
+    final minutes = timerState.duration > 0 ? (timerState.duration ~/ 60) : 45;
+    timerController = TextEditingController(text: minutes.toString());
 
     team1Color = controlState.team1Color;
     team2Color = controlState.team2Color;
   }
 
   bool _isValid() {
-    return team1Controller.text.trim().isNotEmpty &&
-        team2Controller.text.trim().isNotEmpty;
+    return team1Controller?.text.trim().isNotEmpty == true &&
+        team2Controller?.text.trim().isNotEmpty == true;
   }
 
   @override
   void dispose() {
-    team1Controller.dispose();
-    team2Controller.dispose();
-    timerController.dispose();
+    team1Controller?.dispose();
+    team2Controller?.dispose();
+    timerController?.dispose();
     super.dispose();
   }
 
@@ -65,24 +68,26 @@ class _FootballConfigScreenState extends State<FootballConfigScreen> {
           padding: const EdgeInsets.all(8.0),
           child: Column(
             children: [
-              TwoTextFieldWidget(
-                team1Controller: team1Controller,
-                team2Controller: team2Controller,
-                team1Color: team1Color,
-                team2Color: team2Color,
-                onTeam1ColorChanged: (color) {
-                  setState(() => team1Color = color);
-                },
-                onTeam2ColorChanged: (color) {
-                  setState(() => team2Color = color);
-                },
-              ),
+              if (team1Controller != null && team2Controller != null && timerController != null) ...[
+                TwoTextFieldWidget(
+                  team1Controller: team1Controller!,
+                  team2Controller: team2Controller!,
+                  team1Color: team1Color,
+                  team2Color: team2Color,
+                  onTeam1ColorChanged: (color) {
+                    setState(() => team1Color = color);
+                  },
+                  onTeam2ColorChanged: (color) {
+                    setState(() => team2Color = color);
+                  },
+                ),
 
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              TimerTextFieldWidget(
-                  timerController: timerController
-              ),
+                TimerTextFieldWidget(
+                    timerController: timerController!
+                ),
+              ],
 
               const SizedBox(height: 24),
               Builder(
@@ -97,12 +102,12 @@ class _FootballConfigScreenState extends State<FootballConfigScreen> {
                         return;
                       }
                       
-                      controlCubit.updateTeam1Name(team1Controller.text);
-                      controlCubit.updateTeam2Name(team2Controller.text);
+                      controlCubit.updateTeam1Name(team1Controller!.text);
+                      controlCubit.updateTeam2Name(team2Controller!.text);
                       controlCubit.updateTeam1Color(team1Color ?? Colors.red);
                       controlCubit.updateTeam2Color(team2Color ?? Colors.blue);
-                      
-                      context.pop();
+
+                      context.pushReplacement(AppPaths.football);
                     },
                     child: const Text('SAVE'),
                   );

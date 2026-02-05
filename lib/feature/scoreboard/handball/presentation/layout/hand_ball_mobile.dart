@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/scoreboard/handball/presentation/cubit/controller/hand_ball_controller_cubit.dart';
+import 'package:xelex_esp/feature/scoreboard/handball/presentation/cubit/timer/hand_ball_timer_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/handball/presentation/widget/hand_ball_control_panal.dart';
 import 'package:xelex_esp/feature/scoreboard/handball/presentation/widget/hand_ball_scoreboard_preview.dart';
 import 'package:xelex_esp/feature/scoreboard/handball/presentation/widget/hand_ball_timer_control_row.dart';
@@ -14,15 +15,22 @@ class HandBallMobile extends StatelessWidget {
 
   Future<bool?> _showExitDialog(BuildContext context) {
     final controlCubit = sl<HandBallControlCubit>();
+    final timerCubit = sl<HandBallTimerCubit>();
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Exit Game?'),
-        content: const Text('Are you sure you want to close the scoreboard? Any unsaved progress may be lost.'),
+        content: const Text(
+          'Are you sure you want to close the scoreboard? Any unsaved progress may be lost.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('CANCEL'),
+          ),
           TextButton(
             onPressed: () {
+              timerCubit.resetToDefault();
               controlCubit.exit();
               context.pop(true);
             },
@@ -46,9 +54,6 @@ class HandBallMobile extends StatelessWidget {
       },
       child: AdaptiveScaffold(
         title: "Hand Ball",
-        onSettingsPressed: () {
-          context.push(AppPaths.handballConfig);
-        },
         body: Column(
           mainAxisSize: MainAxisSize.max,
           children: [

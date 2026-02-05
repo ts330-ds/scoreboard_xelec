@@ -1,77 +1,42 @@
 import 'package:flutter/foundation.dart';
 
 class BasketBallBleMapper {
-  // Helper method to log and return the command
   String _log(String command) {
     debugPrint('🏀 BLE Command: $command');
     return command;
   }
 
-  // ======================
-  // TEAM NAMES
-  // ======================
+  // Team Names
+  String setTeam1Name(String name) => _log("BBN1$name");
+  String setTeam2Name(String name) => _log("BBN2$name");
 
-  String setHomeTeamName(String name) => _log("BBN1$name");
-  String setAwayTeamName(String name) => _log("BBN2$name");
+  // Scores
+  String setTeam1Score(int score) => _log("BBS1$score");
+  String setTeam2Score(int score) => _log("BBS2$score");
 
-  // ======================
-  // SCORES (DIRECT SET)
-  // ======================
+  // Team Colors (RGB565 HEX)
+  String setTeam1Color(String rgb565) => _log("BBC1$rgb565");
+  String setTeam2Color(String rgb565) => _log("BBC2$rgb565");
 
-  String setHomeScore(int score) {
-    assert(score >= 0);
-    return _log("BBS1$score");
+  // Quarter (1-4)
+  String setQuarter(int quarter) => _log("BBQ$quarter");
+
+  // Timer
+  String setTimerMinutes(int minutes) => _log("BBTN$minutes");
+  
+  String setTime(int totalSeconds) {
+    final mm = (totalSeconds ~/ 60).toString().padLeft(2, '0');
+    final ss = (totalSeconds % 60).toString().padLeft(2, '0');
+    return _log("BBTT$mm");
   }
-
-  String setAwayScore(int score) {
-    assert(score >= 0);
-    return _log("BBS2$score");
-  }
-
-  // ======================
-  // QUARTERS (SEPARATE COMMANDS)
-  // ======================
-
-  String setQuarter1() => _log("BBQ1");
-  String setQuarter2() => _log("BBQ2");
-  String setQuarter3() => _log("BBQ3");
-  String setQuarter4() => _log("BBQ4");
-
-  // ======================
-  // TEAM COLORS (RGB565 HEX)
-  // ======================
-
-  /// Example: "07E0", "F800"
-  String setHomeTeamColor(String hex565) => _log("BBC1$hex565");
-  String setAwayTeamColor(String hex565) => _log("BBC2$hex565");
-
-  // ======================
-  // MAIN TIMER
-  // ======================
-
-  /// Set timer minutes (seconds auto reset in firmware)
-  String setTimerMinutes(int minutes) {
-    assert(minutes > 0);
-    return _log("BBTN$minutes");
-  }
-
   String startTimer() => _log("BBTS");
   String pauseTimer() => _log("BBTP");
   String resetTimer() => _log("BBTR");
 
-  // ======================
-  // SHOT / MINI TIMER
-  // ======================
+  // Shot Clock
+  String startShotClock() => _log("BBMS");
+  String resetShotClock() => _log("BBMR");
 
-  String setBrightness(int value) => _log("HOBS:$value");
-  String setBuzzer(int value) => _log("HOBS:$value");
-
-  String startShotTimer() => _log("BBMS");
-  String resetShotTimer() => _log("BBMR");
-
-  // ======================
-  // SCREEN
-  // ======================
-
+  // Reset
   String resetScreen() => _log("BBRT");
 }

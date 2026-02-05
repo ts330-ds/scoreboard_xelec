@@ -25,14 +25,7 @@ class TopBar extends StatelessWidget {
           const Spacer(),
           RoundDots(),
           const Spacer(),
-          const Text(
-            "30:00",
-            style: TextStyle(
-              color: Colors.yellow,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+        
         ],
       ),
     );

@@ -2,7 +2,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/badminton_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
-import 'package:xelex_esp/utility/universal_method.dart';
 import 'badminton_controller_state.dart';
 import 'package:flutter/material.dart';
 class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
@@ -19,7 +18,7 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
   void setTeam1Name(String name) {
     try {
       emit(state.copyWith(team1Name: name));
-      bleService.send(badmintonBleMapper.setTeam1Name(name));
+      bleService.send(badmintonBleMapper.setPlayer1Name(name));
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 1 name: $e');
     }
@@ -28,7 +27,7 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
   void setTeam2Name(String name) {
     try {
       emit(state.copyWith(team2Name: name));
-      bleService.send(badmintonBleMapper.setTeam2Name(name));
+      bleService.send(badmintonBleMapper.setPlayer2Name(name));
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 2 name: $e');
     }
@@ -39,11 +38,11 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
   void setTeam1Color(Color color) {
     try {
       emit(state.copyWith(team1Color: color));
-      bleService.send(
-        badmintonBleMapper.setTeam1Color(
-          toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase(),
-        ),
-      );
+      //bleService.send(
+      //  badmintonBleMapper.setTeam1Color(
+      //    toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase(),
+      //  ),
+      //);
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 1 color: $e');
     }
@@ -52,11 +51,11 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
   void setTeam2Color(Color color) {
     try {
       emit(state.copyWith(team2Color: color));
-      bleService.send(
-        badmintonBleMapper.setTeam2Color(
-          toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase(),
-        ),
-      );
+      //bleService.send(
+      //  badmintonBleMapper.setTeam2Color(
+      //    toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase(),
+      //  ),
+      //);
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 2 color: $e');
     }
@@ -71,6 +70,11 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
           : ServeTeam.team1;
 
       emit(state.copyWith(serveTeam: newServe));
+      bleService.send(
+        newServe == ServeTeam.team1
+            ? badmintonBleMapper.setServerSide(1)
+            : badmintonBleMapper.setServerSide(2),
+      );
     } catch (e) {
       globalErrorCubit.showError('Failed to toggle serve: $e');
     }
@@ -226,7 +230,7 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
     try {
       final v = value.clamp(0, 220);
       emit(state.copyWith(brightness: v));
-      bleService.send(badmintonBleMapper.setBrightness(v));
+      bleService.send("BRIG${value.clamp(0, 220)}");
     } catch (e) {
       globalErrorCubit.showError('Failed to set brightness: $e');
     }
@@ -239,16 +243,13 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
       globalErrorCubit.showError('Failed temp brightness: $e');
     }
   }
-
-  // ---------------- BUZZER ----------------
-
-  void toggleBuzzer() {
+  
+  void resetScreen() {
     try {
-      final newValue = !state.buzzerOn;
-      emit(state.copyWith(buzzerOn: newValue));
-      bleService.send(newValue ? "BBBUZZERON" : "BBBUZZEROFF");
+      emit(BadmintonControllerState.initial());
+      bleService.send(badmintonBleMapper.resetScreen());
     } catch (e) {
-      globalErrorCubit.showError('Failed to toggle buzzer: $e');
+      globalErrorCubit.showError('Failed to reset screen: $e');
     }
-  }
+  } 
 }

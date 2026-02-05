@@ -23,7 +23,7 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
   void setTeam1Name(String name) {
     try {
       emit(state.copyWith(team1Name: name));
-      bleService.send(basketBallBleMapper.setHomeTeamName(name));
+      bleService.send(basketBallBleMapper.setTeam1Name(name));
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 1 name: $e');
     }
@@ -40,7 +40,7 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
   void setTeam2Name(String name) {
     try {
       emit(state.copyWith(team2Name: name));
-      bleService.send(basketBallBleMapper.setAwayTeamName(name));
+      bleService.send(basketBallBleMapper.setTeam2Name(name));
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 2 name: $e');
     }
@@ -51,7 +51,7 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
     try {
       emit(state.copyWith(team1Color: color));
       bleService.send(
-        basketBallBleMapper.setHomeTeamColor(
+        basketBallBleMapper.setTeam1Color(
           toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase(),
         ),
       );
@@ -64,7 +64,7 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
     try {
       emit(state.copyWith(team2Color: color));
       bleService.send(
-        basketBallBleMapper.setAwayTeamColor(
+        basketBallBleMapper.setTeam2Color(
           toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase(),
         ),
       );
@@ -77,22 +77,7 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
   void setQuarter(int quarter) {
     try {
       emit(state.copyWith(quarter: quarter));
-      switch (quarter) {
-        case 1:
-          bleService.send(basketBallBleMapper.setQuarter1());
-          break;
-        case 2:
-          bleService.send(basketBallBleMapper.setQuarter2());
-          break;
-        case 3:
-          bleService.send(basketBallBleMapper.setQuarter3());
-          break;
-        case 4:
-          bleService.send(basketBallBleMapper.setQuarter4());
-          break;
-        default:
-          return;
-      }
+      bleService.send(basketBallBleMapper.setQuarter(quarter));
     } catch (e) {
       globalErrorCubit.showError('Failed to set quarter: $e');
     }
@@ -102,7 +87,7 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
   void incrementTeam1() {
     try {
       emit(state.copyWith(team1Score: state.team1Score + 1));
-      bleService.send(basketBallBleMapper.setHomeScore(state.team1Score));
+      bleService.send(basketBallBleMapper.setTeam1Score(state.team1Score));
     } catch (e) {
       globalErrorCubit.showError('Failed to increment team 1 score: $e');
     }
@@ -112,7 +97,7 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
     try {
       if (state.team1Score > 0) {
         emit(state.copyWith(team1Score: state.team1Score - 1));
-        bleService.send(basketBallBleMapper.setHomeScore(state.team1Score));
+        bleService.send(basketBallBleMapper.setTeam1Score(state.team1Score));
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to decrement team 1 score: $e');
@@ -122,7 +107,7 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
   void incrementTeam2() {
     try {
       emit(state.copyWith(team2Score: state.team2Score + 1));
-      bleService.send(basketBallBleMapper.setAwayScore(state.team2Score));
+      bleService.send(basketBallBleMapper.setTeam2Score(state.team2Score));
     } catch (e) {
       globalErrorCubit.showError('Failed to increment team 2 score: $e');
     }
@@ -132,7 +117,7 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
     try {
       if (state.team2Score > 0) {
         emit(state.copyWith(team2Score: state.team2Score - 1));
-        bleService.send(basketBallBleMapper.setAwayScore(state.team2Score));
+        bleService.send(basketBallBleMapper.setTeam2Score(state.team2Score));
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to decrement team 2 score: $e');
@@ -169,11 +154,12 @@ class BasketControlPanelCubit extends Cubit<ControlPanelState> {
   }
 
   // Reset scores only
-  void resetScores() {
+  void resetScreen() {
     try {
-      emit(state.copyWith(team1Score: 0, team2Score: 0));
+      emit(ControlPanelState.initial());
+      bleService.send(basketBallBleMapper.resetScreen());
     } catch (e) {
-      globalErrorCubit.showError('Failed to reset scores: $e');
+      globalErrorCubit.showError('Failed to reset screen: $e');
     }
   }
 }

@@ -112,11 +112,11 @@ class _HandBallConfigScreenState extends State<HandBallConfigScreen> {
                       controlCubit.setTeam2Name(team2Controller.text);
                       controlCubit.updateTeam1Color(team1Color ?? Colors.red);
                       controlCubit.updateTeam2Color(team2Color ?? Colors.blue);
-                      timerCubit.setTime(int.parse(timerController.text) * 60);
+                      timerCubit.setTime(int.parse(timerController.text));
                       
-                      context.pop();
+                      context.pushReplacement(AppPaths.handball);
                     },
-                    child: const Text('SAVE'),
+                    child: const Text('SAVE'), 
                   );
                 },
               ),

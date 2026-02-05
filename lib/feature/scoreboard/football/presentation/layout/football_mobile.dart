@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:xelex_esp/feature/scoreboard/football/presentation/cubit/timer/football_timer_cubit.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import '../../../../../service/dependency_injection/di_service.dart';
@@ -15,15 +16,22 @@ class FootballMobile extends StatelessWidget {
 
   Future<bool?> _showExitDialog(BuildContext context) {
     final cubit = sl<FootballControllerCubit>();
+    final timer_cubit = sl<FootballTimerCubit>();
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Exit Game?'),
-        content: const Text('Are you sure you want to close the scoreboard? Any unsaved progress may be lost.'),
+        content: const Text(
+          'Are you sure you want to close the scoreboard? Any unsaved progress may be lost.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('CANCEL'),
+          ),
           TextButton(
             onPressed: () {
+              timer_cubit.resetToDefault();
               cubit.exit(); // Optional: Reset logic if needed
               context.pop(true);
             },
@@ -48,9 +56,6 @@ class FootballMobile extends StatelessWidget {
       child: AdaptiveScaffold(
         title: "Football Scoreboard",
         resizeToAvoidBottomInset: false,
-        onSettingsPressed: () {
-          context.push(AppPaths.footballConfig);
-        },
         body: Column(
           children: [
             // Preview Area
@@ -58,34 +63,44 @@ class FootballMobile extends StatelessWidget {
               flex: 4,
               child: Container(
                 color: Colors.black,
-                child: BlocBuilder<FootballControllerCubit, FootballControllerState>(
-                  builder: (context, state) {
-                    return Row(
-                      children: [
-                        // Team 1 - Now wrapped in Expanded for proper layout
-                        Expanded(
-                          child: FootballTeamCard(
-                            teamName: state.team1Name,
-                            score: state.team1Score.toString().padLeft(2, '0'),
-                            teamNameColor: state.team1Color,
-                          ),
-                        ),
+                child:
+                    BlocBuilder<
+                      FootballControllerCubit,
+                      FootballControllerState
+                    >(
+                      builder: (context, state) {
+                        return Row(
+                          children: [
+                            // Team 1 - Now wrapped in Expanded for proper layout
+                            Expanded(
+                              child: FootballTeamCard(
+                                teamName: state.team1Name,
+                                score: state.team1Score.toString().padLeft(
+                                  2,
+                                  '0',
+                                ),
+                                teamNameColor: state.team1Color,
+                              ),
+                            ),
 
-                        // Center Panel - Fixed width within the Row
-                        FootballCenterPanel(),
+                            // Center Panel - Fixed width within the Row
+                            FootballCenterPanel(),
 
-                        // Team 2 - Now wrapped in Expanded for proper layout
-                        Expanded(
-                          child: FootballTeamCard(
-                            teamName: state.team2Name,
-                            score: state.team2Score.toString().padLeft(2, '0'),
-                            teamNameColor: state.team2Color,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+                            // Team 2 - Now wrapped in Expanded for proper layout
+                            Expanded(
+                              child: FootballTeamCard(
+                                teamName: state.team2Name,
+                                score: state.team2Score.toString().padLeft(
+                                  2,
+                                  '0',
+                                ),
+                                teamNameColor: state.team2Color,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
               ),
             ),
 

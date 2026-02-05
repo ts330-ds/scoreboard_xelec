@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/scoreboard/badminton/presentation/cubit/controller/badminton_controller_cubit.dart';
-import 'package:xelex_esp/feature/scoreboard/football/presentation/cubit/controller/football_controller_cubit.dart';
-import 'package:xelex_esp/feature/scoreboard/football/presentation/cubit/timer/football_timer_cubit.dart';
-import 'package:xelex_esp/feature/scoreboard/game_config/presentation/widget/timer_text_field.dart';
 import 'package:xelex_esp/feature/scoreboard/game_config/presentation/widget/two_textfield_widget.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 import 'package:xelex_esp/router/app_path.dart';
@@ -96,7 +93,7 @@ class _BadmintonConfigScreenState extends State<BadmintonConfigScreen> {
                       controlCubit.setTeam1Color(team1Color ?? Colors.red);
                       controlCubit.setTeam2Color(team2Color ?? Colors.blue);
 
-                      context.pop();
+                      context.pushReplacement(AppPaths.badminton);
                     },
                     child: const Text('SAVE'),
                   );

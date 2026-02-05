@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:xelex_esp/feature/scoreboard/basketball/presentation/cubit/shot_clock/shot_clock_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/basketball/presentation/widget/timerControlButtons.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
-import 'package:xelex_esp/router/app_path.dart';
 
 import '../../../../../../common_widget/controller_heading.dart';
 import '../../../../../../service/dependency_injection/di_service.dart';
@@ -19,11 +19,15 @@ class BasketBallMobile extends StatelessWidget {
 
   Future<bool?> _showExitDialog(BuildContext context) {
     final controller_cubit = sl<BasketControlPanelCubit>();
+    final timercontroller_cubit = sl<BasketBallTimerCubit>();
+    final shortcubit = sl<ShotClockCubit>();
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Exit Game?'),
-        content: const Text('Are you sure you want to close the scoreboard? Any unsaved progress may be lost.'),
+        content: const Text(
+          'Are you sure you want to close the scoreboard? Any unsaved progress may be lost.',
+        ),
         actions: [
           TextButton(
             onPressed: () => context.pop(false),
@@ -32,6 +36,8 @@ class BasketBallMobile extends StatelessWidget {
           TextButton(
             onPressed: () {
               controller_cubit.exit();
+              shortcubit.resetToDefault();
+              timercontroller_cubit.resetToDefault();
               context.pop(true);
             },
             child: const Text('EXIT', style: TextStyle(color: Colors.red)),
@@ -54,9 +60,6 @@ class BasketBallMobile extends StatelessWidget {
       },
       child: AdaptiveScaffold(
         title: "BasketBall",
-        onSettingsPressed: () {
-          context.push(AppPaths.basketballConfig);
-        },
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

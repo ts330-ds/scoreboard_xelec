@@ -38,7 +38,7 @@ class TableTennisTeamPanel extends StatelessWidget {
               width: double.maxFinite,
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: color, // ✅ reactive background color
+                color: isTeam1?Colors.blue:Colors.red, // ✅ reactive background color
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Column(
@@ -48,7 +48,7 @@ class TableTennisTeamPanel extends StatelessWidget {
                   Text(
                     name,
                     style: context.text.titleMedium!
-                        .copyWith(color: context.colors.surface),
+                        .copyWith(color: color),
                   ),
 
                   buttonGap(),

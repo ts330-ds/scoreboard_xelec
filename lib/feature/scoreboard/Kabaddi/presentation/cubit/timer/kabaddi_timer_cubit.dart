@@ -25,13 +25,17 @@ class KabaddiTimerCubit extends Cubit<KabaddiTimerState> {
       if (state.status == TimerStatus.running) return;
 
       emit(state.copyWith(status: TimerStatus.running));
-
+      bleService.send(ballBleMapper.startTimer());
       _timer?.cancel();
       _timer = Timer.periodic(
         const Duration(seconds: 1),
         (timer) {
           try {
-            if (state.seconds <= 1) {
+            if (isClosed) {
+              timer.cancel();
+              return;
+            }
+            if (state.seconds < 1) {
               timer.cancel();
               emit(
                 state.copyWith(
@@ -39,6 +43,7 @@ class KabaddiTimerCubit extends Cubit<KabaddiTimerState> {
                   status: TimerStatus.finished,
                 ),
               );
+              bleService.send(ballBleMapper.resetTimer());
             } else {
               emit(state.copyWith(seconds: state.seconds - 1));
             }
@@ -47,8 +52,6 @@ class KabaddiTimerCubit extends Cubit<KabaddiTimerState> {
           }
         },
       );
-
-      bleService.send(ballBleMapper.startTimer());
     } catch (e) {
       globalErrorCubit.showError('Failed to start timer: $e');
     }
@@ -73,33 +76,48 @@ class KabaddiTimerCubit extends Cubit<KabaddiTimerState> {
       if (state.status != TimerStatus.paused) return;
 
       start();
-      bleService.send(ballBleMapper.startTimer());
+  
     } catch (e) {
       globalErrorCubit.showError('Failed to resume timer: $e');
     }
   }
 
-  /// Reset everything
+  /// Reset timer to initial seconds
   void reset() {
     try {
       _timer?.cancel();
-      emit(KabaddiTimerState.initial());
+      emit(state.copyWith(
+        seconds: state.initialSeconds,
+        status: TimerStatus.initial,
+      ));
+      bleService.send(ballBleMapper.resetTimer());
     } catch (e) {
       globalErrorCubit.showError('Failed to reset timer: $e');
     }
   }
 
-  void setTime(int totalSeconds) {
+  /// Reset to default state (called on exit)
+  void resetToDefault() {
     try {
       _timer?.cancel();
+      emit(KabaddiTimerState.initial());
+    } catch (e) {
+      globalErrorCubit.showError('Failed to reset to default: $e');
+    }
+  }
+
+  void setTime(int totalMinutes) {
+    try {
+      _timer?.cancel();
+      final seconds = totalMinutes * 60;
       emit(
         state.copyWith(
-          seconds: totalSeconds,
-          initialSeconds: totalSeconds,
+          seconds: seconds,
+          initialSeconds: seconds,
           status: TimerStatus.initial,
         ),
       );
-      // bleService.send(ballBleMapper.setMinutes(totalSeconds));
+       bleService.send(ballBleMapper.setTimerMinutes(totalMinutes));
     } catch (e) {
       globalErrorCubit.showError('Failed to set time: $e');
     }

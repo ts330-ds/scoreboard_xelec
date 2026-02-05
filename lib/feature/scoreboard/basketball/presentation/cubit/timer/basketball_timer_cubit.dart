@@ -7,7 +7,9 @@ import 'basketball_timer_state.dart';
 
 class BasketBallTimerCubit extends Cubit<BasketBallTimerState> {
   Timer? _timer;
-  static int totalSeconds = 900;
+
+  /// Total time per quarter in seconds (default 15 min = 900s)
+  int totalSeconds = 900;
 
   final BasketBallBleMapper ballBleMapper;
   final BleService bleService;
@@ -17,22 +19,25 @@ class BasketBallTimerCubit extends Cubit<BasketBallTimerState> {
     required this.bleService,
     required this.ballBleMapper,
     required this.globalErrorCubit,
-  }) : super(BasketBallTimerState.initial(totalSeconds));
+  }) : super(BasketBallTimerState.initial(900));
 
-  /// Set match/quarter time manually
-  void setTime(int totalSeconds) {
+  /// Set match/quarter time manually (in seconds)
+  void setTime(int seconds) {
     try {
       _timer?.cancel();
 
+      totalSeconds = seconds*60;
+
       emit(
         state.copyWith(
-          seconds: totalSeconds,
-          initialSeconds: totalSeconds,
+          seconds: seconds*60,
+          initialSeconds: seconds*60,
           status: TimerStatus.initial,
         ),
       );
 
-      bleService.send(ballBleMapper.setTimerMinutes(totalSeconds));
+      // Send formatted time MM:SS to BLE device
+      bleService.send(ballBleMapper.setTimerMinutes(seconds));
     } catch (e) {
       globalErrorCubit.showError('Failed to set time: $e');
     }
@@ -49,11 +54,18 @@ class BasketBallTimerCubit extends Cubit<BasketBallTimerState> {
       _timer?.cancel();
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         try {
+          if (isClosed) {
+            timer.cancel();
+            return;
+          }
           if (state.seconds <= 1) {
             timer.cancel();
             emit(state.copyWith(seconds: 0, status: TimerStatus.finished));
+            // Send final 00:00 to BLE device
+            bleService.send(ballBleMapper.setTime(0));
           } else {
-            emit(state.copyWith(seconds: state.seconds - 1));
+            final newSeconds = state.seconds - 1;
+            emit(state.copyWith(seconds: newSeconds));
           }
         } catch (e) {
           globalErrorCubit.showError('Timer tick error: $e');
@@ -88,14 +100,29 @@ class BasketBallTimerCubit extends Cubit<BasketBallTimerState> {
     }
   }
 
-  /// Reset everything
+  /// Reset timer to initial seconds
   void reset() {
     try {
       _timer?.cancel();
-      emit(BasketBallTimerState.initial(totalSeconds));
+      emit(state.copyWith(
+        seconds: state.initialSeconds,
+        status: TimerStatus.initial,
+      ));
       bleService.send(ballBleMapper.resetTimer());
+      // Send reset time to BLE device
+      bleService.send(ballBleMapper.setTime(state.initialSeconds));
     } catch (e) {
       globalErrorCubit.showError('Failed to reset timer: $e');
+    }
+  }
+
+  /// Reset to default state (called on exit)
+  void resetToDefault() {
+    try {
+      _timer?.cancel();
+      emit(BasketBallTimerState.initial(900));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to reset to default: $e');
     }
   }
 
@@ -111,24 +138,13 @@ class BasketBallTimerCubit extends Cubit<BasketBallTimerState> {
       emit(
         state.copyWith(
           quarter: quarter,
-          seconds: totalSeconds,
+          seconds: state.initialSeconds,
           status: TimerStatus.initial,
         ),
       );
-      switch (quarter) {
-        case 1:
-          bleService.send(ballBleMapper.setQuarter1());
-          break;
-        case 2:
-          bleService.send(ballBleMapper.setQuarter2());
-          break;
-        case 3:
-          bleService.send(ballBleMapper.setQuarter3());
-          break;
-        case 4:
-          bleService.send(ballBleMapper.setQuarter4());
-          break;
-      }
+      bleService.send(ballBleMapper.setQuarter(quarter));
+      // Send reset time for the new quarter
+      bleService.send(ballBleMapper.setTime(state.initialSeconds));
       return true;
     } catch (e) {
       globalErrorCubit.showError('Failed to set quarter: $e');

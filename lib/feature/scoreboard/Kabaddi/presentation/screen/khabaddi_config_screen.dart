@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/scoreboard/Kabaddi/presentation/cubit/controller/kabaddi_controller_cubit.dart';
+import 'package:xelex_esp/router/app_path.dart';
 
 import '../../../../../responsive/adaptive_scaffold.dart';
 import '../../../../../service/dependency_injection/di_service.dart';
@@ -114,8 +115,8 @@ class _KhabaddiConfigScreenState extends State<KhabaddiConfigScreen> {
                       controlCubit.setTeam2Name(team2Controller.text);
                       controlCubit.setTeam1Color(team1Color ?? Colors.red);
                       controlCubit.setTeam2Color(team2Color ?? Colors.blue);
-                      timerCubit.setTime(int.parse(timerController.text) * 60);
-                      context.pop();
+                      timerCubit.setTime(int.parse(timerController.text));
+                      context.pushReplacement(AppPaths.khabaddi);
                     },
                     child: const Text('SAVE'),
                   );

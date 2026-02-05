@@ -46,12 +46,29 @@ class BasketBallControlPanelUI extends StatelessWidget {
 
           const ControllerHeading(text: "Shot Clock"),
           const SizedBox(height: 6),
-          CustomButton(
-            onPressed: () => context.read<ShotClockCubit>().reset(),
-            label: " Reset 24s ",
-            backgroundColor: Colors.redAccent,
-            height: 40,
+
+          Row(
+            children: [
+              CustomButton(
+                onPressed: () {
+              context.read<ShotClockCubit>().start();
+              },
+                label: " Start ",
+              backgroundColor: AppColors.lakersGreen,
+              height: 40,
           ),
+          const SizedBox(width: 12),
+          CustomButton(
+                onPressed: () {
+              context.read<ShotClockCubit>().pause();
+              },
+                label: " Pause ",
+              backgroundColor: AppColors.scoreOrange,
+              height: 40,
+          ),
+            ],
+          ),
+          
 
           const SizedBox(height: 12),
 
@@ -134,10 +151,14 @@ class BasketBallControlPanelUI extends StatelessWidget {
               return BrightnessSliderMinimal(
                 value: brightness.toDouble(),
                 onChanged: (value) {
-                  context.read<BasketControlPanelCubit>().setTempBrightness(value.toInt());
+                  context.read<BasketControlPanelCubit>().setTempBrightness(
+                    value.toInt(),
+                  );
                 },
                 onChangedEnd: (double value) {
-                  context.read<BasketControlPanelCubit>().setBrightness(value.toInt());
+                  context.read<BasketControlPanelCubit>().setBrightness(
+                    value.toInt(),
+                  );
                 },
               );
             },

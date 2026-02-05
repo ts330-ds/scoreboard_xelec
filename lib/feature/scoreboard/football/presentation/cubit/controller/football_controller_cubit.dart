@@ -39,7 +39,9 @@ class FootballControllerCubit extends Cubit<FootballControllerState> {
   void updateTeam1Color(Color color) {
     try {
       emit(state.copyWith(team1Color: color));
-      bleService.send(footballBleMapper.setTeam1Color(toRgb565(color)));
+      bleService.send(footballBleMapper.setTeam1NameColor(
+        toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase()
+        ));
     } catch (e) {
       globalErrorCubit.showError('Failed to update team 1 color: $e');
     }
@@ -48,7 +50,9 @@ class FootballControllerCubit extends Cubit<FootballControllerState> {
   void updateTeam2Color(Color color) {
     try {
       emit(state.copyWith(team2Color: color));
-      bleService.send(footballBleMapper.setTeam2Color(toRgb565(color)));
+      bleService.send(footballBleMapper.setTeam2NameColor(
+        toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase()
+        ));
     } catch (e) {
       globalErrorCubit.showError('Failed to update team 2 color: $e');
     }
@@ -102,7 +106,7 @@ class FootballControllerCubit extends Cubit<FootballControllerState> {
     try {
       final newExtra = state.extraTime + 1;
       emit(state.copyWith(extraTime: newExtra));
-      bleService.send(footballBleMapper.setExtraTime("$newExtra'"));
+      bleService.send(footballBleMapper.setExtraTime("$newExtra"));
     } catch (e) {
       globalErrorCubit.showError('Failed to increment extra time: $e');
     }
@@ -113,7 +117,7 @@ class FootballControllerCubit extends Cubit<FootballControllerState> {
       if (state.extraTime > 0) {
         final newExtra = state.extraTime - 1;
         emit(state.copyWith(extraTime: newExtra));
-        bleService.send(footballBleMapper.setExtraTime(newExtra == 0 ? " " : "$newExtra'"));
+        bleService.send(footballBleMapper.setExtraTime(newExtra == 0 ? " 0" : "$newExtra"));
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to decrement extra time: $e');
@@ -123,11 +127,7 @@ class FootballControllerCubit extends Cubit<FootballControllerState> {
   void setHalf(int half) {
     try {
       emit(state.copyWith(currentHalf: half));
-      if (half == 1) {
-        bleService.send(footballBleMapper.setFirstHalf());
-      } else {
-        bleService.send(footballBleMapper.setSecondHalf());
-      }
+      bleService.send(footballBleMapper.setPeriod(half));
     } catch (e) {
       globalErrorCubit.showError('Failed to set half: $e');
     }
@@ -135,17 +135,10 @@ class FootballControllerCubit extends Cubit<FootballControllerState> {
 
   void resetScreen() {
     try {
+      emit(FootballControllerState());
       bleService.send(footballBleMapper.resetScreen());
     } catch (e) {
       globalErrorCubit.showError('Failed to reset screen: $e');
-    }
-  }
-
-  void triggerBuzzer() {
-    try {
-     // bleService.send(footballBleMapper.triggerBuzzer());
-    } catch (e) {
-      globalErrorCubit.showError('Failed to trigger buzzer: $e');
     }
   }
 
@@ -153,6 +146,7 @@ class FootballControllerCubit extends Cubit<FootballControllerState> {
   void setBrightness(int value) {
     try {
       emit(state.copyWith(brightness: value.clamp(0, 220)));
+      bleService.send("BRIG${value.clamp(0, 220)}");
     } catch (e) {
       globalErrorCubit.showError('Failed to set brightness: $e');
     }
@@ -166,18 +160,10 @@ class FootballControllerCubit extends Cubit<FootballControllerState> {
     }
   }
 
-  // Buzzer toggle
-  void toggleBuzzer() {
-    try {
-      emit(state.copyWith(buzzerOn: !state.buzzerOn));
-    } catch (e) {
-      globalErrorCubit.showError('Failed to toggle buzzer: $e');
-    }
-  }
-
   void exit() {
     try {
       emit(const FootballControllerState());
+      bleService.send(footballBleMapper.resetScreen());
     } catch (e) {
       globalErrorCubit.showError('Failed to exit: $e');
     }

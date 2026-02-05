@@ -17,10 +17,10 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
     required this.globalErrorCubit,
   }) : super(TableTennisControllerState.initial());
 
-
   void exit() {
     try {
       emit(TableTennisControllerState.initial());
+      bleService.send(tableTennisBleMapper.resetScreen());
     } catch (e) {
       globalErrorCubit.showError('Failed to exit: $e');
     }
@@ -32,7 +32,7 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   void setTeam1Name(String name) {
     try {
       emit(state.copyWith(team1Name: name));
-      bleService.send(tableTennisBleMapper.setTeam1Name(name));
+      bleService.send(tableTennisBleMapper.setPlayer1Name(name));
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 1 name: $e');
     }
@@ -41,7 +41,7 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   void setTeam2Name(String name) {
     try {
       emit(state.copyWith(team2Name: name));
-      bleService.send(tableTennisBleMapper.setTeam2Name(name));
+      bleService.send(tableTennisBleMapper.setPlayer2Name(name));
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 2 name: $e');
     }
@@ -53,7 +53,11 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   void setTeam1Color(Color color) {
     try {
       emit(state.copyWith(team1Color: color));
-      bleService.send(tableTennisBleMapper.setTeam1Color(toRgb565(color)));
+      bleService.send(
+        tableTennisBleMapper.setPlayer1BgColor(
+          toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase(),
+        ),
+      );
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 1 color: $e');
     }
@@ -62,7 +66,11 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   void setTeam2Color(Color color) {
     try {
       emit(state.copyWith(team2Color: color));
-      bleService.send(tableTennisBleMapper.setTeam2Color(toRgb565(color)));
+      bleService.send(
+        tableTennisBleMapper.setPlayer2BgColor(
+          toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase(),
+        ),
+      );
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 2 color: $e');
     }
@@ -73,8 +81,9 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   // ------------------------------------------------
   void incTeam1Score() {
     try {
-      emit(state.copyWith(team1Score: state.team1Score + 1));
-      bleService.send(tableTennisBleMapper.setTeam1Score(state.team1Score));
+      final newValue = state.team1Score + 1;
+      emit(state.copyWith(team1Score: newValue));
+      bleService.send(tableTennisBleMapper.setPlayer1Score(newValue));
       // Auto switch serve (every 2 points)
       _autoSwitchServe();
     } catch (e) {
@@ -85,8 +94,9 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   void decTeam1Score() {
     try {
       if (state.team1Score > 0) {
-        emit(state.copyWith(team1Score: state.team1Score - 1));
-        bleService.send(tableTennisBleMapper.setTeam1Score(state.team1Score));
+        final newValue = state.team1Score - 1;
+        emit(state.copyWith(team1Score: newValue));
+        bleService.send(tableTennisBleMapper.setPlayer1Score(newValue));
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to decrement team 1 score: $e');
@@ -95,8 +105,9 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
 
   void incTeam2Score() {
     try {
-      emit(state.copyWith(team2Score: state.team2Score + 1));
-      bleService.send(tableTennisBleMapper.setTeam2Score(state.team2Score));
+      final newValue = state.team2Score + 1;
+      emit(state.copyWith(team2Score: newValue));
+      bleService.send(tableTennisBleMapper.setPlayer2Score(newValue));
       _autoSwitchServe();
     } catch (e) {
       globalErrorCubit.showError('Failed to increment team 2 score: $e');
@@ -106,8 +117,9 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   void decTeam2Score() {
     try {
       if (state.team2Score > 0) {
-        emit(state.copyWith(team2Score: state.team2Score - 1));
-        bleService.send(tableTennisBleMapper.setTeam2Score(state.team2Score));
+        final newValue = state.team2Score - 1;
+        emit(state.copyWith(team2Score: newValue));
+        bleService.send(tableTennisBleMapper.setPlayer2Score(newValue));
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to decrement team 2 score: $e');
@@ -138,7 +150,7 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
       // team = 1 or 2
       if (team == 1 || team == 2) {
         emit(state.copyWith(servingTeam: team));
-        bleService.send(tableTennisBleMapper.setServe(team));
+        bleService.send(tableTennisBleMapper.setServing(team));
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to set initial serve: $e');
@@ -149,7 +161,7 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
     try {
       if (state.servingTeam == 0) return;
       emit(state.copyWith(servingTeam: state.servingTeam == 1 ? 2 : 1));
-      bleService.send(tableTennisBleMapper.setServe(state.servingTeam));
+      bleService.send(tableTennisBleMapper.setServing(state.servingTeam));
     } catch (e) {
       globalErrorCubit.showError('Failed to change serve: $e');
     }
@@ -159,12 +171,14 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
     try {
       if (state.team1GamesWon < 4) {
         final newTeam1GamesWon = state.team1GamesWon + 1;
-
         emit(
           state.copyWith(
             team1GamesWon: newTeam1GamesWon,
             roundPlayed: newTeam1GamesWon + state.team2GamesWon,
           ),
+        );
+        bleService.send(
+          tableTennisBleMapper.setPlayer1GamesWon(newTeam1GamesWon),
         );
         _resetScoresForNextGame();
       }
@@ -173,17 +187,18 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
     }
   }
 
-
   void decTeam1GamesWon() {
     try {
       if (state.team1GamesWon > 0) {
         final newTeam1GamesWon = state.team1GamesWon - 1;
-
         emit(
           state.copyWith(
             team1GamesWon: newTeam1GamesWon,
             roundPlayed: newTeam1GamesWon + state.team2GamesWon,
           ),
+        );
+        bleService.send(
+          tableTennisBleMapper.setPlayer1GamesWon(newTeam1GamesWon),
         );
       }
     } catch (e) {
@@ -191,19 +206,19 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
     }
   }
 
-
   void incTeam2GamesWon() {
     try {
       if (state.team2GamesWon < 4) {
         final newTeam2GamesWon = state.team2GamesWon + 1;
-
         emit(
           state.copyWith(
             team2GamesWon: newTeam2GamesWon,
             roundPlayed: state.team1GamesWon + newTeam2GamesWon,
           ),
         );
-
+        bleService.send(
+          tableTennisBleMapper.setPlayer2GamesWon(newTeam2GamesWon),
+        );
         _resetScoresForNextGame();
       }
     } catch (e) {
@@ -211,24 +226,24 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
     }
   }
 
-
   void decTeam2GamesWon() {
     try {
       if (state.team2GamesWon > 0) {
         final newTeam2GamesWon = state.team2GamesWon - 1;
-
         emit(
           state.copyWith(
             team2GamesWon: newTeam2GamesWon,
             roundPlayed: state.team1GamesWon + newTeam2GamesWon,
           ),
         );
+        bleService.send(
+          tableTennisBleMapper.setPlayer2GamesWon(newTeam2GamesWon),
+        );
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to decrement team 2 games won: $e');
     }
   }
-
 
   void _resetScoresForNextGame() {
     try {
@@ -239,6 +254,9 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
           servingTeam: state.servingTeam == 1 ? 2 : 1, // alternate serve
         ),
       );
+      bleService.send(tableTennisBleMapper.setPlayer1Score(0));
+      bleService.send(tableTennisBleMapper.setPlayer2Score(0));
+      bleService.send(tableTennisBleMapper.setServing(state.servingTeam));
     } catch (e) {
       globalErrorCubit.showError('Failed to reset scores for next game: $e');
     }
@@ -247,25 +265,45 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   // ------------------------------------------------
   // TIMEOUTS (ONLY ONE TEAM AT A TIME)
   // ------------------------------------------------
+  
   void toggleTeam1Timeout() {
-    try {
-      emit(state.copyWith(team1Timeout: !state.team1Timeout));
-    } catch (e) {
-      globalErrorCubit.showError('Failed to toggle team 1 timeout: $e');
-    }
-  }
+  try {
+    // 1. Determine the new state
+    final bool newTimeoutState = !state.team1Timeout;
+    // 2. Convert boolean to int (1 for true, 0 for false)
+    final int bleValue = newTimeoutState ? 1 : 0;
 
-  void toggleTeam2Timeout() {
-    try {
-      emit(state.copyWith(team2Timeout: !state.team2Timeout));
-    } catch (e) {
-      globalErrorCubit.showError('Failed to toggle team 2 timeout: $e');
-    }
+    // 3. Update UI and send to BLE
+    emit(state.copyWith(team1Timeout: newTimeoutState));
+    bleService.send(tableTennisBleMapper.setPlayer1Timeout(bleValue));
+    
+  } catch (e) {
+    globalErrorCubit.showError('Failed to toggle team 1 timeout: $e');
   }
+}
+
+void toggleTeam2Timeout() {
+  try {
+    // 1. Determine the new state
+    final bool newTimeoutState = !state.team2Timeout;
+    // 2. Convert boolean to int (1 for true, 0 for false)
+    final int bleValue = newTimeoutState ? 1 : 0;
+    
+    // 3. Update UI and send to BLE
+    emit(state.copyWith(team2Timeout: newTimeoutState));
+    bleService.send(tableTennisBleMapper.setPlayer2Timeout(bleValue));
+    
+  } catch (e) {
+    globalErrorCubit.showError('Failed to toggle team 2 timeout: $e');
+  }
+}
+
 
   void clearTimeouts() {
     try {
       emit(state.copyWith(team1Timeout: false, team2Timeout: false));
+      bleService.send(tableTennisBleMapper.setPlayer1Timeout(0));
+      bleService.send(tableTennisBleMapper.setPlayer2Timeout(0));
     } catch (e) {
       globalErrorCubit.showError('Failed to clear timeouts: $e');
     }
@@ -276,7 +314,9 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   // ------------------------------------------------
   void incrementMatchNumber() {
     try {
-      emit(state.copyWith(matchNumber: state.matchNumber + 1));
+      int newValue = state.matchNumber + 1;
+      emit(state.copyWith(matchNumber: newValue));
+      bleService.send( tableTennisBleMapper.setMatchNumber(newValue));
     } catch (e) {
       globalErrorCubit.showError('Failed to increment match number: $e');
     }
@@ -285,7 +325,9 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   void decrementMatchNumber() {
     try {
       if (state.matchNumber > 1) {
-        emit(state.copyWith(matchNumber: state.matchNumber - 1));
+        int newValue = state.matchNumber - 1;
+        emit(state.copyWith(matchNumber: newValue));
+        bleService.send( tableTennisBleMapper.setMatchNumber(newValue));
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to decrement match number: $e');
@@ -318,6 +360,7 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   void resetMatch() {
     try {
       emit(TableTennisControllerState.initial());
+      bleService.send(tableTennisBleMapper.resetScreen());
     } catch (e) {
       globalErrorCubit.showError('Failed to reset match: $e');
     }
@@ -327,7 +370,7 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
   void setBrightness(int value) {
     try {
       emit(state.copyWith(brightness: value.clamp(0, 220)));
-      //bleService.send(basketBallBleMapper.setBrightness(value));
+      bleService.send("BRIG${value.clamp(0, 220)}");
     } catch (e) {
       globalErrorCubit.showError('Failed to set brightness: $e');
     }
@@ -338,16 +381,6 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
       emit(state.copyWith(tempBrightness: value.clamp(0, 220)));
     } catch (e) {
       globalErrorCubit.showError('Failed to set temp brightness: $e');
-    }
-  }
-
-  // Buzzer toggle
-  void toggleBuzzer() {
-    try {
-      emit(state.copyWith(buzzerOn: !state.buzzerOn));
-      //bleService.send(state.buzzerOn ? "BBBUZZERON" : "BBBUZZEROFF");
-    } catch (e) {
-      globalErrorCubit.showError('Failed to toggle buzzer: $e');
     }
   }
 }

@@ -1,5 +1,6 @@
-import 'package:bloc/bloc.dart';
+
 import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/archery_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
@@ -22,7 +23,7 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
   void showIdleScreen() {
     try {
       emit(state.copyWith(isIdleScreen: true));
-      // bleService.send(archeryBleMapper.showIdleScreen());
+       bleService.send(archeryBleMapper.activateClockMode());
     } catch (e) {
       globalErrorCubit.showError('Failed to show idle screen: $e');
     }
@@ -45,13 +46,13 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
       String modeString;
       if (mode == ArcheryMode.abcd) {
         modeString = 'ABCD';
-        bleService.send(archeryBleMapper.setMode4Targets());
+        bleService.send(archeryBleMapper.showArchersABCD());
       } else if (mode == ArcheryMode.abc) {
         modeString = 'ABC';
-        bleService.send(archeryBleMapper.setMode3Targets());
+        bleService.send(archeryBleMapper.showArchersABC());
       } else {
         modeString = 'AB-CD';
-        bleService.send(archeryBleMapper.setFirstGroupAB());
+        bleService.send(archeryBleMapper.showFirstGroupShooting());
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to set mode: $e');
@@ -61,7 +62,7 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
   void setPracticeEnds(int ends) {
     try {
       emit(state.copyWith(practiceEnds: ends));
-      bleService.send(archeryBleMapper.setInfoText("SIGHTER END $ends"));
+      bleService.send(archeryBleMapper.setEndInfo("SIGHTER END $ends"));
     } catch (e) {
       globalErrorCubit.showError('Failed to set practice ends: $e');
     }
@@ -70,7 +71,7 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
   void setScoringEnds(int ends) {
     try {
       emit(state.copyWith(scoringEnds: ends));
-      bleService.send(archeryBleMapper.setInfoText("SCORING END $ends"));
+      bleService.send(archeryBleMapper.setEndInfo("SCORING END $ends"));
     } catch (e) {
       globalErrorCubit.showError('Failed to set scoring ends: $e');
     }
@@ -79,6 +80,7 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
   void setGreenTime(int seconds) {
     try {
       emit(state.copyWith(greenTime: seconds));
+      bleService.send(archeryBleMapper.startMatch(seconds)); 
     } catch (e) {
       globalErrorCubit.showError('Failed to set green time: $e');
     }
@@ -171,9 +173,9 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
   void _sendTeamBleCommand(String team) {
     try {
       if (team == 'AB') {
-        bleService.send(archeryBleMapper.setFirstGroupAB());
+        bleService.send(archeryBleMapper.showFirstGroupShooting());
       } else {
-        bleService.send(archeryBleMapper.setSecondGroupCD());
+        bleService.send(archeryBleMapper.showSecondGroupShooting());
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to send team BLE command: $e');
@@ -310,22 +312,6 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
     }
   }
 
-  void toggleBuzzer() {
-    try {
-      emit(state.copyWith(buzzerOn: !state.buzzerOn));
-    } catch (e) {
-      globalErrorCubit.showError('Failed to toggle buzzer: $e');
-    }
-  }
-
-  void triggerBuzzer() {
-    try {
-      if (state.buzzerOn) {}
-    } catch (e) {
-      globalErrorCubit.showError('Failed to trigger buzzer: $e');
-    }
-  }
-
   void resetScreen() {
     try {
       //bleService.send(archeryBleMapper.resetScreen());
@@ -337,7 +323,7 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
   void resetMatch() {
     try {
       emit(const ArcheryControllerState());
-      // bleService.send(archeryBleMapper.resetScreen());
+       bleService.send(archeryBleMapper.resetMatch());
     } catch (e) {
       globalErrorCubit.showError('Failed to reset match: $e');
     }

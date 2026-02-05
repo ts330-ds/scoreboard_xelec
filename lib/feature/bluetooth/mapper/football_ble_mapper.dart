@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 class FootballBleMapper {
-  // Helper method to log and return the command
   String _log(String command) {
     debugPrint('⚽ BLE Command: $command');
     return command;
@@ -15,17 +14,14 @@ class FootballBleMapper {
   String setTeam1Score(int score) => _log("FOS1$score");
   String setTeam2Score(int score) => _log("FOS2$score");
 
-  // Team Colors (RGB565 HEX)
-  String setTeam1Color(int rgb565) =>
-      _log("FOC1${rgb565.toRadixString(16).toUpperCase().padLeft(4, '0')}");
-  String setTeam2Color(int rgb565) =>
-      _log("FOC2${rgb565.toRadixString(16).toUpperCase().padLeft(4, '0')}");
+  // Team Name Colors (RGB565 HEX)
+  String setTeam1NameColor(String rgb565) => _log("FOC1$rgb565");
+  String setTeam2NameColor(String rgb565) => _log("FOC2$rgb565");
 
-  // Period / Half
-  String setFirstHalf() => _log("FOQ1");
-  String setSecondHalf() => _log("FOQ2");
+  // Period (1 or 2)
+  String setPeriod(int period) => _log(period == 1 ? "FOQ1" : "FOQ2");
 
-  // Extra Time
+  // Extra Time Text (e.g., "+2'")
   String setExtraTime(String text) => _log("FOET$text");
 
   // Timer

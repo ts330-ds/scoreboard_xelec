@@ -189,7 +189,7 @@ class HandBallControlCubit extends Cubit<HandballControlState> {
       final newValue = state.team1Suspension + 2;
       emit(state.copyWith(team1Suspension: newValue));
       // Firmware: 1 = Red (has suspension), 2 = Green (no suspension)
-      bleService.send(ballBleMapper.setTeam1Suspension(1));
+      bleService.send(ballBleMapper.setTeam1Suspension(newValue));
     } catch (e) {
       globalErrorCubit.showError('Failed to increment team 1 suspension: $e');
     }
@@ -200,7 +200,7 @@ class HandBallControlCubit extends Cubit<HandballControlState> {
       if (state.team1Suspension <= 0) return;
       final newValue = state.team1Suspension - 2;
       emit(state.copyWith(team1Suspension: newValue));
-      bleService.send(ballBleMapper.setTeam1Suspension(newValue > 0 ? 1 : 2));
+      bleService.send(ballBleMapper.setTeam1Suspension(newValue));
     } catch (e) {
       globalErrorCubit.showError('Failed to decrement team 1 suspension: $e');
     }
@@ -210,7 +210,7 @@ class HandBallControlCubit extends Cubit<HandballControlState> {
     try {
       final newValue = state.team2Suspension + 2;
       emit(state.copyWith(team2Suspension: newValue));
-      bleService.send(ballBleMapper.setTeam2Suspension(1));
+      bleService.send(ballBleMapper.setTeam2Suspension(newValue));
     } catch (e) {
       globalErrorCubit.showError('Failed to increment team 2 suspension: $e');
     }
@@ -221,7 +221,7 @@ class HandBallControlCubit extends Cubit<HandballControlState> {
       if (state.team2Suspension <= 0) return;
       final newValue = state.team2Suspension - 2;
       emit(state.copyWith(team2Suspension: newValue));
-      bleService.send(ballBleMapper.setTeam2Suspension(newValue > 0 ? 1 : 2));
+      bleService.send(ballBleMapper.setTeam2Suspension(newValue));
     } catch (e) {
       globalErrorCubit.showError('Failed to decrement team 2 suspension: $e');
     }
@@ -298,6 +298,7 @@ class HandBallControlCubit extends Cubit<HandballControlState> {
     try {
       emit(state.copyWith(brightness: value.clamp(0, 220)));
       // Note: Brightness NOT supported in Handball firmware
+      bleService.send("BRIG${value.clamp(0, 220)}");
     } catch (e) {
       globalErrorCubit.showError('Failed to set brightness: $e');
     }

@@ -114,7 +114,7 @@ class _HockeyConfigScreenState extends State<HockeyConfigScreen> {
                       controlCubit.setTeam2Color(team2Color ?? Colors.blue);
                       timerCubit.setTime(int.parse(timerController.text) * 60);
 
-                      context.pop();
+                      context.pushReplacement(AppPaths.hockey);
                     },
                     child: const Text('SAVE'),
                   );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/controller/archery_controller_cubit.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/timer/archery_timer_cubit.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
@@ -16,7 +17,8 @@ class ArcheryMobile extends StatelessWidget {
 
 
 Future<bool?> _showExitDialog(BuildContext context) {
-    final controller_cubit = sl<ArcheryControllerCubit>();
+    final controllerCubit = sl<ArcheryControllerCubit>();
+    final timerCubit = sl<ArcheryTimerCubit>();
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -29,7 +31,8 @@ Future<bool?> _showExitDialog(BuildContext context) {
           ),
           TextButton(
             onPressed: () {
-              controller_cubit.resetMatch();
+              timerCubit.resetToDefault();
+              controllerCubit.resetMatch();
               context.pop(true);
             },
             child: const Text('EXIT', style: TextStyle(color: Colors.red)),
@@ -52,9 +55,6 @@ Future<bool?> _showExitDialog(BuildContext context) {
       },
       child: AdaptiveScaffold(
         title: "Archery",
-        onSettingsPressed: () {
-          context.push(AppPaths.archeryConfig);
-        },  
         appBarBackground: Colors.grey[900]!,
         bodyBackground: Colors.black,
         body: SafeArea(

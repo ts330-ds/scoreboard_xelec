@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/common_widget/controller_heading.dart';
+import 'package:xelex_esp/feature/scoreboard/hockey/presentation/cubit/timer/hockey_timer_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/hockey/presentation/widget/hockey_scoreboard_preview.dart';
 import 'package:xelex_esp/feature/scoreboard/hockey/presentation/widget/hockey_timer_control_row.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
@@ -10,17 +11,19 @@ import '../../../../../service/dependency_injection/di_service.dart';
 import '../cubit/controller/hockey_controller_cubit.dart';
 import '../widget/hockey_control_panal.dart';
 
-
 class HockeyMobile extends StatelessWidget {
   const HockeyMobile({super.key});
 
   Future<bool?> _showExitDialog(BuildContext context) {
     final cubit = sl<HockeyControllerCubit>();
+    final timer_cubit = sl<HockeyTimerCubit>();
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Exit Game?'),
-        content: const Text('Are you sure you want to close the scoreboard? Any unsaved progress may be lost.'),
+        content: const Text(
+          'Are you sure you want to close the scoreboard? Any unsaved progress may be lost.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -28,6 +31,7 @@ class HockeyMobile extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
+              timer_cubit.resetToDefault();
               cubit.exit();
               context.pop(true);
             },
@@ -51,9 +55,6 @@ class HockeyMobile extends StatelessWidget {
       },
       child: AdaptiveScaffold(
         title: "Hockey",
-        onSettingsPressed: (){
-          context.push(AppPaths.hockeyConfig);
-        },
         body: Column(
           mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,9 +68,7 @@ class HockeyMobile extends StatelessWidget {
             const SizedBox(height: 10),
             const HockeyTimerControlRow(),
             const SizedBox(height: 10),
-            const Expanded(
-                flex: 6, child: HockeyControlPanal()
-            )
+            const Expanded(flex: 6, child: HockeyControlPanal()),
           ],
         ),
       ),

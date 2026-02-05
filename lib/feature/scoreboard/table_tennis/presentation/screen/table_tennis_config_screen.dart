@@ -89,7 +89,7 @@ class _TableTennisConfigScreenState extends State<TableTennisConfigScreen> {
                       controlCubit.setTeam1Color(team1Color!);
                       controlCubit.setTeam2Color(team2Color!);
 
-                      context.pop();
+                      context.pushReplacement(AppPaths.table_tennis);
                     },
                     child: const Text('SAVE'),
                   );

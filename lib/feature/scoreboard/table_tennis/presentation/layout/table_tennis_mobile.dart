@@ -46,9 +46,6 @@ class TableTennisMobile extends StatelessWidget {
       },
       child: AdaptiveScaffold(
         title: "Table Tennis",
-        onSettingsPressed: (){
-          context.push(AppPaths.tableTennisConfig);
-        },
         body: Column(
           children: [
             Expanded(flex: 4, child: TableTennisPreview()),

@@ -24,7 +24,7 @@ class KhokhoTimerCubit extends Cubit<KhokhoTimerState> {
     try {
       emit(state.copyWith(duration: durationInSeconds));
       bleService.send(
-        khoBleMapper.setMatchMinutes(durationInSeconds ~/ 60),
+        khoBleMapper.setMatchTimerMinutes(durationInSeconds ~/ 60),
       );
     } catch (e) {
       globalErrorCubit.showError('Failed to set duration: $e');
@@ -36,7 +36,6 @@ class KhokhoTimerCubit extends Cubit<KhokhoTimerState> {
       if (state.status == KhokhoTimerStatus.initial ||
           state.status == KhokhoTimerStatus.paused) {
         _start();
-        bleService.send(khoBleMapper.startMatchTimer());
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to start timer: $e');
@@ -58,6 +57,10 @@ class KhokhoTimerCubit extends Cubit<KhokhoTimerState> {
 
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         try {
+          if (isClosed) {
+            timer.cancel();
+            return;
+          }
           if (state.duration > 0) {
             emit(state.copyWith(duration: state.duration - 1));
           } else {
@@ -65,6 +68,7 @@ class KhokhoTimerCubit extends Cubit<KhokhoTimerState> {
             emit(state.copyWith(status: KhokhoTimerStatus.paused));
             bleService.send(khoBleMapper.pauseMatchTimer());
           }
+          bleService.send(khoBleMapper.startMatchTimer());
         } catch (e) {
           globalErrorCubit.showError('Timer tick error: $e');
         }
@@ -106,9 +110,22 @@ class KhokhoTimerCubit extends Cubit<KhokhoTimerState> {
         ),
       );
       bleService.send(khoBleMapper.resetMatchTimer());
-      bleService.send(khoBleMapper.setMatchMinutes(duration ~/ 60));
+      bleService.send(khoBleMapper.setMatchTimerMinutes(duration ~/ 60));
     } catch (e) {
       globalErrorCubit.showError('Failed to reset timer: $e');
+    }
+  }
+
+  /// Reset to default state (called on exit)
+  void resetToDefault() {
+    try {
+      _timer?.cancel();
+      emit(const KhokhoTimerState(
+        duration: 540,
+        status: KhokhoTimerStatus.initial,
+      ));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to reset to default: $e');
     }
   }
 

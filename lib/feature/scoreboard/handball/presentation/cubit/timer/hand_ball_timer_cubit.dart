@@ -7,7 +7,7 @@ import 'hand_ball_timer_state.dart';
 
 class HandBallTimerCubit extends Cubit<HandBallTimerState> {
   Timer? _timer;
-  static int totalSeconds = 5;
+  int totalSeconds = 3600;
 
   final BleService bleService;
   final HandBallBleMapper ballBleMapper;
@@ -17,7 +17,7 @@ class HandBallTimerCubit extends Cubit<HandBallTimerState> {
     required this.bleService,
     required this.ballBleMapper,
     required this.globalErrorCubit,
-  }) : super(HandBallTimerState.initial(totalSeconds));
+  }) : super(HandBallTimerState.initial(3600));
 
   /* ================= TIMER CONTROLS ================= */
 
@@ -27,11 +27,12 @@ class HandBallTimerCubit extends Cubit<HandBallTimerState> {
       _timer?.cancel();
       emit(
         state.copyWith(
-          seconds: totalSeconds,
-          initialSeconds: totalSeconds,
+          seconds: totalSeconds * 60,
+          initialSeconds: totalSeconds * 60,
           status: TimerStatus.initial,
         ),
       );
+      bleService.send(ballBleMapper.setTimerMinutes(totalSeconds));
     } catch (e) {
       globalErrorCubit.showError('Failed to set time: $e');
     }
@@ -43,30 +44,25 @@ class HandBallTimerCubit extends Cubit<HandBallTimerState> {
       if (state.status == TimerStatus.running) return;
 
       emit(state.copyWith(status: TimerStatus.running));
+      bleService.send(ballBleMapper.startTimer());
 
       _timer?.cancel();
-      _timer = Timer.periodic(
-        const Duration(seconds: 1),
-        (timer) {
-          try {
-            if (state.seconds <= 1) {
-              timer.cancel();
-              emit(
-                state.copyWith(
-                  seconds: 0,
-                  status: TimerStatus.finished,
-                ),
-              );
-            } else {
-              emit(state.copyWith(seconds: state.seconds - 1));
-            }
-          } catch (e) {
-            globalErrorCubit.showError('Timer tick error: $e');
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        try {
+          if (isClosed) {
+            timer.cancel();
+            return;
           }
-        },
-      );
-
-      bleService.send(ballBleMapper.startTimer());
+          if (state.seconds <= 1) {
+            timer.cancel();
+            emit(state.copyWith(seconds: 0, status: TimerStatus.finished));
+          } else {
+            emit(state.copyWith(seconds: state.seconds - 1));
+          }
+        } catch (e) {
+          globalErrorCubit.showError('Timer tick error: $e');
+        }
+      });
     } catch (e) {
       globalErrorCubit.showError('Failed to start timer: $e');
     }
@@ -90,19 +86,33 @@ class HandBallTimerCubit extends Cubit<HandBallTimerState> {
     try {
       if (state.status != TimerStatus.paused) return;
       start();
-      bleService.send(ballBleMapper.startTimer());
     } catch (e) {
       globalErrorCubit.showError('Failed to resume timer: $e');
     }
   }
 
-  /// Reset everything
+  /// Reset timer to initial seconds
   void reset() {
     try {
       _timer?.cancel();
-      emit(HandBallTimerState.initial(totalSeconds));
+      emit(state.copyWith(
+        seconds: state.initialSeconds,
+        status: TimerStatus.initial,
+      ));
+      bleService.send(ballBleMapper.resetTimer());
+      bleService.send(ballBleMapper.setTimerMinutes(state.initialSeconds ~/ 60));
     } catch (e) {
       globalErrorCubit.showError('Failed to reset timer: $e');
+    }
+  }
+
+  /// Reset to default state (called on exit)
+  void resetToDefault() {
+    try {
+      _timer?.cancel();
+      emit(HandBallTimerState.initial(3600));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to reset to default: $e');
     }
   }
 
@@ -120,12 +130,13 @@ class HandBallTimerCubit extends Cubit<HandBallTimerState> {
       emit(
         state.copyWith(
           quarter: quarter,
-          seconds: totalSeconds,
+          seconds: state.initialSeconds,
           status: TimerStatus.initial,
         ),
       );
 
       bleService.send(ballBleMapper.setQuarter(quarter));
+      bleService.send(ballBleMapper.setTimerMinutes(state.initialSeconds ~/ 60));
       return true;
     } catch (e) {
       globalErrorCubit.showError('Failed to set quarter: $e');

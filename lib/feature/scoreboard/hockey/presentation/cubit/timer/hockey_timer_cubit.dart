@@ -21,8 +21,8 @@ class HockeyTimerCubit extends Cubit<HockeyTimerState> {
     required this.hockeyBleMapper,
     required this.globalErrorCubit,
     int initialSeconds = 900,
-  })  : totalSeconds = initialSeconds,
-        super(HockeyTimerState.initial(initialSeconds));
+  }) : totalSeconds = initialSeconds,
+       super(HockeyTimerState.initial(initialSeconds));
 
   /// Set match/quarter time manually (from user input)
   void setTime(int seconds) {
@@ -53,28 +53,26 @@ class HockeyTimerCubit extends Cubit<HockeyTimerState> {
       emit(state.copyWith(status: TimerStatus.running));
 
       _timer?.cancel();
-      _timer = Timer.periodic(
-        const Duration(seconds: 1),
-        (timer) {
-          try {
-            if (state.seconds <= 1) {
-              timer.cancel();
-              emit(
-                state.copyWith(
-                  seconds: 0,
-                  status: TimerStatus.finished,
-                ),
-              );
-            } else {
-              emit(state.copyWith(seconds: state.seconds - 1));
-            }
-          } catch (e) {
-            globalErrorCubit.showError('Timer tick error: $e');
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        try {
+          if (isClosed) {
+            timer.cancel();
+            return;
           }
-        },
-      );
+          if (state.seconds <= 1) {
+            timer.cancel();
+            emit(state.copyWith(seconds: 0, status: TimerStatus.finished));
+            bleService.send(hockeyBleMapper.resetTimer());
+          } else {
+            emit(state.copyWith(seconds: state.seconds - 1));
+            bleService.send(hockeyBleMapper.startTimer());
+          }
+        } catch (e) {
+          globalErrorCubit.showError('Timer tick error: $e');
+        }
+      });
 
-      bleService.send(hockeyBleMapper.startTimer());
+      //bleService.send(hockeyBleMapper.startTimer());
     } catch (e) {
       globalErrorCubit.showError('Failed to start timer: $e');
     }
@@ -107,10 +105,23 @@ class HockeyTimerCubit extends Cubit<HockeyTimerState> {
   void reset() {
     try {
       _timer?.cancel();
-      emit(HockeyTimerState.initial(totalSeconds));
+      emit(state.copyWith(
+        seconds: state.initialSeconds,
+        status: TimerStatus.initial,
+      ));
       bleService.send(hockeyBleMapper.resetTimer());
     } catch (e) {
       globalErrorCubit.showError('Failed to reset timer: $e');
+    }
+  }
+
+  /// Reset to default state (called on exit)
+  void resetToDefault() {
+    try {
+      _timer?.cancel();
+      emit(HockeyTimerState.initial(900));
+    } catch (e) {
+      globalErrorCubit.showError('Failed to reset to default: $e');
     }
   }
 
@@ -124,7 +135,7 @@ class HockeyTimerCubit extends Cubit<HockeyTimerState> {
       emit(
         state.copyWith(
           quarter: quarter,
-          seconds: totalSeconds,
+          seconds: state.initialSeconds,
           status: TimerStatus.initial,
         ),
       );

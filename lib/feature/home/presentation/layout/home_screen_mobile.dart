@@ -26,7 +26,7 @@ class HomeScreenMobile extends StatelessWidget {
         name: 'Basketball',
         iconPath: "images/svg_icon/basketball.svg",
         onTap: () {
-          context.push(AppPaths.basketball);
+          context.push(AppPaths.basketballConfig);
           bleCubit.setGame("BB");
         },
       ),
@@ -34,7 +34,7 @@ class HomeScreenMobile extends StatelessWidget {
         name: 'HandBall',
         iconPath: "images/svg_icon/handball.svg",
         onTap: () {
-          context.push(AppPaths.handball);
+          context.push(AppPaths.handballConfig);
           bleCubit.setGame("HB");
         },
       ),
@@ -42,7 +42,7 @@ class HomeScreenMobile extends StatelessWidget {
         name: 'Hockey',
         iconPath: "images/svg_icon/ice-hockey.svg",
         onTap: () {
-          context.push(AppPaths.hockey);
+          context.push(AppPaths.hockeyConfig);
           bleCubit.setGame("HO");
         },
       ),
@@ -50,7 +50,7 @@ class HomeScreenMobile extends StatelessWidget {
         name: 'Table Tennis',
         iconPath: "images/svg_icon/table-tennis.svg",
         onTap: () {
-          context.push(AppPaths.table_tennis);
+          context.push(AppPaths.tableTennisConfig);
           bleCubit.setGame("TT");
         },
       ),
@@ -58,7 +58,7 @@ class HomeScreenMobile extends StatelessWidget {
         name: 'Kho Kho',
         iconPath: "images/svg_icon/kho-kho.svg",
         onTap: () {
-          context.push(AppPaths.kho_kho);
+          context.push(AppPaths.khoKhoConfig);
           bleCubit.setGame("KK");
         },
       ),
@@ -66,7 +66,7 @@ class HomeScreenMobile extends StatelessWidget {
         name: 'Football',
         iconPath: "images/svg_icon/shoot.svg",
         onTap: () {
-          context.push(AppPaths.football);
+          context.push(AppPaths.footballConfig);
           bleCubit.setGame("FO");
         },
       ),
@@ -74,7 +74,7 @@ class HomeScreenMobile extends StatelessWidget {
         name: 'Kabaddi',
         iconPath: "images/svg_icon/kabaddi.svg",
         onTap: () {
-          context.push(AppPaths.khabaddi);
+          context.push(AppPaths.khabaddisConfig);
           bleCubit.setGame("KA");
         },
       ),
@@ -82,7 +82,7 @@ class HomeScreenMobile extends StatelessWidget {
         name: 'Badminton',
         iconPath: "images/svg_icon/badminton.svg",
         onTap: () {
-          context.push(AppPaths.badminton);
+          context.push(AppPaths.badmintonConfig);
           bleCubit.setGame("BD");
         },
       ),
@@ -90,7 +90,7 @@ class HomeScreenMobile extends StatelessWidget {
         name: 'Universal Game',
         iconPath: "images/svg_icon/universal_game.svg",
         onTap: () {
-          context.push(AppPaths.universal);
+          context.push(AppPaths.universalConfig);
           bleCubit.setGame("UG");
         },
       ),
@@ -99,7 +99,7 @@ class HomeScreenMobile extends StatelessWidget {
         name: 'Archery',
         iconPath: "images/svg_icon/archery.svg",
         onTap: () {
-          context.push(AppPaths.archery);
+          context.push(AppPaths.archeryConfig);
           bleCubit.setGame("AR");
         },
       ),

@@ -36,7 +36,7 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
       }
 
       _matchTime = seconds;
-      bleService.send(archeryBleMapper.startMatch(matchTime));
+      //bleService.send(archeryBleMapper.startMatch(matchTime));
     } catch (e) {
       globalErrorToastListener.showError('Failed to set match time: $e');
     }
@@ -49,7 +49,7 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
   void startCycle() {
     try {
       _startRedPhase();
-      bleService.send(archeryBleMapper.startTimer());
+      bleService.send(archeryBleMapper.startMatch(matchTime));
     } catch (e) {
       globalErrorToastListener.showError('Failed to start cycle: $e');
     }
@@ -103,6 +103,10 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
       _cancelTimer();
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         try {
+          if (isClosed) {
+            timer.cancel();
+            return;
+          }
           if (state.remainingSeconds > 1) {
             final newSeconds = state.remainingSeconds - 1;
 
@@ -141,7 +145,7 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
       if (state.isRunning && !state.isPaused) {
         _cancelTimer();
         emit(state.copyWith(isPaused: true, isRunning: false));
-        bleService.send(archeryBleMapper.pauseTimer());
+        bleService.send(archeryBleMapper.pauseMatch());
       }
     } catch (e) {
       globalErrorToastListener.showError('Failed to pause timer: $e');
@@ -152,7 +156,7 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
     try {
       if (state.isPaused) {
         emit(state.copyWith(isPaused: false, isRunning: true));
-        bleService.send(archeryBleMapper.resumeTimer());
+        bleService.send(archeryBleMapper.resetMatch());
         _runTimer();
       }
     } catch (e) {
@@ -164,9 +168,19 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
     try {
       _cancelTimer();
       emit(const ArcheryTimerState());
-      bleService.send(archeryBleMapper.resetGame());
+      bleService.send(archeryBleMapper.resetMatch());
     } catch (e) {
       globalErrorToastListener.showError('Failed to stop timer: $e');
+    }
+  }
+
+  /// Reset to default state (called on exit)
+  void resetToDefault() {
+    try {
+      _cancelTimer();
+      emit(const ArcheryTimerState());
+    } catch (e) {
+      globalErrorToastListener.showError('Failed to reset to default: $e');
     }
   }
 

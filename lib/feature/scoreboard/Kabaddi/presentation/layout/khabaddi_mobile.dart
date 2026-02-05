@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/scoreboard/Kabaddi/presentation/widget/kabaddi_control_panel.dart';
+import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 import '../../../../../common_widget/controller_heading.dart';
 import '../../../../../responsive/adaptive_scaffold.dart';
 import '../../../../../router/app_path.dart';
@@ -19,6 +20,8 @@ class KhabaddiMobile extends StatelessWidget {
   const KhabaddiMobile({super.key});
 
   Future<bool?> _showExitDialog(BuildContext context) {
+    final controller_cubit = sl<KabaddiControllerCubit>();
+    final timer_cubit = sl<KabaddiTimerCubit>();
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -28,7 +31,9 @@ class KhabaddiMobile extends StatelessWidget {
           TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('CANCEL')),
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop(true);
+              timer_cubit.resetToDefault();
+              controller_cubit.resetScreen();
+              context.pop(true);
             },
             child: const Text('EXIT', style: TextStyle(color: Colors.red)),
           ),
@@ -54,9 +59,7 @@ class KhabaddiMobile extends StatelessWidget {
       child: AdaptiveScaffold(
         title: "Kabaddi",
         resizeToAvoidBottomInset: false,
-        onSettingsPressed: (){
-          context.push(AppPaths.khabaddisConfig);
-        },
+
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

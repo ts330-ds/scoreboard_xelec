@@ -279,6 +279,7 @@ class KabaddiControllerCubit extends Cubit<KabaddiControllerState> {
 
   void resetScreen() {
     try {
+      emit(KabaddiControllerState.initial());
       bleService.send(kabaddiBleMapper.resetScreen());
     } catch (e) {
       globalErrorCubit.showError('Failed to reset screen: $e');
@@ -289,6 +290,7 @@ class KabaddiControllerCubit extends Cubit<KabaddiControllerState> {
   void setBrightness(int value) {
     try {
       emit(state.copyWith(brightness: value.clamp(0, 220)));
+      bleService.send("BRIG${value.clamp(0, 220)}");
     } catch (e) {
       globalErrorCubit.showError('Failed to set brightness: $e');
     }
@@ -301,14 +303,4 @@ class KabaddiControllerCubit extends Cubit<KabaddiControllerState> {
       globalErrorCubit.showError('Failed to set temp brightness: $e');
     }
   }
-
-  // Buzzer toggle
-  void toggleBuzzer() {
-    try {
-      emit(state.copyWith(buzzerOn: !state.buzzerOn));
-    } catch (e) {
-      globalErrorCubit.showError('Failed to toggle buzzer: $e');
-    }
-  }
-
 }

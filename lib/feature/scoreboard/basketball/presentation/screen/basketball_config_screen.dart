@@ -9,7 +9,6 @@ import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import '../../../../../service/dependency_injection/di_service.dart';
 
-
 class BasketBallConfigScreen extends StatefulWidget {
   const BasketBallConfigScreen({super.key});
 
@@ -35,7 +34,9 @@ class _BasketBallConfigScreenState extends State<BasketBallConfigScreen> {
     // 2. Initialize controllers with current values
     team1Controller = TextEditingController(text: controlState.team1Name);
     team2Controller = TextEditingController(text: controlState.team2Name);
-    timerController = TextEditingController(text: (timerState.seconds ~/ 60).toString());
+    timerController = TextEditingController(
+      text: (timerState.seconds ~/ 60).toString(),
+    );
 
     // 3. Initialize colors
     team1Color = controlState.team1Color;
@@ -60,7 +61,7 @@ class _BasketBallConfigScreenState extends State<BasketBallConfigScreen> {
     return MultiBlocProvider(
       providers: [
         BlocProvider.value(value: sl<BasketControlPanelCubit>()),
-        BlocProvider.value(value: sl<BasketBallTimerCubit>())
+        BlocProvider.value(value: sl<BasketBallTimerCubit>()),
       ],
       child: AdaptiveScaffold(
         title: 'Basketball Config',
@@ -83,9 +84,7 @@ class _BasketBallConfigScreenState extends State<BasketBallConfigScreen> {
 
               const SizedBox(height: 24),
 
-              TimerTextFieldWidget(
-                  timerController: timerController
-              ),
+              TimerTextFieldWidget(timerController: timerController),
 
               const SizedBox(height: 24),
               // SAVE BUTTON
@@ -93,7 +92,7 @@ class _BasketBallConfigScreenState extends State<BasketBallConfigScreen> {
                 builder: (BuildContext context) {
                   final controlCubit = context.read<BasketControlPanelCubit>();
                   final timerCubit = context.read<BasketBallTimerCubit>();
-                 return ElevatedButton(
+                  return ElevatedButton(
                     onPressed: () {
                       if (!_isValid()) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -103,7 +102,9 @@ class _BasketBallConfigScreenState extends State<BasketBallConfigScreen> {
                         );
                         return;
                       }
-                      if(timerController.text.isEmpty || int.tryParse(timerController.text) == null || int.parse(timerController.text) <= 0){
+                      if (timerController.text.isEmpty ||
+                          int.tryParse(timerController.text) == null ||
+                          int.parse(timerController.text) <= 0) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Please enter a valid timer'),
@@ -111,16 +112,17 @@ class _BasketBallConfigScreenState extends State<BasketBallConfigScreen> {
                         );
                         return;
                       }
-                      
+
                       // Save to Cubits
                       controlCubit.setTeam1Name(team1Controller.text);
                       controlCubit.setTeam2Name(team2Controller.text);
                       controlCubit.setTeam1Color(team1Color ?? Colors.blue);
                       controlCubit.setTeam2Color(team2Color ?? Colors.red);
-                      timerCubit.setTime(int.parse(timerController.text) * 60);
-                      
+                      timerCubit.setTime(int.parse(timerController.text));
+                      timerCubit.setQuarter(1);
+
                       // Navigate to Basketball Screen
-                      context.pop();
+                      context.pushReplacement(AppPaths.basketball);
                     },
                     child: const Text('SAVE'),
                   );

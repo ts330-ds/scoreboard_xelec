@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
+import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 
 import '../cubit/controller/archery_controller_cubit.dart';
@@ -311,9 +312,10 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Color.fromRGBO(color.red, color.green, color.blue, 0.2),
+          //color: Color.fromRGBO(color.red, color.green, color.blue, 0.2),
+          color: color.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color),
+          border: Border.all(color: color),                 
         ),
         child: Column(
           children: [
@@ -347,6 +349,6 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
     controllerCubit.initializeMatch();
 
     // Navigate to archery screen
-    context.pop();
+    context.pushReplacement(AppPaths.archery);
   }
 }
