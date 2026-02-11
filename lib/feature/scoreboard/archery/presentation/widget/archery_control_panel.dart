@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/timer/archery_timer_state.dart';
 
 import '../../../../../common_widget/brightness_slider_widget.dart';
 import '../../../../../common_widget/buzzerWidget.dart';
 import '../../../../../common_widget/controller_heading.dart';
 import '../../../../../service/dependency_injection/di_service.dart';
-import '../../../../../utility/universal_method.dart';
 import '../../../../bluetooth/service/ble_service.dart';
 import '../cubit/controller/archery_controller_cubit.dart';
 import '../cubit/timer/archery_timer_cubit.dart';
@@ -21,10 +21,10 @@ class ArcheryControlPanel extends StatelessWidget {
         return BlocBuilder<ArcheryControllerCubit, ArcheryControllerState>(
           builder: (context, controllerState) {
             return Container(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16.w),
               decoration: BoxDecoration(
                 color: Colors.grey[900],
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(12.w),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -38,11 +38,14 @@ class ArcheryControlPanel extends StatelessWidget {
                         label: 'START',
                         color: Colors.green,
                         onPressed: timerState.phase == TimerPhase.stopped
-                            ? () => context.read<ArcheryTimerCubit>().startCycle()
+                            ? () =>
+                                  context.read<ArcheryTimerCubit>().startCycle()
                             : null,
                       ),
                       _buildControlButton(
-                        icon: timerState.isPaused ? Icons.play_arrow : Icons.pause,
+                        icon: timerState.isPaused
+                            ? Icons.play_arrow
+                            : Icons.pause,
                         label: timerState.isPaused ? 'RESUME' : 'PAUSE',
                         color: Colors.orange,
                         onPressed: timerState.isRunning || timerState.isPaused
@@ -59,24 +62,22 @@ class ArcheryControlPanel extends StatelessWidget {
                         label: 'STOP',
                         color: Colors.red,
                         onPressed: timerState.phase != TimerPhase.stopped
-                            ? () => context.read<ArcheryTimerCubit>().stopTimer()
+                            ? () =>
+                                  context.read<ArcheryTimerCubit>().stopTimer()
                             : null,
                       ),
                     ],
                   ),
 
-                  const SizedBox(height: 16),
+                  SizedBox(height: 8.h),
 
                   // End Info
                   Text(
                     'End ${controllerState.currentEndNumber} of ${controllerState.totalEnds}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 16.sp),
                   ),
 
-                  const SizedBox(height: 8),
+                  SizedBox(height: 8.h),
 
                   // Skip Practice Button
                   if (controllerState.matchPhase == MatchPhase.sighter)
@@ -93,37 +94,37 @@ class ArcheryControlPanel extends StatelessWidget {
                     ),
 
                   // Back to Idle
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: () {
-                      context.read<ArcheryTimerCubit>().stopTimer();
-                      context.read<ArcheryControllerCubit>().showIdleScreen();
-                    },
-                    icon: const Icon(Icons.home, color: Colors.grey),
-                    label: const Text(
-                      'Back to Idle',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: 8.h),
+                  
 
-                  const ControllerHeading(text: "Display Settings"),
-                  widgetGap(),
-                  BlocSelector<ArcheryControllerCubit, ArcheryControllerState, int>(
+                   ControllerHeading(
+                    text: "Display Settings",
+                    style: TextStyle(color: Colors.white,fontSize: 16.sp),
+                  ),
+                  SizedBox(height: 16.h),
+                  BlocSelector<
+                    ArcheryControllerCubit,
+                    ArcheryControllerState,
+                    int
+                  >(
                     selector: (state) => state.setTempBrightness,
                     builder: (context, brightness) {
                       return BrightnessSliderMinimal(
                         value: brightness.toDouble(),
                         onChanged: (value) {
-                          context.read<ArcheryControllerCubit>().setTempBrightness(value.toInt());
+                          context
+                              .read<ArcheryControllerCubit>()
+                              .setTempBrightness(value.toInt());
                         },
                         onChangedEnd: (value) {
-                          context.read<ArcheryControllerCubit>().setBrightness(value.toInt());
+                          context.read<ArcheryControllerCubit>().setBrightness(
+                            value.toInt(),
+                          );
                         },
                       );
                     },
                   ),
-                  widgetGap(),
+                  SizedBox(height: 16.h),
                   Align(
                     alignment: Alignment.centerRight,
                     child: BuzzerButton(bleService: sl<BleService>()),
@@ -150,14 +151,14 @@ class ArcheryControlPanel extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: onPressed != null ? color : Colors.grey,
             shape: const CircleBorder(),
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16.w),
           ),
-          child: Icon(icon, size: 28, color: Colors.white),
+          child: Icon(icon, size: 28.sp, color: Colors.white),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: 4.h),
         Text(
           label,
-          style: const TextStyle(color: Colors.white, fontSize: 11),
+          style: TextStyle(color: Colors.white, fontSize: 11.sp),
         ),
       ],
     );

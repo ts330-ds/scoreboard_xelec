@@ -1,5 +1,5 @@
 @JS()
-library web_ble;
+library;
 
 import 'dart:js_interop';
 

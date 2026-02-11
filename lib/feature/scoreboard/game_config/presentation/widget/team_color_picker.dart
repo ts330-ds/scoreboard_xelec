@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class ColorPickerWidget extends StatelessWidget {
   final BuildContext parentContext;
@@ -64,10 +65,7 @@ class ColorPickerWidget extends StatelessWidget {
 
     return GestureDetector(
       onTap: _openPicker,
-      child: CircleAvatar(
-        radius: 18,
-        backgroundColor: colorToShow,
-      ),
+      child: CircleAvatar(radius: 18.w, backgroundColor: colorToShow),
     );
   }
 }

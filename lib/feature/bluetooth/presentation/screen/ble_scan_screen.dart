@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../cubit/ble/ble_cubit.dart';
 import '../cubit/scan/ble_scan_cubit.dart';
 import '../cubit/scan/ble_scan_state.dart';
-import 'package:flutter/material.dart';
 
 
 class BluetoothScanScreen extends StatelessWidget {

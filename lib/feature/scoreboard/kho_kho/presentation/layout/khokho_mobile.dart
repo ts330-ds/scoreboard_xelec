@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:xelex_esp/feature/scoreboard/kho_kho/presentation/cubit/timer/khokho_timer_cubit.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
-import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 import '../widget/khokho_header.dart';
 import '../widget/khokho_team_card.dart';
@@ -16,7 +16,7 @@ class KhokhoMobile extends StatelessWidget {
 
   Future<bool?> _showExitDialog(BuildContext context) {
     final cubit = sl<KhokhoControllerCubit>();
-    final timer_cubit = sl<KhokhoTimerCubit>();
+    final timerCubit = sl<KhokhoTimerCubit>();
 
     return showDialog<bool>(
       context: context,
@@ -32,7 +32,7 @@ class KhokhoMobile extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              timer_cubit.resetToDefault();
+              timerCubit.resetToDefault();
               cubit.resetScreen();
               context.pop(true);
             },
@@ -94,10 +94,10 @@ class KhokhoMobile extends StatelessWidget {
                                 ),
 
                                 // Divider Line
-                                const VerticalDivider(
-                                  width: 2,
+                                VerticalDivider(
+                                  width: 2.w,
                                   color: Colors.black,
-                                  thickness: 2,
+                                  thickness: 2.w,
                                 ),
 
                                 // Team 2 (Red)
@@ -128,7 +128,7 @@ class KhokhoMobile extends StatelessWidget {
               ),
             ),
 
-            const Divider(height: 1, color: Colors.black),
+            Divider(height: 1.h, color: Colors.black),
 
             // Control Panel
             const Expanded(flex: 5, child: KhokhoControlPanel()),

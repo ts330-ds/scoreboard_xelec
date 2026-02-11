@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/scoreboard/basketball/presentation/cubit/shot_clock/shot_clock_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/basketball/presentation/widget/timerControlButtons.dart';
@@ -18,8 +19,8 @@ class BasketBallMobile extends StatelessWidget {
   const BasketBallMobile({super.key});
 
   Future<bool?> _showExitDialog(BuildContext context) {
-    final controller_cubit = sl<BasketControlPanelCubit>();
-    final timercontroller_cubit = sl<BasketBallTimerCubit>();
+    final controllerCubit = sl<BasketControlPanelCubit>();
+    final timercontrollerCubit = sl<BasketBallTimerCubit>();
     final shortcubit = sl<ShotClockCubit>();
     return showDialog<bool>(
       context: context,
@@ -35,9 +36,9 @@ class BasketBallMobile extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              controller_cubit.exit();
+              controllerCubit.exit();
               shortcubit.resetToDefault();
-              timercontroller_cubit.resetToDefault();
+              timercontrollerCubit.resetToDefault();
               context.pop(true);
             },
             child: const Text('EXIT', style: TextStyle(color: Colors.red)),
@@ -64,12 +65,12 @@ class BasketBallMobile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const BasketScoreboardPreviewUI(),
-            const SizedBox(height: 10),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0),
-              child: ControllerHeading(text: "Timer"),
+            SizedBox(height: 10.h),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.w),
+              child: const ControllerHeading(text: "Timer"),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10.h),
             const BasketBallTimerControlRow(),
             Expanded(
               flex: 6,

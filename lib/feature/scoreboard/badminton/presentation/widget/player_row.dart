@@ -4,7 +4,6 @@ import 'package:xelex_esp/feature/scoreboard/badminton/presentation/cubit/contro
 import 'package:xelex_esp/feature/scoreboard/badminton/presentation/widget/player_info_section.dart';
 import 'package:xelex_esp/feature/scoreboard/badminton/presentation/widget/setUiModel.dart';
 import 'package:xelex_esp/feature/scoreboard/badminton/presentation/widget/set_column.dart';
-import 'package:xelex_esp/feature/scoreboard/badminton/presentation/widget/vertical_divider.dart';
 
 import '../cubit/controller/badminton_controller_state.dart';
 

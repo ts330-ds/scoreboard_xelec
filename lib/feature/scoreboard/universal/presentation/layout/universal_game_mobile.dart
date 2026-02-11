@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/cubit/controller/table_tennis_controller_cubit.dart';
-import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/screen/table_tennis_config_screen.dart';
-import 'package:xelex_esp/feature/scoreboard/table_tennis/presentation/widget/table_tennis_preview.dart';
 import 'package:xelex_esp/feature/scoreboard/universal/presentation/cubit/controller/universal_game_controller_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/universal/presentation/widgets/universal_game_board.dart';
 import 'package:xelex_esp/feature/scoreboard/universal/presentation/widgets/universal_game_control_panal_ui.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 
-import '../../../../../router/app_path.dart';
 import '../../../../../service/dependency_injection/di_service.dart';
 
 class UniversalGameMobile extends StatelessWidget {

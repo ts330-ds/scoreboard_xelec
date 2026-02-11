@@ -10,22 +10,23 @@ class BleService {
 
   StreamSubscription<BluetoothConnectionState>? _connSub;
   Timer? _rssiTimer;
+  bool _isConnecting = false;
 
   // UUIDs ko Guid format mein rakhein
   static final Guid _serviceUuid = Guid("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
   static final Guid _rxUuid = Guid("6E400002-B5A3-F393-E0A9-E50E24DCCA9E");
 
   Future<void> connect(
-      BluetoothDevice d,
-      void Function(BluetoothConnectionState state) onConn,
-      void Function(int rssi) onRssi,
-      ) async {
+    BluetoothDevice d,
+    void Function(BluetoothConnectionState state) onConn,
+    void Function(int rssi) onRssi,
+  ) async {
+    if (_isConnecting) return;
+    _isConnecting = true;
+    await disconnect();
     device = d;
 
     try {
-      // autoConnect: false hi rakhein fast connection ke liye
-      await device!.connect(autoConnect: false, license: License.free);
-
       // 🔔 Connection listener
       _connSub = device!.connectionState.listen((state) {
         onConn(state);
@@ -35,6 +36,11 @@ class BleService {
           _stopRssiUpdates();
         }
       });
+
+      // autoConnect: false hi rakhein fast connection ke liye
+      await device!
+          .connect(autoConnect: false, license: License.free)
+          .timeout(const Duration(seconds: 6));
 
       // Services Discover karna
       final services = await device!.discoverServices();
@@ -54,25 +60,27 @@ class BleService {
       }
     } catch (e) {
       sl<GlobalErrorCubit>().showError("Connection Error: $e");
+      await disconnect();
       rethrow;
+    } finally {
+      _isConnecting = false;
     }
   }
 
   void _startRssiUpdates(void Function(int rssi) onRssi) {
     _rssiTimer?.cancel();
-    _rssiTimer = Timer.periodic(
-      const Duration(seconds: 3),
-          (_) async {
-        try {
-          if (device != null && device!.isConnected) {
-            final rssi = await device!.readRssi();
-            onRssi(rssi);
-          }
-        } catch (e) {
-          print("RSSI Read Error: $e");
+    _rssiTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
+      try {
+        if (device == null) return;
+        final state = await device!.connectionState.first;
+        if (state == BluetoothConnectionState.connected) {
+          final rssi = await device!.readRssi();
+          onRssi(rssi);
         }
-      },
-    );
+      } catch (e) {
+        print("RSSI Read Error: $e");
+      }
+    });
   }
 
   void _stopRssiUpdates() {
@@ -90,7 +98,9 @@ class BleService {
 
   Future<void> send(String data) async {
     if (rxChar == null) {
-      sl<GlobalErrorCubit>().showError("Cannot send: RX Characteristic is null and Data is ${data}");
+      sl<GlobalErrorCubit>().showError(
+        "Cannot send: RX Characteristic is null and Data is $data",
+      );
       return;
     }
     try {

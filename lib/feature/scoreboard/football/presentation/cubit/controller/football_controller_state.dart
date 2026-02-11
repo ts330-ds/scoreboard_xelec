@@ -1,6 +1,5 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
-import 'package:equatable/equatable.dart';
 
 class FootballControllerState extends Equatable {
   final String team1Name;

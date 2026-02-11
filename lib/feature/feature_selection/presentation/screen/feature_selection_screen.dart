@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/utility/theme_extension.dart';
@@ -9,6 +11,7 @@ class FeatureSelectionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final error_cubit = context.read<GlobalErrorCubit>();
     return AdaptiveScaffold(
       title: 'Feature',
       body: SingleChildScrollView(
@@ -20,21 +23,29 @@ class FeatureSelectionScreen extends StatelessWidget {
               title: 'Scoreboard',
               icon: Icons.scoreboard_outlined,
               color: Colors.orange,
-              onTap: () => context.push('${AppPaths.deviceSelection}?feature=scoreboard'),
+              onTap: () => context.push(
+                '${AppPaths.deviceSelection}?feature=scoreboard',
+              ),
             ),
             const SizedBox(height: 24),
             _FeatureCard(
               title: 'Time Gate',
               icon: Icons.timer_outlined,
               color: Colors.blue,
-              onTap: () => context.push('${AppPaths.deviceSelection}?feature=time-gate'),
+              onTap: () {
+                error_cubit.showWarning("Coming Soon, Time Gate feature is under development and will be available in a future update.");
+                //context.push('${AppPaths.deviceSelection}?feature=time-gate');
+              },
             ),
             const SizedBox(height: 24),
             _FeatureCard(
               title: 'Heart Tracker',
               icon: Icons.favorite_outline,
               color: Colors.red,
-              onTap: () => context.push('${AppPaths.deviceSelection}?feature=heart-tracker'),
+              onTap: () {
+                error_cubit.showWarning("Coming Soon, Heart Tracker feature is under development and will be available in a future update.");
+                //context.push('${AppPaths.deviceSelection}?feature=heart-tracker');
+              },
             ),
           ],
         ),

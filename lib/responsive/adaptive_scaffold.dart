@@ -39,6 +39,8 @@ class AdaptiveScaffold extends StatelessWidget {
           backgroundColor: appBarBackground,
           title: Text(
             title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: context.text.titleSmall!.copyWith(color: textColor),
           ),
           actions: onSettingsPressed != null
@@ -60,9 +62,12 @@ class AdaptiveScaffold extends StatelessWidget {
     if (Platform.isIOS) {
       return CupertinoPageScaffold(
         resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+        backgroundColor: bodyBackground,
         navigationBar: CupertinoNavigationBar(
           middle: Text(
             title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: context.text.titleSmall!.copyWith(
               color: context.colors.primary,
             ),
@@ -85,12 +90,15 @@ class AdaptiveScaffold extends StatelessWidget {
     // 🤖 Android
     return Scaffold(
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+      backgroundColor: bodyBackground,
       appBar: AppBar(
         titleSpacing: 10,
         elevation: 0,
         backgroundColor: appBarBackground,
         title: Text(
           title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: context.text.titleSmall!.copyWith(color: textColor),
         ),
         actions: onSettingsPressed != null

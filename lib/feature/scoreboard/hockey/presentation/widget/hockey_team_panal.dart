@@ -97,7 +97,7 @@ class HockeyTeamPanel extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
           ),
           child:  Text(
-            "$value",
+            value,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,

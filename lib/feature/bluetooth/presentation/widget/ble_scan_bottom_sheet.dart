@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
+import 'package:xelex_esp/feature/bluetooth/presentation/cubit/ble/ble_state.dart';
 import 'package:xelex_esp/utility/theme_extension.dart';
 import '../cubit/ble/ble_cubit.dart';
 import '../cubit/scan/ble_scan_cubit.dart';
@@ -31,14 +33,16 @@ class BleScanBottomSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            
+
             // Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   'Scanning for Devices',
-                  style: context.text.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  style: context.text.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 BlocBuilder<BluetoothScanCubit, BluetoothScanState>(
                   builder: (context, state) {
@@ -51,22 +55,24 @@ class BleScanBottomSheet extends StatelessWidget {
                     }
                     return IconButton(
                       icon: const Icon(Icons.refresh),
-                      onPressed: () => context.read<BluetoothScanCubit>().startScan(),
+                      onPressed: () =>
+                          context.read<BluetoothScanCubit>().startScan(),
                     );
                   },
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Device List
             Expanded(
               child: BlocBuilder<BluetoothScanCubit, BluetoothScanState>(
                 builder: (context, state) {
-                  if (state.devices.isEmpty && state.status != ScanStatus.scanning) {
+                  if (state.devices.isEmpty &&
+                      state.status != ScanStatus.scanning) {
                     return const Center(child: Text("No devices found"));
                   }
-                  
+
                   return ListView.separated(
                     itemCount: state.devices.length,
                     separatorBuilder: (context, index) => const Divider(),
@@ -78,14 +84,49 @@ class BleScanBottomSheet extends StatelessWidget {
                           : "Unknown Device";
 
                       return ListTile(
-                        leading: const CircleAvatar(child: Icon(Icons.bluetooth)),
-                        title: Text(name),
-                        subtitle: Text(device.remoteId.toString()),
-                        trailing: Text("\${result.rssi} dBm"),
+                        leading: const CircleAvatar(
+                          child: Icon(Icons.bluetooth),
+                        ),
+                        title: Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+
                         onTap: () async {
-                          await context.read<BleCubit>().connectToDevice(device);
-                          if (context.mounted) {
-                            Navigator.pop(context, true); // Return true on success
+                          final cubit = context.read<BleCubit>();
+                          await cubit.connectToDevice(device);
+
+                          BleState resultState;
+                          try {
+                            resultState = await cubit.stream
+                                .firstWhere(
+                                  (state) =>
+                                      state.status == BleStatus.connected ||
+                                      state.status == BleStatus.error,
+                                )
+                                .timeout(const Duration(seconds: 6));
+                          } catch (_) {
+                            resultState = const BleState(
+                              status: BleStatus.error,
+                              error: 'Connection timed out',
+                            );
+                          }
+
+                          if (!context.mounted) return;
+
+                          if (resultState.status == BleStatus.connected) {
+                            context.pop(true); // Return true on success
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  resultState.error ??
+                                      'Failed to connect - Check again',
+                                ),
+                              ),
+                            );
                           }
                         },
                       );

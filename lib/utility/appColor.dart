@@ -38,7 +38,7 @@ class AppColors {
 
   // Input field colors
   // The darkBackground color with 30% opacity
-  static final Color inputFillColor = darkBackground.withOpacity(0.3);
+  static final Color inputFillColor = darkBackground.withValues(alpha: 0.3);
   static const Color inputBorderColor = Color(0xFF333D48);
 
   // Button colors

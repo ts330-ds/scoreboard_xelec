@@ -6,7 +6,7 @@ import '../../../../../utility/universal_method.dart';
 import '../cubit/timer/hand_ball_timer_cubit.dart';
 import '../cubit/timer/hand_ball_timer_state.dart';
 class HandBallCenterPanel extends StatelessWidget {
-  const HandBallCenterPanel();
+  const HandBallCenterPanel({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../cubit/controller/archery_controller_cubit.dart';
 
@@ -15,11 +16,11 @@ class ArcheryPlayerIndicator extends StatelessWidget {
           children: state.allPlayers.map((player) {
             final isActive = state.isPlayerActive(player);
             return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              padding: EdgeInsets.symmetric(horizontal: 4.w),
               child: Text(
                 player,
                 style: TextStyle(
-                  fontSize: 48,
+                  fontSize: 32.sp,
                   fontWeight: FontWeight.bold,
                   color: isActive ? const Color(0xFF00FF00) : Colors.grey[600],
                 ),

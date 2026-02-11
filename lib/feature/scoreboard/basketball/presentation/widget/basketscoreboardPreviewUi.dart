@@ -72,7 +72,7 @@ class BasketScoreboardPreviewUI extends StatelessWidget {
   }
 
   Widget _centerSection(double width,BuildContext ctx) {
-    final ble_cubit = ctx.read<BleCubit>();
+    final bleCubit = ctx.read<BleCubit>();
     return BlocBuilder<BasketBallTimerCubit, BasketBallTimerState>(
       builder: (context, snapshot) {
         return Column(

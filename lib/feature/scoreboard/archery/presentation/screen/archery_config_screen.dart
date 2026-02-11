@@ -82,17 +82,15 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
 
             const SizedBox(height: 24),
 
-            // Timer Preview
-            _buildTimerPreview(),
-
-            const SizedBox(height: 32),
-
             // Start Button
             Center(
               child: ElevatedButton(
                 onPressed: _startMatch,
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 48,
+                    vertical: 16,
+                  ),
                   backgroundColor: Colors.green,
                 ),
                 child: const Text(
@@ -114,10 +112,7 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-      ),
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
     );
   }
 
@@ -294,7 +289,11 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
             children: [
               _buildTimerPhasePreview('🔴 RED', '10s', Colors.red),
               const Icon(Icons.arrow_forward, size: 16),
-              _buildTimerPhasePreview('🟢 GREEN', '${_greenTime}s', Colors.green),
+              _buildTimerPhasePreview(
+                '🟢 GREEN',
+                '${_greenTime}s',
+                Colors.green,
+              ),
               const Icon(Icons.arrow_forward, size: 16),
               _buildTimerPhasePreview('🟡 YELLOW', '30s', Colors.yellow[700]!),
             ],
@@ -315,7 +314,7 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
           //color: Color.fromRGBO(color.red, color.green, color.blue, 0.2),
           color: color.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color),                 
+          border: Border.all(color: color),
         ),
         child: Column(
           children: [
@@ -349,6 +348,6 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
     controllerCubit.initializeMatch();
 
     // Navigate to archery screen
-    context.pushReplacement(AppPaths.archery);
+    context.pushReplacement(AppPaths.archeryGame);
   }
 }

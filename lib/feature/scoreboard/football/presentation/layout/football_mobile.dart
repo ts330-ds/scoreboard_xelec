@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:xelex_esp/feature/scoreboard/football/presentation/cubit/timer/football_timer_cubit.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
-import 'package:xelex_esp/router/app_path.dart';
 import '../../../../../service/dependency_injection/di_service.dart';
 import '../cubit/controller/football_controller_state.dart';
 import '../widget/football_team_card.dart';
@@ -16,7 +16,7 @@ class FootballMobile extends StatelessWidget {
 
   Future<bool?> _showExitDialog(BuildContext context) {
     final cubit = sl<FootballControllerCubit>();
-    final timer_cubit = sl<FootballTimerCubit>();
+    final timerCubit = sl<FootballTimerCubit>();
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -31,7 +31,7 @@ class FootballMobile extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              timer_cubit.resetToDefault();
+              timerCubit.resetToDefault();
               cubit.exit(); // Optional: Reset logic if needed
               context.pop(true);
             },
@@ -104,7 +104,7 @@ class FootballMobile extends StatelessWidget {
               ),
             ),
 
-            const Divider(height: 1, color: Colors.grey),
+            Divider(height: 1.h, color: Colors.grey),
 
             // Control Panel
             const Expanded(flex: 6, child: FootballControlPanel()),

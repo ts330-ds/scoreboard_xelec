@@ -9,7 +9,6 @@ import 'package:xelex_esp/utility/universal_method.dart';
 import '../../../../../common_widget/brightness_slider_widget.dart';
 import '../../../../../common_widget/buzzerWidget.dart';
 import '../../../../../common_widget/controller_heading.dart';
-import '../../../../../common_widget/quarter_select_row.dart';
 import '../../../../../service/dependency_injection/di_service.dart';
 import '../../../../../utility/appColor.dart';
 import '../../../../bluetooth/service/ble_service.dart';
@@ -38,7 +37,7 @@ class TableTennisControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.lakersGreen,
-                      label: "${name} +",
+                      label: "$name +",
                       onPressed: () {
                         controlCubit.incTeam1Score();
                       },
@@ -53,7 +52,7 @@ class TableTennisControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.scoreOrange,
-                      label: "${name} -",
+                      label: "$name -",
                       onPressed: () {
                         controlCubit.decTeam1Score();
                       },
@@ -74,7 +73,7 @@ class TableTennisControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.lakersGreen,
-                      label: "${name} +",
+                      label: "$name +",
                       onPressed: () {
                         controlCubit.incTeam2Score();
                       },
@@ -89,7 +88,7 @@ class TableTennisControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.scoreOrange,
-                      label: "${name} -",
+                      label: "$name -",
                       onPressed: () {
                         controlCubit.decTeam2Score();
                       },
@@ -130,7 +129,7 @@ class TableTennisControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.scoreOrange,
-                      label: "${name} -",
+                      label: "$name -",
                       onPressed: () {
                         controlCubit.decTeam1GamesWon();
                       },
@@ -168,7 +167,7 @@ class TableTennisControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.scoreOrange,
-                      label: "${name} -",
+                      label: "$name -",
                       onPressed: () {
                         controlCubit.decTeam2GamesWon();
                       },

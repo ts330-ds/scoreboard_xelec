@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:xelex_esp/feature/scoreboard/Kabaddi/presentation/widget/kabaddi_control_panel.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 import '../../../../../common_widget/controller_heading.dart';
 import '../../../../../responsive/adaptive_scaffold.dart';
-import '../../../../../router/app_path.dart';
 import '../../../../../utility/universal_method.dart';
 import '../cubit/controller/kabaddi_controller_cubit.dart';
 import '../cubit/controller/kabaddi_controller_state.dart';
@@ -14,25 +14,28 @@ import '../cubit/timer/kabaddi_timer_state.dart';
 import '../widget/kabaddi_header.dart';
 import '../widget/kabaddi_team_panal.dart';
 
-
 class KhabaddiMobile extends StatelessWidget {
-  
   const KhabaddiMobile({super.key});
 
   Future<bool?> _showExitDialog(BuildContext context) {
-    final controller_cubit = sl<KabaddiControllerCubit>();
-    final timer_cubit = sl<KabaddiTimerCubit>();
+    final controllerCubit = sl<KabaddiControllerCubit>();
+    final timerCubit = sl<KabaddiTimerCubit>();
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Exit Game?'),
-        content: const Text('Are you sure you want to close the scoreboard? Any unsaved progress may be lost.'),
+        content: const Text(
+          'Are you sure you want to close the scoreboard? Any unsaved progress may be lost.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('CANCEL')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('CANCEL'),
+          ),
           TextButton(
             onPressed: () {
-              timer_cubit.resetToDefault();
-              controller_cubit.resetScreen();
+              timerCubit.resetToDefault();
+              controllerCubit.resetScreen();
               context.pop(true);
             },
             child: const Text('EXIT', style: TextStyle(color: Colors.red)),
@@ -42,11 +45,9 @@ class KhabaddiMobile extends StatelessWidget {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
-    Size size = MediaQuery.of(context).size;
-    GameState _gameState = GameState();
+    GameState gameState = GameState();
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -65,9 +66,9 @@ class KhabaddiMobile extends StatelessWidget {
           children: [
             /// HEADER
             HeaderBar(
-              timeInSeconds: _gameState.timeInSeconds,
-              raid: _gameState.raid,
-              currentPlayer: _gameState.currentPlayer,
+              timeInSeconds: gameState.timeInSeconds,
+              raid: gameState.raid,
+              currentPlayer: gameState.currentPlayer,
             ),
 
             /// TEAMS SECTION
@@ -75,58 +76,67 @@ class KhabaddiMobile extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Expanded(
-                  child: BlocBuilder<KabaddiControllerCubit, KabaddiControllerState>(
-                    builder: (context,snapshot) {
-                      return TeamPanel(
-                        teamName: snapshot.team1Name,
-                        score: snapshot.team1Score,
-                        touch: snapshot.team1Touch,
-                        bonus: snapshot.team1Bonus,
-                        allOut: snapshot.team1AllOut,
-                        backgroundColor: const Color(0xFFB3D9FF),
-                        scoreBackgroundColor: const Color(0xFF5A8DC8),
-                        teamNameColor: snapshot.team1Color,
-                        showRunner: snapshot.isRaiderOnTeam1,
-                      );
-                    }
-                  ),
+                  child:
+                      BlocBuilder<
+                        KabaddiControllerCubit,
+                        KabaddiControllerState
+                      >(
+                        builder: (context, snapshot) {
+                          return TeamPanel(
+                            teamName: snapshot.team1Name,
+                            score: snapshot.team1Score,
+                            touch: snapshot.team1Touch,
+                            bonus: snapshot.team1Bonus,
+                            allOut: snapshot.team1AllOut,
+                            backgroundColor: const Color(0xFFB3D9FF),
+                            scoreBackgroundColor: const Color(0xFF5A8DC8),
+                            teamNameColor: snapshot.team1Color,
+                            showRunner: snapshot.isRaiderOnTeam1,
+                          );
+                        },
+                      ),
                 ),
 
-                const VerticalDivider(
-                  width: 2,
-                  thickness: 2,
+                VerticalDivider(
+                  width: 2.w,
+                  thickness: 2.w,
                   color: Colors.black,
                 ),
 
                 Expanded(
-                  child: BlocBuilder<KabaddiControllerCubit, KabaddiControllerState>(
-                      builder: (context,snapshot) {
-                        return TeamPanel(
-                          teamName: snapshot.team2Name,
-                          score: snapshot.team2Score,
-                          touch: snapshot.team2Touch,
-                          bonus: snapshot.team2Bonus,
-                          allOut: snapshot.team2AllOut,
-                          backgroundColor: const Color(0xFFB3D9FF),
-                          scoreBackgroundColor: const Color(0xFF5A8DC8),
-                          teamNameColor: snapshot.team2Color,
-                          showRunner: !snapshot.isRaiderOnTeam1,
-                        );
-                      }
-                  ),
+                  child:
+                      BlocBuilder<
+                        KabaddiControllerCubit,
+                        KabaddiControllerState
+                      >(
+                        builder: (context, snapshot) {
+                          return TeamPanel(
+                            teamName: snapshot.team2Name,
+                            score: snapshot.team2Score,
+                            touch: snapshot.team2Touch,
+                            bonus: snapshot.team2Bonus,
+                            allOut: snapshot.team2AllOut,
+                            backgroundColor: const Color(0xFFB3D9FF),
+                            scoreBackgroundColor: const Color(0xFF5A8DC8),
+                            teamNameColor: snapshot.team2Color,
+                            showRunner: !snapshot.isRaiderOnTeam1,
+                          );
+                        },
+                      ),
                 ),
               ],
             ),
+
             /// BOTTOM SECTION (Raid Timer / Controls / Debug)
             ///
-            widgetGap(),
+            SizedBox(height: 16.h),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              padding: EdgeInsets.symmetric(horizontal: 8.w),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const ControllerHeading(text: "Match Timer"),
-                  const SizedBox(height: 6),
+                  SizedBox(height: 6.h),
                   BlocBuilder<KabaddiTimerCubit, KabaddiTimerState>(
                     builder: (context, state) {
                       final timerCubit = context.read<KabaddiTimerCubit>();
@@ -134,8 +144,13 @@ class KhabaddiMobile extends StatelessWidget {
                         children: [
                           Expanded(
                             child: CustomButton(
-                              label: state.status == TimerStatus.running ? "Pause" : "Start",
-                              backgroundColor: state.status == TimerStatus.running ? Colors.orange : Colors.green,
+                              label: state.status == TimerStatus.running
+                                  ? "Pause"
+                                  : "Start",
+                              backgroundColor:
+                                  state.status == TimerStatus.running
+                                  ? Colors.orange
+                                  : Colors.green,
                               onPressed: () {
                                 if (state.status == TimerStatus.running) {
                                   timerCubit.pause();
@@ -145,7 +160,7 @@ class KhabaddiMobile extends StatelessWidget {
                               },
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          SizedBox(width: 10.w),
                           Expanded(
                             child: CustomButton(
                               label: "Reset",
@@ -160,16 +175,12 @@ class KhabaddiMobile extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            Expanded(
-              flex: 6,
-              child: KabaddiControlPanel(),
-            ),
+            SizedBox(height: 12.h),
+            Expanded(flex: 6, child: KabaddiControlPanel()),
           ],
-        )
+        ),
       ),
     );
-
   }
 }
 

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:xelex_esp/utility/theme_extension.dart';
 import 'package:xelex_esp/utility/universal_method.dart';
 
-import '../cubit/controller/badminton_controller_state.dart';
 class PlayerInfoSection extends StatelessWidget {
   final String playerName;
   final Color scoreColor;

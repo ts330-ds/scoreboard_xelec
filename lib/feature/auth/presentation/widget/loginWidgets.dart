@@ -1,22 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../utility/appColor.dart';
 import '../../../../utility/appStyle.dart';
-
 
 Widget buildLogo() {
   return Center(
     child: Container(
-      width: 60,
-      height: 60,
+      width: 60.w,
+      height: 60.w,
       decoration: BoxDecoration(
         color: AppColors.primaryBlue,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(12.w),
       ),
-      child: const Icon(
+      child: Icon(
         Icons.flash_on, // Placeholder icon similar to the design
         color: AppColors.darkText,
-        size: 30,
+        size: 30.sp,
       ),
     ),
   );
@@ -29,19 +28,19 @@ Widget buildInputField({required String hintText, bool obscureText = false}) {
     decoration: InputDecoration(
       hintText: hintText,
       hintStyle: AppStyles.inputPlaceholder,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
       filled: true,
       fillColor: AppColors.inputFillColor,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8.0),
+        borderRadius: BorderRadius.circular(8.w),
         borderSide: BorderSide(color: AppColors.inputBorderColor),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8.0),
+        borderRadius: BorderRadius.circular(8.w),
         borderSide: BorderSide(color: AppColors.inputBorderColor),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8.0),
+        borderRadius: BorderRadius.circular(8.w),
         borderSide: const BorderSide(color: AppColors.blueButton, width: 2),
       ),
     ),
@@ -50,14 +49,12 @@ Widget buildInputField({required String hintText, bool obscureText = false}) {
 
 Widget buildPrimaryButton({required String text}) {
   return SizedBox(
-    height: 50,
+    height: 50.h,
     child: ElevatedButton(
       onPressed: () {},
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.blueButton,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8.0),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.w)),
         elevation: 0,
       ),
       child: Text(text, style: AppStyles.buttonText),
@@ -70,7 +67,7 @@ Widget buildOrDivider() {
     children: [
       Expanded(child: Divider(color: AppColors.inputBorderColor)),
       Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16.0),
+        padding: EdgeInsets.symmetric(horizontal: 16.w),
         child: Text('or continue with', style: AppStyles.orDivider),
       ),
       Expanded(child: Divider(color: AppColors.inputBorderColor)),
@@ -89,7 +86,7 @@ Widget buildSocialButtons() {
           onPressed: () {},
         ),
       ),
-      const SizedBox(width: 16),
+      SizedBox(width: 16.w),
       Expanded(
         child: buildSocialButton(
           text: 'Apple',
@@ -107,15 +104,13 @@ Widget buildSocialButton({
   required VoidCallback onPressed,
 }) {
   return SizedBox(
-    height: 50,
+    height: 50.h,
     child: OutlinedButton.icon(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         backgroundColor: AppColors.darkBackground,
         side: const BorderSide(color: AppColors.socialButtonBorder),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8.0),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.w)),
       ),
       icon: Icon(icon, color: AppColors.darkText),
       label: Text(text, style: AppStyles.socialButtonText),
@@ -125,15 +120,13 @@ Widget buildSocialButton({
 
 Widget buildCreateAccountButton() {
   return SizedBox(
-    height: 36,
+    height: 36.h,
     child: ElevatedButton(
       onPressed: () {},
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.blueButton,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8.0),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.w)),
+        padding: EdgeInsets.symmetric(horizontal: 16.w),
         elevation: 0,
       ),
       child: const Text('Create Account', style: AppStyles.buttonText),

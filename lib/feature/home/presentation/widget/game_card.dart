@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 class GameCard extends StatelessWidget {
   final String name;
@@ -20,37 +21,38 @@ class GameCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        padding: EdgeInsets.symmetric(vertical: 8.h),
         child: SizedBox(
-          height: 90,
+          height: 90.h,
           child: Stack(
             clipBehavior: Clip.none, // 🔥 allow overflow
             children: [
               // 🧱 Card
               Positioned.fill(
                 child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 24,vertical: 4),
+                  margin: EdgeInsets.symmetric(horizontal: 24.w, vertical: 4.h),
                   padding: EdgeInsets.only(
-                    left: iconRight ? 40 : 62,
-                    right: iconRight ? 62 : 40,
+                    left: iconRight ? 40.w : 62.w,
+                    right: iconRight ? 62.w : 40.w,
                   ),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18.w),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.5),
-                        blurRadius: 14,
-                        offset: const Offset(0, 3),
+                        blurRadius: 14.w,
+                        offset: Offset(0, 3.h),
                       ),
                     ],
                   ),
-                  alignment:
-                  iconRight ? Alignment.centerLeft : Alignment.centerRight,
+                  alignment: iconRight
+                      ? Alignment.centerLeft
+                      : Alignment.centerRight,
                   child: Text(
                     name,
-                    style: const TextStyle(
-                      fontSize: 20,
+                    style: TextStyle(
+                      fontSize: 20.sp,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -59,22 +61,17 @@ class GameCard extends StatelessWidget {
 
               // 🎮 Floating SVG Icon
               Positioned(
-                left: iconRight ? null : 50,
-                right: iconRight ? 50 : null,
-                top: -30,
+                left: iconRight ? null : 50.w,
+                right: iconRight ? 50.w : null,
+                top: -30.h,
 
                 child: Transform.translate(
-                  offset: const Offset(0, 6),
+                  offset: Offset(0, 6.h),
                   child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: Colors.transparent,
-                    ),
-                    child: SvgPicture.asset(
-                      iconPath,
-                      fit: BoxFit.contain,
-                    ),
+                    width: 80.w,
+                    height: 80.w,
+                    decoration: BoxDecoration(color: Colors.transparent),
+                    child: SvgPicture.asset(iconPath, fit: BoxFit.contain),
                   ),
                 ),
               ),

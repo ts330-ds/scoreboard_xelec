@@ -9,8 +9,6 @@ import '../../../../../service/dependency_injection/di_service.dart';
 import '../../../../bluetooth/service/ble_service.dart';
 import '../cubit/controller/kabaddi_controller_cubit.dart';
 import '../cubit/controller/kabaddi_controller_state.dart';
-import '../cubit/timer/kabaddi_timer_cubit.dart';
-import '../cubit/timer/kabaddi_timer_state.dart';
 
 class KabaddiControlPanel extends StatelessWidget {
   const KabaddiControlPanel({super.key});

@@ -10,11 +10,9 @@ import 'package:xelex_esp/feature/scoreboard/basketball/presentation/cubit/shot_
 import 'package:xelex_esp/feature/scoreboard/basketball/presentation/cubit/timer/basketball_timer_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/basketball/presentation/cubit/timer/basketball_timer_state.dart';
 import 'package:xelex_esp/utility/appColor.dart';
-import 'package:xelex_esp/utility/theme_extension.dart';
 import 'package:xelex_esp/utility/universal_method.dart';
 
 import '../../../../../service/dependency_injection/di_service.dart';
-import '../../../../bluetooth/presentation/cubit/ble/ble_cubit.dart';
 import '../cubit/controlPanal/controlPanalState.dart';
 
 class BasketBallControlPanelUI extends StatelessWidget {
@@ -75,7 +73,7 @@ class BasketBallControlPanelUI extends StatelessWidget {
           BlocSelector<BasketControlPanelCubit, ControlPanelState, String>(
             selector: (state) => state.team1Name,
             builder: (context, team1Name) {
-              return ControllerHeading(text: "${team1Name} Score");
+              return ControllerHeading(text: "$team1Name Score");
             },
           ),
 

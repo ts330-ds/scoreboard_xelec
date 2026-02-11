@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:xelex_esp/feature/scoreboard/basketball/presentation/screen/basket_ball_screen.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import '../../../../utility/appColor.dart';
 import '../widget/inputField.dart';

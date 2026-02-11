@@ -22,14 +22,14 @@ class ScoreControl extends StatelessWidget {
           children: [
             Expanded(
               child: _scoreButton(
-                label: "${teamLabel} +",
+                label: "$teamLabel +",
                 onPressed: onIncrement,
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _scoreButton(
-                label: "${teamLabel} -",
+                label: "$teamLabel -",
                 onPressed: onDecrement,
               ),
             ),

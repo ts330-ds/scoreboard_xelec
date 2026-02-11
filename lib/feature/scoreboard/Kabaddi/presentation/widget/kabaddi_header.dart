@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/scoreboard/Kabaddi/presentation/cubit/timer/kabaddi_timer_cubit.dart';
-import 'package:xelex_esp/feature/scoreboard/Kabaddi/presentation/widget/kabaddi_control_panel.dart';
 import 'package:xelex_esp/utility/theme_extension.dart';
 import 'package:xelex_esp/utility/universal_method.dart';
 
@@ -15,8 +14,7 @@ class HeaderBar extends StatelessWidget {
   final int raid;
   final int currentPlayer;
 
-  const HeaderBar({Key? key, required this.timeInSeconds, required this.raid, required this.currentPlayer})
-    : super(key: key);
+  const HeaderBar({super.key, required this.timeInSeconds, required this.raid, required this.currentPlayer});
 
   String _formatTime(int seconds) {
     int minutes = seconds ~/ 60;

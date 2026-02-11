@@ -7,7 +7,7 @@ class ControlButton extends StatelessWidget {
   final bool enabled;
   final VoidCallback onPressed;
 
-  const ControlButton({
+  const ControlButton({super.key, 
     required this.label,
     required this.color,
     required this.enabled,

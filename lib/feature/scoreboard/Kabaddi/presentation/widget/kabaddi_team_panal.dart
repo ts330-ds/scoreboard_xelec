@@ -14,7 +14,7 @@ class TeamPanel extends StatelessWidget {
   final Color teamNameColor;
 
   const TeamPanel({
-    Key? key,
+    super.key,
     required this.teamName,
     required this.score,
     required this.touch,
@@ -24,7 +24,7 @@ class TeamPanel extends StatelessWidget {
     required this.scoreBackgroundColor,
     required this.teamNameColor,
     this.showRunner = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

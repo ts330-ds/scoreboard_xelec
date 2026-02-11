@@ -79,14 +79,14 @@ class _TimerButton extends StatelessWidget {
   final Color backgroundColor;
   final Color disabledColor;
   final VoidCallback? onPressed;
-  final double height;
+
 
   const _TimerButton({
     required this.label,
     required this.backgroundColor,
     required this.disabledColor,
     required this.onPressed,
-    this.height = 36,
+
   });
 
   @override
@@ -94,7 +94,6 @@ class _TimerButton extends StatelessWidget {
     final bool isEnabled = onPressed != null;
 
     return SizedBox(
-      height: height,
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(

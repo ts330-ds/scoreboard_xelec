@@ -24,10 +24,11 @@ abstract class AppPaths {
   static const String khabaddisConfig = '/khabaddis-config';
   static const String universalConfig = '/universal-config';
   static const String archeryConfig = '/archery-config';
+  static const String archeryModeSelection = '/archery-mode-selection';
+  static const String archeryAlternateConfig = '/archery-alternate-config';
 
   /// Bluetooth
   static const String ble_permission = '/ble_scan';
-
 
   /// Scoreboards
   static const String basketball = '/basketball';
@@ -40,6 +41,8 @@ abstract class AppPaths {
   static const String khabaddi = '/khabaddi';
   static const String universal = '/universal';
   static const String archery = '/archery';
+  static const String archeryGame = '/archery-game';
+  static const String archeryAlternateScreen = '/archery-alternate-screen';
 
   /// Settings
   static const String settings = '/settings';
@@ -49,5 +52,4 @@ abstract class AppPaths {
 
   //Bluetooth Scan Screen
   static const String ble_scan = '/ble_scan';
-
 }

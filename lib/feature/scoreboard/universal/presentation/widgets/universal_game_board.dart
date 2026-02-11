@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/scoreboard/universal/presentation/cubit/controller/universal_game_controller_cubit.dart';
-import 'package:xelex_esp/feature/scoreboard/universal/presentation/widgets/player_main_score.dart';
 import 'package:xelex_esp/feature/scoreboard/universal/presentation/widgets/player_row.dart';
-import 'package:xelex_esp/feature/scoreboard/universal/presentation/widgets/set_cell.dart';
 
 import '../cubit/controller/universal_game_controller_state.dart';
 

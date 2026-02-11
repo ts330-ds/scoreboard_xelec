@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:xelex_esp/feature/scoreboard/handball/presentation/cubit/controller/hand_ball_controller_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/handball/presentation/cubit/timer/hand_ball_timer_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/handball/presentation/widget/hand_ball_control_panal.dart';
@@ -7,7 +8,6 @@ import 'package:xelex_esp/feature/scoreboard/handball/presentation/widget/hand_b
 import 'package:xelex_esp/feature/scoreboard/handball/presentation/widget/hand_ball_timer_control_row.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 
-import '../../../../../router/app_path.dart';
 import '../../../../../service/dependency_injection/di_service.dart';
 
 class HandBallMobile extends StatelessWidget {
@@ -58,9 +58,9 @@ class HandBallMobile extends StatelessWidget {
           mainAxisSize: MainAxisSize.max,
           children: [
             const HandballScoreboardPreview(),
-            const SizedBox(height: 10),
+            SizedBox(height: 10.h),
             const HandBallTimerControlRow(),
-            const SizedBox(height: 10),
+            SizedBox(height: 10.h),
             const Expanded(child: HandBallControlPanal()),
           ],
         ),

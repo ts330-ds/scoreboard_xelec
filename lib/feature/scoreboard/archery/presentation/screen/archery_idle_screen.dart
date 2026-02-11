@@ -1,19 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/archery_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
 
 class ArcheryIdleScreen extends StatefulWidget {
   final VoidCallback onLetsPlay;
-  BleService bleService;
-  ArcheryBleMapper archeryBleMapper;
-   ArcheryIdleScreen({
+  final BleService bleService;
+  final ArcheryBleMapper archeryBleMapper;
+  ArcheryIdleScreen({
     super.key,
     required this.onLetsPlay,
     required this.bleService,
-     required this.archeryBleMapper
+    required this.archeryBleMapper,
   });
 
   @override
@@ -24,7 +25,6 @@ class _ArcheryIdleScreenState extends State<ArcheryIdleScreen> {
   late Timer _timer;
   DateTime _currentTime = DateTime.now();
 
-
   String getDayName(DateTime dateTime) {
     const days = [
       'MONDAY',
@@ -33,7 +33,7 @@ class _ArcheryIdleScreenState extends State<ArcheryIdleScreen> {
       'THURSDAY',
       'FRIDAY',
       'SATURDAY',
-      'SUNDAY'
+      'SUNDAY',
     ];
     return days[dateTime.weekday - 1];
   }
@@ -48,6 +48,7 @@ class _ArcheryIdleScreenState extends State<ArcheryIdleScreen> {
     });
     _sendTimeToBle(_currentTime);
   }
+
   void _sendTimeToBle(DateTime dateTime) {
     final date =
         "${dateTime.day.toString().padLeft(2, '0')}/${dateTime.month.toString().padLeft(2, '0')}/${dateTime.year}";
@@ -55,14 +56,14 @@ class _ArcheryIdleScreenState extends State<ArcheryIdleScreen> {
     final day = getDayName(dateTime);
 
     widget.bleService.send(
-      widget.archeryBleMapper.setTime(dateTime.hour, dateTime.minute, dateTime.second),
+      widget.archeryBleMapper.setTime(
+        dateTime.hour,
+        dateTime.minute,
+        dateTime.second,
+      ),
     );
-    widget.bleService.send(
-      widget.archeryBleMapper.setDate(date),
-    );
-    widget.bleService.send(
-      widget.archeryBleMapper.setDay(day)
-    );
+    widget.bleService.send(widget.archeryBleMapper.setDate(date));
+    widget.bleService.send(widget.archeryBleMapper.setDay(day));
   }
 
   @override
@@ -78,6 +79,21 @@ class _ArcheryIdleScreenState extends State<ArcheryIdleScreen> {
 
     return Scaffold(
       backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        titleSpacing: 0,
+        title: Text(
+          'Archery Game',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: const Color(0xFFFFFF00), // Yellow like LED
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2.sp,
+          ),
+        ),
+      ),
       body: SafeArea(
         child: GestureDetector(
           onTap: widget.onLetsPlay,
@@ -89,71 +105,85 @@ class _ArcheryIdleScreenState extends State<ArcheryIdleScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Time Display
-                Text(
-                  timeFormat.format(_currentTime),
-                  style: const TextStyle(
-                    fontSize: 80,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFFFFFF00), // Yellow like LED
-                    fontFamily: 'monospace',
-                    letterSpacing: 8,
+                SizedBox(
+                  width: 1.sw,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      timeFormat.format(_currentTime),
+                      style: TextStyle(
+                        fontSize: 40.sp,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFFFFFF00), // Yellow like LED
+                        letterSpacing: 8.sp,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: 24.h),
                 // Day Display
-                Text(
-                  dayFormat.format(_currentTime).toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFFFFFF00), // Yellow like LED
-                    fontFamily: 'monospace',
-                    letterSpacing: 12,
+                SizedBox(
+                  width: 1.sw,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      dayFormat.format(_currentTime).toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 28.sp,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFFFFFF00), // Yellow like LED
+                        letterSpacing: 12.sp,
+                      ),
+                    ),
                   ),
                 ),
-                Text("${_currentTime.day.toString().padLeft(2, '0')}/"
-                    "${_currentTime.month.toString().padLeft(2, '0')}/"
-                    "${_currentTime.year}",
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFFFFFF00), // Yellow like LED
-                    fontFamily: 'monospace',
-                    letterSpacing: 8,
+                SizedBox(height: 24.h),
+                SizedBox(
+                  width: 1.sw,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      "${_currentTime.day.toString().padLeft(2, '0')}/"
+                      "${_currentTime.month.toString().padLeft(2, '0')}/"
+                      "${_currentTime.year}",
+                      style: TextStyle(
+                        fontSize: 24.sp,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFFFFFF00), // Yellow like LED
+                        letterSpacing: 8.sp,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 60),
+                SizedBox(height: 60.h),
                 // Let's Play Button
                 ElevatedButton(
                   onPressed: widget.onLetsPlay,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00FF00),
                     foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 48,
-                      vertical: 20,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 48.w,
+                      vertical: 20.h,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(12.w),
                     ),
                   ),
-                  child: const Text(
+                  child: Text(
                     "LET'S PLAY",
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 24.sp,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 2,
+                      letterSpacing: 2.sp,
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: 20.h),
                 // Tap hint
-                const Text(
+                Text(
                   'Tap anywhere to start',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey, fontSize: 14.sp),
                 ),
               ],
             ),

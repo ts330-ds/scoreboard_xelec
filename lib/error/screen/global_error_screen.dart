@@ -24,7 +24,7 @@ class GlobalErrorToastListener extends StatelessWidget {
           backgroundColor:
           state.type == ErrorType.error ? Colors.red : Colors.orange,
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
+          duration: const Duration(milliseconds: 1500),
         );
 
         ScaffoldMessenger.of(context).showSnackBar(snackBar);

@@ -6,6 +6,8 @@ import 'package:xelex_esp/utility/theme_extension.dart';
 import '../cubit/controller/table_tennis_controller_cubit.dart';
 import '../cubit/controller/table_tennis_controller_state.dart';
 class TopBar extends StatelessWidget {
+  const TopBar({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -17,7 +19,7 @@ class TopBar extends StatelessWidget {
             selector: (state) => state.roundPlayed,
               builder: (context,data) {
               return Text(
-                "MATCH ${data}",
+                "MATCH $data",
                 style: context.text.headlineMedium!.copyWith(color: context.colors.surface),
               );
             }

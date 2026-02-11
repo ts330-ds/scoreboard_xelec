@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:xelex_esp/common_widget/controller_heading.dart';
 import 'package:xelex_esp/feature/scoreboard/hockey/presentation/cubit/timer/hockey_timer_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/hockey/presentation/widget/hockey_scoreboard_preview.dart';
 import 'package:xelex_esp/feature/scoreboard/hockey/presentation/widget/hockey_timer_control_row.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
-import 'package:xelex_esp/router/app_path.dart';
 
 import '../../../../../service/dependency_injection/di_service.dart';
 import '../cubit/controller/hockey_controller_cubit.dart';
@@ -16,7 +16,7 @@ class HockeyMobile extends StatelessWidget {
 
   Future<bool?> _showExitDialog(BuildContext context) {
     final cubit = sl<HockeyControllerCubit>();
-    final timer_cubit = sl<HockeyTimerCubit>();
+    final timerCubit = sl<HockeyTimerCubit>();
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -31,7 +31,7 @@ class HockeyMobile extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              timer_cubit.resetToDefault();
+              timerCubit.resetToDefault();
               cubit.exit();
               context.pop(true);
             },
@@ -60,14 +60,14 @@ class HockeyMobile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const HockeyScoreboardPreview(),
-            const SizedBox(height: 10),
+            SizedBox(height: 10.h),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              padding: EdgeInsets.symmetric(horizontal: 8.w),
               child: ControllerHeading(text: "Timer"),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: 10.h),
             const HockeyTimerControlRow(),
-            const SizedBox(height: 10),
+            SizedBox(height: 10.h),
             const Expanded(flex: 6, child: HockeyControlPanal()),
           ],
         ),

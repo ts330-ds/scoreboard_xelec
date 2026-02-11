@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:xelex_esp/feature/scoreboard/game_config/presentation/widget/team_color_picker.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 // your reusable color picker
 
 class TwoTextFieldWidget extends StatelessWidget {
@@ -11,7 +12,6 @@ class TwoTextFieldWidget extends StatelessWidget {
 
   final ValueChanged<Color> onTeam1ColorChanged;
   final ValueChanged<Color> onTeam2ColorChanged;
-
 
   const TwoTextFieldWidget({
     super.key,
@@ -44,7 +44,7 @@ class TwoTextFieldWidget extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12.w),
             ColorPickerWidget(
               parentContext: context,
               selectedColor: team1Color,
@@ -54,7 +54,7 @@ class TwoTextFieldWidget extends StatelessWidget {
           ],
         ),
 
-        const SizedBox(height: 16),
+        SizedBox(height: 16.h),
 
         // TEAM 2 ROW
         Row(
@@ -68,7 +68,7 @@ class TwoTextFieldWidget extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12.w),
             ColorPickerWidget(
               parentContext: context,
               selectedColor: team2Color,

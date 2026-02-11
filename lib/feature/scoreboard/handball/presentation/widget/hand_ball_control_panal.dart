@@ -53,7 +53,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.lakersGreen,
-                      label: "${name} +",
+                      label: "$name +",
                       onPressed: () {
                         controlCubit.incTeam1Score();
                       },
@@ -68,7 +68,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.scoreOrange,
-                      label: "${name} -",
+                      label: "$name -",
                       onPressed: () {
                         controlCubit.decTeam1Score();
                       },
@@ -89,7 +89,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.lakersGreen,
-                      label: "${name} +",
+                      label: "$name +",
                       onPressed: () {
                         controlCubit.incTeam2Score();
                       },
@@ -105,7 +105,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.scoreOrange,
-                      label: "${name} -",
+                      label: "$name -",
                       onPressed: () {
                         controlCubit.decTeam2Score();
                       },
@@ -129,7 +129,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.lakersGreen,
-                      label: "${name} +",
+                      label: "$name +",
                       onPressed: () {
                         controlCubit.incrementTeam1Timeout();
                       },
@@ -145,7 +145,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.scoreOrange,
-                      label: "${name} -",
+                      label: "$name -",
                       onPressed: () {
                         controlCubit.decrementTeam1Timeout();
                       },
@@ -166,7 +166,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.lakersGreen,
-                      label: "${name} +",
+                      label: "$name +",
                       onPressed: () {
                         controlCubit.incrementTeam2Timeout();
                       },
@@ -182,7 +182,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.scoreOrange,
-                      label: "${name} -",
+                      label: "$name -",
                       onPressed: () {
                         controlCubit.decrementTeam2Timeout();
                       },
@@ -205,7 +205,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.lakersGreen,
-                      label: "${name} +",
+                      label: "$name +",
                       onPressed: () {
                         controlCubit.incTeam1_7m();
                       },
@@ -221,7 +221,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.scoreOrange,
-                      label: "${name} -",
+                      label: "$name -",
                       onPressed: () {
                         controlCubit.decTeam1_7m();
                       },
@@ -242,7 +242,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.lakersGreen,
-                      label: "${name} +",
+                      label: "$name +",
                       onPressed: () {
                         controlCubit.incTeam2_7m();
                       },
@@ -258,7 +258,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.scoreOrange,
-                      label: "${name} -",
+                      label: "$name -",
                       onPressed: () {
                         controlCubit.decTeam2_7m();
                       },
@@ -282,7 +282,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.lakersGreen,
-                      label: "${name} +",
+                      label: "$name +",
                       onPressed: () {
                         controlCubit.incTeam1Suspension();
                       },
@@ -298,7 +298,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.scoreOrange,
-                      label: "${name} -",
+                      label: "$name -",
                       onPressed: () {
                         controlCubit.decTeam1Suspension();
                       },
@@ -319,7 +319,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.lakersGreen,
-                      label: "${name} +",
+                      label: "$name +",
                       onPressed: () {
                         controlCubit.incTeam2Suspension();
                       },
@@ -335,7 +335,7 @@ class HandBallControlPanal extends StatelessWidget {
                   return Expanded(
                     child: CustomButton(
                       backgroundColor: AppColors.scoreOrange,
-                      label: "${name} -",
+                      label: "$name -",
                       onPressed: () {
                         controlCubit.decTeam2Suspension();
                       },

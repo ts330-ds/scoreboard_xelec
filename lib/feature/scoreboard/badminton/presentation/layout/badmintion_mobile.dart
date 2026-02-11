@@ -4,7 +4,6 @@ import 'package:xelex_esp/feature/scoreboard/badminton/presentation/cubit/contro
 import 'package:xelex_esp/feature/scoreboard/badminton/presentation/widget/badminton_control_panal.dart';
 import 'package:xelex_esp/feature/scoreboard/badminton/presentation/widget/scoreboard_card.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
-import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 
 class BadmintionMobile extends StatelessWidget {

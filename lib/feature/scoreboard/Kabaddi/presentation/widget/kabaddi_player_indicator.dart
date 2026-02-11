@@ -6,10 +6,10 @@ class PlayerIndicator extends StatelessWidget {
   final int selectedNumber;
 
   const PlayerIndicator({
-    Key? key,
+    super.key,
     required this.playerNumber,
     required this.selectedNumber,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

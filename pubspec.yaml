@@ -47,10 +47,14 @@ dependencies:
   flutter_colorpicker: ^1.1.0
   flutter_svg:
   device_preview_plus:
+  flutter_screenutil: ^5.9.0
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  bloc_test: ^9.1.6
+  mocktail: ^1.0.3
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
