@@ -36,78 +36,56 @@ class DeviceSelectionScreen extends StatelessWidget {
   }
 
   void _showScanSheet(BuildContext context) async {
-    await context.read<PermissionCubit>().ask();
-    final permissionStatus = context.read<PermissionCubit>().state;
-    if (Platform.isIOS && permissionStatus != AppPermissionStatus.granted) {
-      if (!context.mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('Permission required'),
-            content: const Text(
-              'Please enable Bluetooth permission in Settings to scan for devices.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('CANCEL'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await openAppSettings();
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                  }
-                },
-                child: const Text('OPEN SETTINGS'),
-              ),
-            ],
-          );
-        },
-      );
-      return;
-    }
-    if (permissionStatus == AppPermissionStatus.permanentlyDenied) {
-      if (!context.mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('Permission denied'),
-            content: const Text(
-              'Bluetooth permission is permanently denied. Please enable it in Settings.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('CANCEL'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await openAppSettings();
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                  }
-                },
-                child: const Text('OPEN SETTINGS'),
-              ),
-            ],
-          );
-        },
-      );
-      return;
-    }
-
-    if (permissionStatus != AppPermissionStatus.granted) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bluetooth permission required.')),
-      );
-      return;
-    }
+    // On iOS, Bluetooth permission is auto-requested when scanning starts
+    // Check adapter state first, then request permissions
     final canScan = await _ensureBluetoothOn(context);
     if (!canScan) return;
+
+    // For Android, explicitly request permissions
+    if (Platform.isAndroid) {
+      await context.read<PermissionCubit>().ask();
+      final permissionStatus = context.read<PermissionCubit>().state;
+
+      if (permissionStatus == AppPermissionStatus.permanentlyDenied) {
+        if (!context.mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Permission denied'),
+              content: const Text(
+                'Bluetooth permission is permanently denied. Please enable it in Settings.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('CANCEL'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await openAppSettings();
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: const Text('OPEN SETTINGS'),
+                ),
+              ],
+            );
+          },
+        );
+        return;
+      }
+
+      if (permissionStatus != AppPermissionStatus.granted) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bluetooth permission required.')),
+        );
+        return;
+      }
+    }
+
     if (!context.mounted) return;
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -118,12 +96,34 @@ class DeviceSelectionScreen extends StatelessWidget {
 
     if (!context.mounted) return;
     if (result == true) {
-      final bleState = context.read<BleCubit>().state;
-      if (bleState.status == BleStatus.connected) {
+      final cubit = context.read<BleCubit>();
+      BleState resultState;
+      try {
+        resultState = await cubit.stream
+            .firstWhere(
+              (state) =>
+                  state.status == BleStatus.connected ||
+                  state.status == BleStatus.error,
+            )
+            .timeout(const Duration(seconds: 10));
+      } catch (_) {
+        resultState = const BleState(
+          status: BleStatus.error,
+          error: 'Connection timed out',
+        );
+      }
+
+      if (!context.mounted) return;
+
+      if (resultState.status == BleStatus.connected) {
         _navigateToFeature(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Device not connected yet.')),
+          SnackBar(
+            content: Text(
+              resultState.error ?? 'Failed to connect - Check again',
+            ),
+          ),
         );
       }
     }
@@ -306,12 +306,14 @@ class DeviceSelectionScreen extends StatelessWidget {
 
             const SizedBox(height: 16),
             TextButton(
-              onPressed: (){
-              context.push(AppPaths.home);
-            }, 
-            child: Text("Continue without Bluetooth", style: TextStyle(color: context.colors.primary),  ),
-            
-            )
+              onPressed: () {
+                context.push(AppPaths.home);
+              },
+              child: Text(
+                "Continue without Bluetooth",
+                style: TextStyle(color: context.colors.primary),
+              ),
+            ),
           ],
         ),
       ),

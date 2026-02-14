@@ -4,6 +4,7 @@ import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'badminton_controller_state.dart';
 import 'package:flutter/material.dart';
+
 class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
   final BleService bleService;
   final BadmintonBleMapper badmintonBleMapper;
@@ -38,11 +39,11 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
   void setTeam1Color(Color color) {
     try {
       emit(state.copyWith(team1Color: color));
-      //bleService.send(
-      //  badmintonBleMapper.setTeam1Color(
-      //    toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase(),
-      //  ),
-      //);
+      // bleService.send(
+      //   badmintonBleMapper.setTeam1Color(
+      //     toRgb565(color).toRadixString(16).padLeft(4, '0').toUpperCase(),
+      //   ),
+      // );
     } catch (e) {
       globalErrorCubit.showError('Failed to set team 1 color: $e');
     }
@@ -82,11 +83,17 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
 
   // ---------------- HELPERS ----------------
 
-  int _t1(int set) =>
-      set == 1 ? state.t1s1 : set == 2 ? state.t1s2 : state.t1s3;
+  int _t1(int set) => set == 1
+      ? state.t1s1
+      : set == 2
+      ? state.t1s2
+      : state.t1s3;
 
-  int _t2(int set) =>
-      set == 1 ? state.t2s1 : set == 2 ? state.t2s2 : state.t2s3;
+  int _t2(int set) => set == 1
+      ? state.t2s1
+      : set == 2
+      ? state.t2s2
+      : state.t2s3;
 
   void _emitT1(int set, int val) {
     try {
@@ -94,10 +101,11 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
         set == 1
             ? state.copyWith(t1s1: val)
             : set == 2
-                ? state.copyWith(t1s2: val)
-                : state.copyWith(t1s3: val),
+            ? state.copyWith(t1s2: val)
+            : state.copyWith(t1s3: val),
       );
       bleService.send(badmintonBleMapper.setTeam1Score(set, val));
+      bleService.send(badmintonBleMapper.setMainScoreTeam1(val));
     } catch (e) {
       globalErrorCubit.showError('Failed to update team 1 score: $e');
     }
@@ -109,10 +117,11 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
         set == 1
             ? state.copyWith(t2s1: val)
             : set == 2
-                ? state.copyWith(t2s2: val)
-                : state.copyWith(t2s3: val),
+            ? state.copyWith(t2s2: val)
+            : state.copyWith(t2s3: val),
       );
       bleService.send(badmintonBleMapper.setTeam2Score(set, val));
+      bleService.send(badmintonBleMapper.setMainScoreTeam2(val));
     } catch (e) {
       globalErrorCubit.showError('Failed to update team 2 score: $e');
     }
@@ -133,8 +142,8 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
         set == 1
             ? state.copyWith(set1Winner: winner)
             : set == 2
-                ? state.copyWith(set2Winner: winner)
-                : state.copyWith(set3Winner: winner),
+            ? state.copyWith(set2Winner: winner)
+            : state.copyWith(set3Winner: winner),
       );
       bleService.send(badmintonBleMapper.setSetWinner(set, winner));
     } catch (e) {
@@ -158,9 +167,15 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
         set == 1
             ? badmintonBleMapper.selectSet1()
             : set == 2
-                ? badmintonBleMapper.selectSet2()
-                : badmintonBleMapper.selectSet3(),
+            ? badmintonBleMapper.selectSet2()
+            : badmintonBleMapper.selectSet3(),
       );
+
+      // Send the current set's scores for the main display
+      final team1Score = _t1(set);
+      final team2Score = _t2(set);
+      bleService.send(badmintonBleMapper.setMainScoreTeam1(team1Score));
+      bleService.send(badmintonBleMapper.setMainScoreTeam2(team2Score));
     } catch (e) {
       globalErrorCubit.showError('Failed to select set: $e');
     }
@@ -243,7 +258,7 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
       globalErrorCubit.showError('Failed temp brightness: $e');
     }
   }
-  
+
   void resetScreen() {
     try {
       emit(BadmintonControllerState.initial());
@@ -251,5 +266,5 @@ class BadmintonControllerCubit extends Cubit<BadmintonControllerState> {
     } catch (e) {
       globalErrorCubit.showError('Failed to reset screen: $e');
     }
-  } 
+  }
 }

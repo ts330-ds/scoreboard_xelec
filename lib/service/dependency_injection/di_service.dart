@@ -6,8 +6,13 @@ import 'package:xelex_esp/feature/bluetooth/mapper/football_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/hockey_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/kabaddi_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/table_tennis_ble_mapper.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/ab_cd_cubit/ab_cd_timer_cubit.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/abc_cubit/abc_timer_cubit.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/abcd_cubit/abcd_timer_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/alternate_game_controller/archery_alternate_game_controller.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/alternate_game_timer/archery_alternate_game_timer_cubit.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/individual_cubit/timer/archery_individual_timer_cubit.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/teams_cubit/timer/archery_team_timer_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/universal/presentation/cubit/controller/universal_game_controller_cubit.dart';
 import '../../feature/bluetooth/mapper/basketball_ble_mapper.dart';
 import '../../feature/bluetooth/mapper/handball_ble_mapper.dart';
@@ -222,6 +227,47 @@ void setupDI() {
       bleService: sl(),
       globalErrorCubit: sl(),
       bleMapper: sl(),
+    ),
+  );
+  sl.registerLazySingleton<ArcheryIndividualTimerCubit>(
+    () => ArcheryIndividualTimerCubit(
+      bleService: sl(),
+      bleMapper: sl(),
+      globalErrorCubit: sl(),
+    ),
+  );
+  sl.registerLazySingleton<ArcheryTeamTimerCubit>(
+    () => ArcheryTeamTimerCubit(
+      bleService: sl(),
+      bleMapper: sl(),
+      globalErrorCubit: sl(),
+    ),
+  );
+
+
+  /// ALL ABCD Cubits can be registered here in the future
+  
+  sl.registerLazySingleton<AbcdTimerCubit>(
+    () => AbcdTimerCubit(
+      bleService: sl(),
+      bleMapper: sl(),
+      globalErrorCubit: sl(),
+    ),
+  );
+
+  sl.registerLazySingleton<AbcTimerCubit>(
+    () => AbcTimerCubit(
+      bleService: sl(),
+      bleMapper: sl(),
+      globalErrorCubit: sl(),
+    ),
+  );
+
+sl.registerLazySingleton<Ab_CdTimerCubit>(
+    () => Ab_CdTimerCubit(
+      bleService: sl(),
+      bleMapper: sl(),
+      globalErrorCubit: sl(),
     ),
   );
 

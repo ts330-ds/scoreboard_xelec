@@ -28,7 +28,7 @@ class HandBallControlPanal extends StatelessWidget {
         children: [
           ControllerHeading(text: "Time Phase"),
           const SizedBox(height: 6),
-      
+
           BlocBuilder<HandBallTimerCubit, HandBallTimerState>(
             builder: (context, state) {
               return QuarterButtonsRow(
@@ -39,9 +39,9 @@ class HandBallControlPanal extends StatelessWidget {
               );
             },
           ),
-      
+
           const SizedBox(height: 12),
-      
+
           ControllerHeading(text: "Score"),
           const SizedBox(height: 6),
           Row(
@@ -116,7 +116,7 @@ class HandBallControlPanal extends StatelessWidget {
               ),
             ],
           ),
-      
+
           const SizedBox(height: 12),
           ControllerHeading(text: "TimeOut"),
           const SizedBox(height: 6),
@@ -269,80 +269,52 @@ class HandBallControlPanal extends StatelessWidget {
               ),
             ],
           ),
-      
+
           const SizedBox(height: 12),
           ControllerHeading(text: "Suspension"),
           const SizedBox(height: 6),
           Row(
-            mainAxisSize: MainAxisSize.max,
             children: [
-              BlocSelector<HandBallControlCubit, HandballControlState, String>(
-                selector: (state) => state.team1Name,
-                builder: (context, name) {
-                  return Expanded(
-                    child: CustomButton(
-                      backgroundColor: AppColors.lakersGreen,
-                      label: "$name +",
-                      onPressed: () {
-                        controlCubit.incTeam1Suspension();
-                      },
+              Expanded(
+                child: BlocBuilder<HandBallControlCubit, HandballControlState>(
+                  builder: (context, state) {
+                    final isSuspended = state.team1Suspension;
+                    final label = isSuspended
+                        ? "${state.team1Name} Suspended"
+                        : "${state.team1Name} Active";
+                    return CustomButton(
+                      backgroundColor: isSuspended
+                          ? Colors.red
+                          : AppColors.lakersGreen,
+                      label: label,
+                      onPressed: controlCubit.toggleTeam1Suspension,
                       height: 36,
-                    ),
-                  );
-                },
-              ),
-              SizedBox(width: 10),
-              BlocSelector<HandBallControlCubit, HandballControlState, String>(
-                selector: (state) => state.team1Name,
-                builder: (context, name) {
-                  return Expanded(
-                    child: CustomButton(
-                      backgroundColor: AppColors.scoreOrange,
-                      label: "$name -",
-                      onPressed: () {
-                        controlCubit.decTeam1Suspension();
-                      },
-                      height: 36,
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ],
           ),
           const SizedBox(height: 12),
           Row(
-            mainAxisSize: MainAxisSize.max,
             children: [
-              BlocSelector<HandBallControlCubit, HandballControlState, String>(
-                selector: (state) => state.team2Name,
-                builder: (context, name) {
-                  return Expanded(
-                    child: CustomButton(
-                      backgroundColor: AppColors.lakersGreen,
-                      label: "$name +",
-                      onPressed: () {
-                        controlCubit.incTeam2Suspension();
-                      },
+              Expanded(
+                child: BlocBuilder<HandBallControlCubit, HandballControlState>(
+                  builder: (context, state) {
+                    final isSuspended = state.team2Suspension;
+                    final label = isSuspended
+                        ? "${state.team2Name} Suspended"
+                        : "${state.team2Name} Active";
+                    return CustomButton(
+                      backgroundColor: isSuspended
+                          ? Colors.red
+                          : AppColors.lakersGreen,
+                      label: label,
+                      onPressed: controlCubit.toggleTeam2Suspension,
                       height: 36,
-                    ),
-                  );
-                },
-              ),
-              SizedBox(width: 10),
-              BlocSelector<HandBallControlCubit, HandballControlState, String>(
-                selector: (state) => state.team2Name,
-                builder: (context, name) {
-                  return Expanded(
-                    child: CustomButton(
-                      backgroundColor: AppColors.scoreOrange,
-                      label: "$name -",
-                      onPressed: () {
-                        controlCubit.decTeam2Suspension();
-                      },
-                      height: 36,
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ],
           ),
@@ -355,19 +327,23 @@ class HandBallControlPanal extends StatelessWidget {
               return BrightnessSliderMinimal(
                 value: brightness.toDouble(),
                 onChanged: (value) {
-                  context.read<HandBallControlCubit>().setTempBrightness(value.toInt());
-                }, onChangedEnd: (double value) {
-                context.read<HandBallControlCubit>().setBrightness(value.toInt());
-              },
+                  context.read<HandBallControlCubit>().setTempBrightness(
+                    value.toInt(),
+                  );
+                },
+                onChangedEnd: (double value) {
+                  context.read<HandBallControlCubit>().setBrightness(
+                    value.toInt(),
+                  );
+                },
               );
             },
           ),
           widgetGap(),
           Align(
-              alignment: Alignment.centerRight,
-              child: BuzzerButton(bleService: sl<BleService>())),
-
-
+            alignment: Alignment.centerRight,
+            child: BuzzerButton(bleService: sl<BleService>()),
+          ),
         ],
       ),
     );

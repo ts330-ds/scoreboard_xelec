@@ -7,12 +7,24 @@ import 'package:xelex_esp/feature/feature_selection/presentation/screen/feature_
 import 'package:xelex_esp/feature/permission/bluetooth/presentation/permissoin_gate.dart';
 import 'package:xelex_esp/feature/scoreboard/Kabaddi/presentation/screen/khabaddi_config_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/Kabaddi/presentation/screen/khabaddi_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/layout/archery_individual_round_mobile.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/all_abcd_screens/ab_cd_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/all_abcd_screens/abc_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/all_abcd_screens/abcd_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_alternate_config_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_alternate_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_idle_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_individual_config_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_individual_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_mode_selection_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_team_screen.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/archery_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/controller/archery_controller_cubit.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_team_config_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/config_screen/ab_cd_config_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/config_screen/abc_config_screen.dart';
+import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/config_screen/abcd_config_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/badminton/presentation/screen/badminton_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/basketball/presentation/screen/basket_ball_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/basketball/presentation/screen/basketball_config_screen.dart';
@@ -157,7 +169,8 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (context, state) => adaptivePage(
         state: state,
         child: ArcheryIdleScreen(
-          onLetsPlay: () => context.pushReplacement(AppPaths.archeryModeSelection),
+          onLetsPlay: () =>
+              context.pushReplacement(AppPaths.archeryModeSelection),
           bleService: sl<BleService>(),
           archeryBleMapper: sl<ArcheryBleMapper>(),
         ),
@@ -174,24 +187,110 @@ final GoRouter appRouter = GoRouter(
           adaptivePage(state: state, child: const ArcheryAlternateScreen()),
     ),
 
+    GoRoute(
+      path: AppPaths.archeryIndividualRoundScreen,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const ArcheryIndividualScreen()),
+    ),
+
+    GoRoute(
+      path: AppPaths.archeryAlternateScreen,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const ArcheryAlternateScreen()),
+    ),
+
     /// 🏹 Archery Config Screen
     GoRoute(
       path: AppPaths.archeryConfig,
-      pageBuilder: (context, state) =>
-          adaptivePage(state: state, child: const ArcheryConfigScreen()),
+      pageBuilder: (context, state) {
+        final initialMode = state.extra is ArcheryMode
+            ? state.extra as ArcheryMode
+            : ArcheryMode.abcd;
+        return adaptivePage(
+          state: state,
+          child: ArcheryConfigScreen(initialMode: initialMode),
+        );
+      },
     ),
 
+    GoRoute(
+      path: AppPaths.archeryIndividualConfig,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: const ArcheryIndividualConfigScreen(),
+      ),
+    ),
+
+    GoRoute(
+      path: AppPaths.archeryTeamConfig,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const ArcheryTeamConfigScreen()),
+    ),
+
+    GoRoute(
+      path: AppPaths.archeryTeamRoundScreen,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const ArcheryTeamScreen()),
+    ),
+
+    //// All ABCD Screens
+    GoRoute(
+      path: AppPaths.archeryAbcdScreen,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const AbcdScreen()),
+    ),
+
+    GoRoute(
+      path: AppPaths.archeryAbcScreen,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const AbcScreen()),
+    ),
+
+GoRoute(
+      path: AppPaths.archeryAb_CdScreen,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const Ab_CdScreen()),
+    ),
+
+    /// All ABCD Config Screen
+    GoRoute(
+      path: AppPaths.archeryAbcdConfig,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const AbcdConfigScreen()),
+    ),
+
+    GoRoute(
+      path: AppPaths.archeryAbcConfig,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const AbcConfigScreen()),
+    ),
+
+     GoRoute(
+      path: AppPaths.archeryAb_CdConfig,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const Ab_CdConfigScreen()),
+    ),
+
+
+/////////   Archery Mode Selection Screen /////////
     GoRoute(
       path: AppPaths.archeryModeSelection,
       pageBuilder: (context, state) => adaptivePage(
         state: state,
         child: ArcheryModeSelectionScreen(
-          onSimpleModeSelected: () => context.push(AppPaths.archeryConfig),
-          onAlternatingFinalsSelected: () =>
-              context.push(AppPaths.archeryAlternateConfig),
+          onQualificationAbcdSelected: () =>
+              context.push(AppPaths.archeryAbcdConfig),
+          onQualificationAbcSelected: () =>
+              context.push(AppPaths.archeryAbcConfig),
+          onQualificationAb_CdSelected: () =>
+              context.push(AppPaths.archeryAb_CdConfig),
+          onIndividualRoundSelected: () =>
+              context.push(AppPaths.archeryIndividualConfig),
+          onTeamRoundSelected: () => context.push(AppPaths.archeryTeamConfig),
         ),
       ),
     ),
+
     GoRoute(
       path: AppPaths.archeryAlternateConfig,
       pageBuilder: (context, state) => adaptivePage(
@@ -239,7 +338,6 @@ final GoRouter appRouter = GoRouter(
     //   pageBuilder: (context, state) =>
     //       adaptivePage(state: state, child: const BluetoothScanScreen()),
     // ),
-
     GoRoute(
       path: AppPaths.ble_permission,
       pageBuilder: (context, state) => adaptivePage(

@@ -95,7 +95,7 @@ class ArcheryBleMapper {
   String arrowRight() => _log("ARAR");
   
   String switchSide() => _log("ARTS");
-
+  String endGame() => _log("OOOO");
   // === SET CONTROLS ===
   
   /// Set the number of sets
@@ -115,6 +115,8 @@ class ArcheryBleMapper {
   /// Reset to default state (if ESP32 supports it)
   String reset() => _log("ARRT");
   
+  String resetIDLE() => _log("IDLE");
+
   /// Set timer with minutes conversion
   String setTimerMinutes(int minutes) => setTimerIndividuals(minutes * 60);
   

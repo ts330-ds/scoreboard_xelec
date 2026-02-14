@@ -50,20 +50,6 @@ class BleCubit extends Cubit<BleState> {
       await service.connect(
         device,
         (connState) async {
-          if (connState == BluetoothConnectionState.connected) {
-            final name = device.advName.isNotEmpty
-                ? device.advName
-                : "Unknown Device";
-            emit(
-              state.copyWith(
-                status: BleStatus.connected,
-                deviceName: name,
-                deviceId: device.remoteId.str,
-                previousDevices: state.previousDevices,
-              ),
-            );
-          }
-
           if (connState == BluetoothConnectionState.disconnected) {
             emit(state.copyWith(status: BleStatus.idle));
           }
@@ -73,6 +59,18 @@ class BleCubit extends Cubit<BleState> {
             emit(state.copyWith(rssi: rssi));
           }
         },
+      );
+
+      final name = device.advName.isNotEmpty
+          ? device.advName
+          : "Unknown Device";
+      emit(
+        state.copyWith(
+          status: BleStatus.connected,
+          deviceName: name,
+          deviceId: device.remoteId.str,
+          previousDevices: state.previousDevices,
+        ),
       );
     } catch (e) {
       emit(state.copyWith(status: BleStatus.error, error: e.toString()));

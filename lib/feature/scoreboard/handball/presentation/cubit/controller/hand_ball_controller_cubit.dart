@@ -110,6 +110,7 @@ class HandBallControlCubit extends Cubit<HandballControlState> {
       final newTimeout = state.team1Timeout - 1;
       emit(state.copyWith(team1Timeout: newTimeout));
       bleService.send(ballBleMapper.setTeam1Timeout(newTimeout));
+      print(  'Decremented Team 1 Timeout to $newTimeout and sent BLE command');
     } catch (e) {
       globalErrorCubit.showError('Failed to decrement team 1 timeout: $e');
     }
@@ -180,53 +181,26 @@ class HandBallControlCubit extends Cubit<HandballControlState> {
     }
   }
 
-  /* ===== SUSPENSION (1 = Red, 2 = Green) ===== */
-  // Note: Firmware expects 1 or 2 for suspension color
-  /* ===== SUSPENSION ===== */
-  // Increment/Decrement suspension count by 2 (old behavior)
-  void incTeam1Suspension() {
+  /* ===== SUSPENSION TOGGLE (1 = Red, 2 = Green) ===== */
+  void toggleTeam1Suspension() {
     try {
-      final newValue = state.team1Suspension + 2;
-      emit(state.copyWith(team1Suspension: newValue));
-      // Firmware: 1 = Red (has suspension), 2 = Green (no suspension)
-      bleService.send(ballBleMapper.setTeam1Suspension(newValue));
+      final newState = !state.team1Suspension;
+      emit(state.copyWith(team1Suspension: newState));
+      bleService.send(ballBleMapper.setTeam1Suspension(newState ? 1 : 2));
     } catch (e) {
-      globalErrorCubit.showError('Failed to increment team 1 suspension: $e');
+      globalErrorCubit.showError('Failed to toggle team 1 suspension: $e');
     }
   }
 
-  void decTeam1Suspension() {
+  void toggleTeam2Suspension() {
     try {
-      if (state.team1Suspension <= 0) return;
-      final newValue = state.team1Suspension - 2;
-      emit(state.copyWith(team1Suspension: newValue));
-      bleService.send(ballBleMapper.setTeam1Suspension(newValue));
+      final newState = !state.team2Suspension;
+      emit(state.copyWith(team2Suspension: newState));
+      bleService.send(ballBleMapper.setTeam2Suspension(newState ? 1 : 2));
     } catch (e) {
-      globalErrorCubit.showError('Failed to decrement team 1 suspension: $e');
+      globalErrorCubit.showError('Failed to toggle team 2 suspension: $e');
     }
   }
-
-  void incTeam2Suspension() {
-    try {
-      final newValue = state.team2Suspension + 2;
-      emit(state.copyWith(team2Suspension: newValue));
-      bleService.send(ballBleMapper.setTeam2Suspension(newValue));
-    } catch (e) {
-      globalErrorCubit.showError('Failed to increment team 2 suspension: $e');
-    }
-  }
-
-  void decTeam2Suspension() {
-    try {
-      if (state.team2Suspension <= 0) return;
-      final newValue = state.team2Suspension - 2;
-      emit(state.copyWith(team2Suspension: newValue));
-      bleService.send(ballBleMapper.setTeam2Suspension(newValue));
-    } catch (e) {
-      globalErrorCubit.showError('Failed to decrement team 2 suspension: $e');
-    }
-  }
-
 
   /* ===== QUARTER / HALF ===== */
   void setQuarter(int quarter) {
@@ -333,11 +307,17 @@ class HandBallControlCubit extends Cubit<HandballControlState> {
       bleService.send(ballBleMapper.setTeam2Timeout(state.team2Timeout));
       bleService.send(ballBleMapper.setTeam1SevenMeter(state.team1_7m));
       bleService.send(ballBleMapper.setTeam2SevenMeter(state.team2_7m));
-      bleService.send(ballBleMapper.setTeam1Suspension(state.team1Suspension));
-      bleService.send(ballBleMapper.setTeam2Suspension(state.team2Suspension));
+      bleService.send(
+        ballBleMapper.setTeam1Suspension(state.team1Suspension ? 1 : 2),
+      );
+      bleService.send(
+        ballBleMapper.setTeam2Suspension(state.team2Suspension ? 1 : 2),
+      );
 
       // Sync quarter based on match half
-      int quarter = state.matchHalf == MatchHalf.first ? 1 : (state.matchHalf == MatchHalf.second ? 2 : 3);
+      int quarter = state.matchHalf == MatchHalf.first
+          ? 1
+          : (state.matchHalf == MatchHalf.second ? 2 : 3);
       bleService.send(ballBleMapper.setQuarter(quarter));
     } catch (e) {
       globalErrorCubit.showError('Failed to sync all to BLE: $e');

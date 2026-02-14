@@ -33,6 +33,8 @@ class HandBallTimerCubit extends Cubit<HandBallTimerState> {
         ),
       );
       bleService.send(ballBleMapper.setTimerMinutes(totalSeconds));
+      bleService.send(ballBleMapper.setTeam1Timeout(3));
+      bleService.send(ballBleMapper.setTeam2Timeout(3));
     } catch (e) {
       globalErrorCubit.showError('Failed to set time: $e');
     }
@@ -95,12 +97,16 @@ class HandBallTimerCubit extends Cubit<HandBallTimerState> {
   void reset() {
     try {
       _timer?.cancel();
-      emit(state.copyWith(
-        seconds: state.initialSeconds,
-        status: TimerStatus.initial,
-      ));
+      emit(
+        state.copyWith(
+          seconds: state.initialSeconds,
+          status: TimerStatus.initial,
+        ),
+      );
       bleService.send(ballBleMapper.resetTimer());
-      bleService.send(ballBleMapper.setTimerMinutes(state.initialSeconds ~/ 60));
+      bleService.send(
+        ballBleMapper.setTimerMinutes(state.initialSeconds ~/ 60),
+      );
     } catch (e) {
       globalErrorCubit.showError('Failed to reset timer: $e');
     }
@@ -111,6 +117,8 @@ class HandBallTimerCubit extends Cubit<HandBallTimerState> {
     try {
       _timer?.cancel();
       emit(HandBallTimerState.initial(3600));
+      bleService.send(ballBleMapper.setTeam1Timeout(3));
+      bleService.send(ballBleMapper.setTeam2Timeout(3));
     } catch (e) {
       globalErrorCubit.showError('Failed to reset to default: $e');
     }
@@ -136,19 +144,13 @@ class HandBallTimerCubit extends Cubit<HandBallTimerState> {
       );
 
       bleService.send(ballBleMapper.setQuarter(quarter));
-      bleService.send(ballBleMapper.setTimerMinutes(state.initialSeconds ~/ 60));
+      bleService.send(
+        ballBleMapper.setTimerMinutes(state.initialSeconds ~/ 60),
+      );
       return true;
     } catch (e) {
       globalErrorCubit.showError('Failed to set quarter: $e');
       return false;
     }
-  }
-
-  @override
-  Future<void> close() {
-    try {
-      _timer?.cancel();
-    } catch (_) {}
-    return super.close();
   }
 }

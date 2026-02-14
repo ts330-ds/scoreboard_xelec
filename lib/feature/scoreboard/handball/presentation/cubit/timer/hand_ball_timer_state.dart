@@ -1,10 +1,4 @@
-enum TimerStatus {
-  initial,
-  running,
-  paused,
-  finished
-}
-
+enum TimerStatus { initial, running, paused, finished }
 
 class HandBallTimerState {
   final int seconds;
@@ -20,7 +14,7 @@ class HandBallTimerState {
   });
 
   factory HandBallTimerState.initial(int totalTime) {
-    return  HandBallTimerState(
+    return HandBallTimerState(
       seconds: totalTime,
       initialSeconds: 0,
       status: TimerStatus.initial,
@@ -42,7 +36,7 @@ class HandBallTimerState {
     );
   }
 
-  Map<String,dynamic> toJson(){
+  Map<String, dynamic> toJson() {
     return {
       "seconds": seconds,
       /*"initialSeconds": initialSeconds,
@@ -50,6 +44,4 @@ class HandBallTimerState {
       "quarter": quarter,
     };
   }
-
 }
-

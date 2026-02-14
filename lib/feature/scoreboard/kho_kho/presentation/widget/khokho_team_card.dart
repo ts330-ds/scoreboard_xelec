@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:xelex_esp/utility/theme_extension.dart';
 
 class KhokhoTeamCard extends StatelessWidget {
+  final int teamNumber;
   final String teamName;
   final String score;
   final String status;
@@ -12,6 +13,7 @@ class KhokhoTeamCard extends StatelessWidget {
   const KhokhoTeamCard({
     super.key,
     required this.teamName,
+    this.teamNumber = 1,
     required this.score,
     required this.status,
     required this.backgroundColor,
@@ -28,7 +30,7 @@ class KhokhoTeamCard extends StatelessWidget {
           final width = constraints.maxWidth;
 
           return Container(
-            color: backgroundColor,
+            color: teamNumber == 1 ? Colors.blue : Colors.red,
             padding: EdgeInsets.all(width * 0.05),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -42,7 +44,7 @@ class KhokhoTeamCard extends StatelessWidget {
                       teamName,
                       textAlign: TextAlign.center,
                       style: context.text.titleLarge?.copyWith(
-                        color: Colors.white,
+                        color: backgroundColor,
                         fontWeight: FontWeight.bold,
                         height: 0.9,
                       ),

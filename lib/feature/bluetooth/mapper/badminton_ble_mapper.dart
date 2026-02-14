@@ -75,6 +75,12 @@ class BadmintonBleMapper {
   String selectSet2() => _log("BDSS2");
   String selectSet3() => _log("BDSS3");
 
+
+// for main score large number
+
+String setMainScoreTeam1(int score) => _log("BDS1$score");
+String setMainScoreTeam2(int score) => _log("BDS2$score");
+
   // ============== TOTAL SETS ==============
   String setTotalSets(int totalSets) => _log("BDTS$totalSets");
 

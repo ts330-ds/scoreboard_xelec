@@ -102,6 +102,7 @@ class KhokhoMobile extends StatelessWidget {
 
                                 // Team 2 (Red)
                                 KhokhoTeamCard(
+                                  teamNumber: 2,
                                   teamName: state.team2Name,
                                   score: state.team2Score.toString().padLeft(
                                     2,

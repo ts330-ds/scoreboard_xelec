@@ -65,14 +65,12 @@ class HockeyTimerCubit extends Cubit<HockeyTimerState> {
             bleService.send(hockeyBleMapper.resetTimer());
           } else {
             emit(state.copyWith(seconds: state.seconds - 1));
-            bleService.send(hockeyBleMapper.startTimer());
           }
         } catch (e) {
           globalErrorCubit.showError('Timer tick error: $e');
         }
       });
-
-      //bleService.send(hockeyBleMapper.startTimer());
+      bleService.send(hockeyBleMapper.startTimer());
     } catch (e) {
       globalErrorCubit.showError('Failed to start timer: $e');
     }

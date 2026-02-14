@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/archery_ble_mapper.dart';
@@ -35,6 +35,7 @@ class ArcheryAlternateGameControllerCubit
 
   void setActiveSide(ArcheryAlternateSide side) {
     try {
+      print("controller ACtive side is working");
       emit(state.copyWith(activeSide: side));
     } catch (e) {
       globalErrorCubit.showError('Failed to set active side: $e');
@@ -93,6 +94,7 @@ class ArcheryAlternateGameControllerCubit
         emit(state.copyWith(gameMode: mode));
       } else {
         bleService.send(bleMapper.setIndividualMode());
+        bleService.send(bleMapper.setNumberOfSets(1));
         emit(state.copyWith(gameMode: mode));
       }
     } catch (e) {

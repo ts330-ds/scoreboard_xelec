@@ -22,7 +22,7 @@ class FootballBleMapper {
   String setPeriod(int period) => _log(period == 1 ? "FOQ1" : "FOQ2");
 
   // Extra Time Text (e.g., "+2'")
-  String setExtraTime(String text) => _log("FOET$text");
+  String setExtraTime(String text) => _log("FOET+$text'");
 
   // Timer
   String setTimerMinutes(int minutes) => _log("FOTN$minutes");
@@ -35,4 +35,7 @@ class FootballBleMapper {
 
   // Reset
   String resetScreen() => _log("FORT");
+
+  // Game Complete
+  String gameComplete() => _log("OOOO");
 }

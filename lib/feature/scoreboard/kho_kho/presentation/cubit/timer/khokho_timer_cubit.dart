@@ -68,11 +68,12 @@ class KhokhoTimerCubit extends Cubit<KhokhoTimerState> {
             emit(state.copyWith(status: KhokhoTimerStatus.paused));
             bleService.send(khoBleMapper.pauseMatchTimer());
           }
-          bleService.send(khoBleMapper.startMatchTimer());
+          
         } catch (e) {
           globalErrorCubit.showError('Timer tick error: $e');
         }
       });
+      bleService.send(khoBleMapper.startMatchTimer());
     } catch (e) {
       globalErrorCubit.showError('Failed to init timer: $e');
     }

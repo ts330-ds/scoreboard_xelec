@@ -62,7 +62,7 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
   void setPracticeEnds(int ends) {
     try {
       emit(state.copyWith(practiceEnds: ends));
-      bleService.send(archeryBleMapper.setEndInfo("SIGHTER END $ends"));
+      bleService.send(archeryBleMapper.setEndInfo("SI END 1"));
     } catch (e) {
       globalErrorCubit.showError('Failed to set practice ends: $e');
     }
@@ -71,7 +71,7 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
   void setScoringEnds(int ends) {
     try {
       emit(state.copyWith(scoringEnds: ends));
-      bleService.send(archeryBleMapper.setEndInfo("SCORING END $ends"));
+      bleService.send(archeryBleMapper.setEndInfo("SC END 1"));
     } catch (e) {
       globalErrorCubit.showError('Failed to set scoring ends: $e');
     }
@@ -101,6 +101,8 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
         state.copyWith(
           matchPhase: initialPhase,
           currentEndNumber: 1,
+          currentPracticeEnd: 1,
+          currentScoringEnd: 1,
           currentTeam: firstTeam,
           currentTurnInRound: 1,
           isMatchComplete: false,
@@ -232,13 +234,29 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
         final firstTeam = _getFirstTeamForRound(nextRound);
         emit(state.copyWith(
           currentEndNumber: nextRound,
+          currentPracticeEnd: state.matchPhase == MatchPhase.sighter
+              ? nextRound
+              : state.currentPracticeEnd,
+          currentScoringEnd: state.matchPhase == MatchPhase.scoring
+              ? nextRound
+              : state.currentScoringEnd,
           currentTeam: firstTeam,
           currentTurnInRound: 1,
         ));
         _sendTeamBleCommand(firstTeam);
       } else {
         // ABCD/ABC mode: just advance round
-        emit(state.copyWith(currentEndNumber: nextRound));
+        emit(
+          state.copyWith(
+            currentEndNumber: nextRound,
+            currentPracticeEnd: state.matchPhase == MatchPhase.sighter
+                ? nextRound
+                : state.currentPracticeEnd,
+            currentScoringEnd: state.matchPhase == MatchPhase.scoring
+                ? nextRound
+                : state.currentScoringEnd,
+          ),
+        );
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to advance to next round: $e');
@@ -254,6 +272,7 @@ class ArcheryControllerCubit extends Cubit<ArcheryControllerState> {
         state.copyWith(
           matchPhase: MatchPhase.scoring,
           currentEndNumber: 1,
+          currentScoringEnd: 1,
           currentTeam: firstTeam,
           currentTurnInRound: 1,
         ),

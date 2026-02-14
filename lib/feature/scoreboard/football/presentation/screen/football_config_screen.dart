@@ -9,7 +9,6 @@ import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import '../../../../../service/dependency_injection/di_service.dart';
 
-
 class FootballConfigScreen extends StatefulWidget {
   const FootballConfigScreen({super.key});
 
@@ -60,7 +59,7 @@ class _FootballConfigScreenState extends State<FootballConfigScreen> {
     return MultiBlocProvider(
       providers: [
         BlocProvider.value(value: sl<FootballControllerCubit>()),
-        BlocProvider.value(value: sl<FootballTimerCubit>())
+        BlocProvider.value(value: sl<FootballTimerCubit>()),
       ],
       child: AdaptiveScaffold(
         title: 'Football Config',
@@ -68,7 +67,9 @@ class _FootballConfigScreenState extends State<FootballConfigScreen> {
           padding: const EdgeInsets.all(8.0),
           child: Column(
             children: [
-              if (team1Controller != null && team2Controller != null && timerController != null) ...[
+              if (team1Controller != null &&
+                  team2Controller != null &&
+                  timerController != null) ...[
                 TwoTextFieldWidget(
                   team1Controller: team1Controller!,
                   team2Controller: team2Controller!,
@@ -84,28 +85,35 @@ class _FootballConfigScreenState extends State<FootballConfigScreen> {
 
                 const SizedBox(height: 24),
 
-                TimerTextFieldWidget(
-                    timerController: timerController!
-                ),
+                TimerTextFieldWidget(timerController: timerController!),
               ],
 
               const SizedBox(height: 24),
               Builder(
                 builder: (BuildContext context) {
                   final controlCubit = context.read<FootballControllerCubit>();
-                  // Note: Football usually counts up, but we can set a target duration
-                  // For now, let's just use the timer setting logic
-                 return ElevatedButton(
+                  final timerCubit = context.read<FootballTimerCubit>();
+
+                  return ElevatedButton(
                     onPressed: () {
                       if (!_isValid()) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter both team names')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter both team names'),
+                          ),
+                        );
                         return;
                       }
-                      
+
                       controlCubit.updateTeam1Name(team1Controller!.text);
                       controlCubit.updateTeam2Name(team2Controller!.text);
                       controlCubit.updateTeam1Color(team1Color ?? Colors.red);
                       controlCubit.updateTeam2Color(team2Color ?? Colors.blue);
+
+                      // Set timer duration from minutes to seconds
+                      final minutes = int.tryParse(timerController!.text) ?? 45;
+                      final durationInSeconds = minutes * 60;
+                      timerCubit.setDuration(durationInSeconds);
 
                       context.pushReplacement(AppPaths.football);
                     },

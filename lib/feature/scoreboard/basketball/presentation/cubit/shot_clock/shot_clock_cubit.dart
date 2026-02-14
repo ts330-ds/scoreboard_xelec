@@ -8,16 +8,15 @@ class ShotClockCubit extends Cubit<ShotClockState> {
   Timer? _timer;
   final BleService bleService;
   final BasketBallBleMapper ballBleMapper;
-  ShotClockCubit({
-    required this.bleService,
-    required this.ballBleMapper
-}) : super(const ShotClockState());
+  ShotClockCubit({required this.bleService, required this.ballBleMapper})
+    : super(const ShotClockState());
 
   void start() {
     _timer?.cancel();
     // If paused, resume from current time. If initial or expired, start from 24
-    if (state.status == ShotClockStatus.initial || state.status == ShotClockStatus.expired) {
-      emit(const ShotClockState(seconds: 24, status: ShotClockStatus.running));
+    if (state.status == ShotClockStatus.initial ||
+        state.status == ShotClockStatus.expired) {
+      emit(const ShotClockState(seconds: 24, status: ShotClockStatus.initial));
     } else {
       emit(state.copyWith(status: ShotClockStatus.running));
     }
@@ -29,7 +28,9 @@ class ShotClockCubit extends Cubit<ShotClockState> {
       }
       if (state.seconds <= 1) {
         // Timer expired, restart from 24 automatically
-        emit(const ShotClockState(seconds: 24, status: ShotClockStatus.running));
+        emit(
+          const ShotClockState(seconds: 24, status: ShotClockStatus.running),
+        );
       } else {
         emit(state.copyWith(seconds: state.seconds - 1));
       }
@@ -48,6 +49,7 @@ class ShotClockCubit extends Cubit<ShotClockState> {
     // Reset to 24 without starting
     emit(const ShotClockState(seconds: 24, status: ShotClockStatus.initial));
     bleService.send(ballBleMapper.resetShotClock());
+    start();
   }
 
   void stop() {

@@ -6,21 +6,27 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 class TwoTextFieldWidget extends StatelessWidget {
   final TextEditingController team1Controller;
   final TextEditingController team2Controller;
+  final defaultTeam1Color;
+  final defaultTeam2Color;
 
   final Color? team1Color;
   final Color? team2Color;
 
   final ValueChanged<Color> onTeam1ColorChanged;
   final ValueChanged<Color> onTeam2ColorChanged;
+  final bool showColorPicker;
 
   const TwoTextFieldWidget({
     super.key,
+    this.defaultTeam1Color = Colors.blue,
+    this.defaultTeam2Color = Colors.red,
     required this.team1Controller,
     required this.team2Controller,
     required this.team1Color,
     required this.team2Color,
     required this.onTeam1ColorChanged,
     required this.onTeam2ColorChanged,
+    this.showColorPicker = true,
   });
 
   bool _isValid() {
@@ -44,13 +50,15 @@ class TwoTextFieldWidget extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(width: 12.w),
-            ColorPickerWidget(
-              parentContext: context,
-              selectedColor: team1Color,
-              defaultColor: Colors.red,
-              onColorSelected: onTeam1ColorChanged,
-            ),
+            if (showColorPicker) ...[
+              SizedBox(width: 12.w),
+              ColorPickerWidget(
+                parentContext: context,
+                selectedColor: team1Color,
+                defaultColor: defaultTeam1Color,
+                onColorSelected: onTeam1ColorChanged,
+              ),
+            ],
           ],
         ),
 
@@ -68,13 +76,15 @@ class TwoTextFieldWidget extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(width: 12.w),
-            ColorPickerWidget(
-              parentContext: context,
-              selectedColor: team2Color,
-              defaultColor: Colors.blue,
-              onColorSelected: onTeam2ColorChanged,
-            ),
+            if (showColorPicker) ...[
+              SizedBox(width: 12.w),
+              ColorPickerWidget(
+                parentContext: context,
+                selectedColor: team2Color,
+                defaultColor: defaultTeam2Color,
+                onColorSelected: onTeam2ColorChanged,
+              ),
+            ],
           ],
         ),
       ],

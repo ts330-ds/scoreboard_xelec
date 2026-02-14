@@ -56,7 +56,6 @@ class ArcheryAlternateGameTimerCubit
   }
 
   void setActiveSide(ArcheryAlternateSide side) {
-    bleService.send(bleMapper.switchSide());
     emit(state.copyWith(activeSide: side));
   }
 

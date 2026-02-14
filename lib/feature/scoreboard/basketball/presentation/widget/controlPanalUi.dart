@@ -49,24 +49,23 @@ class BasketBallControlPanelUI extends StatelessWidget {
             children: [
               CustomButton(
                 onPressed: () {
-              context.read<ShotClockCubit>().start();
-              },
+                  context.read<ShotClockCubit>().start();
+                },
                 label: " Start ",
-              backgroundColor: AppColors.lakersGreen,
-              height: 40,
-          ),
-          const SizedBox(width: 12),
-          CustomButton(
+                backgroundColor: AppColors.lakersGreen,
+                height: 40,
+              ),
+              const SizedBox(width: 12),
+              CustomButton(
                 onPressed: () {
-              context.read<ShotClockCubit>().pause();
-              },
-                label: " Pause ",
-              backgroundColor: AppColors.scoreOrange,
-              height: 40,
-          ),
+                  context.read<ShotClockCubit>().reset();
+                },
+                label: " Reset ",
+                backgroundColor: AppColors.scoreOrange,
+                height: 40,
+              ),
             ],
           ),
-          
 
           const SizedBox(height: 12),
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/bluetooth/service/ble_service.dart';
@@ -23,6 +24,7 @@ class _ArcheryAlternateConfigScreenState
   final int _greenTime = 90;
 
   late TextEditingController _greenTimeController;
+  late TextEditingController _durationController;
 
   // NEW: round type + set timer
   String _roundType = 'Individual Round';
@@ -46,6 +48,9 @@ class _ArcheryAlternateConfigScreenState
   void initState() {
     super.initState();
     _greenTimeController = TextEditingController(text: _greenTime.toString());
+    _durationController = TextEditingController(
+      text: _totalDurationSeconds.toString(),
+    );
     _timerCubit = sl<ArcheryAlternateGameTimerCubit>();
     _controllerCubit = sl<ArcheryAlternateGameControllerCubit>();
   }
@@ -53,6 +58,7 @@ class _ArcheryAlternateConfigScreenState
   @override
   void dispose() {
     _greenTimeController.dispose();
+    _durationController.dispose();
     super.dispose();
   }
 
@@ -96,17 +102,7 @@ class _ArcheryAlternateConfigScreenState
 
               _buildSectionTitle('Total Duration (seconds)'),
               const SizedBox(height: 8),
-              _buildNumberSelector(
-                value: _totalDurationSeconds,
-                min: _minDurationSeconds,
-                max: _maxDurationSeconds,
-                step: _stepSeconds,
-                suffix: 's',
-                onChanged: (value) => setState(() {
-                  _totalDurationSeconds = value;
-                  //_timerCubit.setTime(value);
-                }),
-              ),
+              _buildDurationInput(),
 
               const SizedBox(height: 32),
 
@@ -226,6 +222,63 @@ class _ArcheryAlternateConfigScreenState
     );
   }
 
+  Widget _buildDurationInput() {
+    return Row(
+      children: [
+        IconButton(
+          onPressed: _totalDurationSeconds > _minDurationSeconds
+              ? () => _setDuration(_totalDurationSeconds - 1)
+              : null,
+          icon: const Icon(Icons.remove_circle_outline),
+          iconSize: 32,
+        ),
+        SizedBox(
+          width: 120,
+          child: TextField(
+            controller: _durationController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            style: const TextStyle(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+              suffixText: 's',
+            ),
+            onChanged: (value) {
+              final parsed = int.tryParse(value);
+              if (parsed == null) return;
+              _setDuration(parsed, updateText: false);
+            },
+            onEditingComplete: () {
+              final parsed = int.tryParse(_durationController.text);
+              _setDuration(parsed ?? _totalDurationSeconds);
+              FocusScope.of(context).unfocus();
+            },
+          ),
+        ),
+        IconButton(
+          onPressed: _totalDurationSeconds < _maxDurationSeconds
+              ? () => _setDuration(_totalDurationSeconds + 1)
+              : null,
+          icon: const Icon(Icons.add_circle_outline),
+          iconSize: 32,
+        ),
+      ],
+    );
+  }
+
+  void _setDuration(int value, {bool updateText = true}) {
+    final clamped = value.clamp(_minDurationSeconds, _maxDurationSeconds);
+    setState(() => _totalDurationSeconds = clamped);
+    if (updateText) {
+      _durationController.text = clamped.toString();
+      _durationController.selection = TextSelection.collapsed(
+        offset: _durationController.text.length,
+      );
+    }
+  }
+
   void _validateAndSave() {
     if (_totalRounds < _minRounds || _totalRounds > _maxRounds) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -246,12 +299,13 @@ class _ArcheryAlternateConfigScreenState
     final mode = _roundType == 'Team Round'
         ? ArcheryGameMode.alternatingFinals
         : ArcheryGameMode.simple;
+
     _controllerCubit.setGameMode(mode);
     _timerCubit.setGameMode(mode);
     _timerCubit.setTime(_totalDurationSeconds, mode);
     _controllerCubit.setTotalRounds(_totalRounds, mode);
     _controllerCubit.setActiveSide(_startSide);
-    _timerCubit.setActiveSide(_startSide);
+    _timerCubit.switchSide(_startSide);
     context.pushReplacement(AppPaths.archeryAlternateScreen);
   }
 }

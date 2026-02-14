@@ -35,8 +35,8 @@ class _KhoKhoConfigScreenState extends State<KhoKhoConfigScreen> {
     team2Controller = TextEditingController(text: controlState.team2Name);
     timerController = TextEditingController(text: (timerState.duration ~/ 60).toString());
 
-    team1Color = Colors.blue; // Default for Kho Kho
-    team2Color = Colors.red;  // Default for Kho Kho
+    team1Color = Colors.amber; // Default for Kho Kho
+    team2Color = Colors.green;  // Default for Kho Kho
   }
 
   bool _isValid() {

@@ -174,7 +174,7 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
         emit(
           state.copyWith(
             team1GamesWon: newTeam1GamesWon,
-            roundPlayed: newTeam1GamesWon + state.team2GamesWon,
+            //roundPlayed: newTeam1GamesWon + state.team2GamesWon,
           ),
         );
         bleService.send(
@@ -194,7 +194,7 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
         emit(
           state.copyWith(
             team1GamesWon: newTeam1GamesWon,
-            roundPlayed: newTeam1GamesWon + state.team2GamesWon,
+            //roundPlayed: newTeam1GamesWon + state.team2GamesWon,
           ),
         );
         bleService.send(
@@ -213,7 +213,7 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
         emit(
           state.copyWith(
             team2GamesWon: newTeam2GamesWon,
-            roundPlayed: state.team1GamesWon + newTeam2GamesWon,
+           // roundPlayed: state.team1GamesWon + newTeam2GamesWon,
           ),
         );
         bleService.send(
@@ -233,7 +233,7 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
         emit(
           state.copyWith(
             team2GamesWon: newTeam2GamesWon,
-            roundPlayed: state.team1GamesWon + newTeam2GamesWon,
+            //roundPlayed: state.team1GamesWon + newTeam2GamesWon,
           ),
         );
         bleService.send(
@@ -251,12 +251,12 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
         state.copyWith(
           team1Score: 0,
           team2Score: 0,
-          servingTeam: state.servingTeam == 1 ? 2 : 1, // alternate serve
+          //servingTeam: state.servingTeam == 1 ? 2 : 1, // alternate serve
         ),
       );
       bleService.send(tableTennisBleMapper.setPlayer1Score(0));
       bleService.send(tableTennisBleMapper.setPlayer2Score(0));
-      bleService.send(tableTennisBleMapper.setServing(state.servingTeam));
+      //bleService.send(tableTennisBleMapper.setServing(state.servingTeam));
     } catch (e) {
       globalErrorCubit.showError('Failed to reset scores for next game: $e');
     }
@@ -271,7 +271,7 @@ class TableTennisControllerCubit extends Cubit<TableTennisControllerState> {
     // 1. Determine the new state
     final bool newTimeoutState = !state.team1Timeout;
     // 2. Convert boolean to int (1 for true, 0 for false)
-    final int bleValue = newTimeoutState ? 1 : 0;
+    final int bleValue = newTimeoutState ? 1 : 2;
 
     // 3. Update UI and send to BLE
     emit(state.copyWith(team1Timeout: newTimeoutState));
@@ -287,7 +287,7 @@ void toggleTeam2Timeout() {
     // 1. Determine the new state
     final bool newTimeoutState = !state.team2Timeout;
     // 2. Convert boolean to int (1 for true, 0 for false)
-    final int bleValue = newTimeoutState ? 1 : 0;
+    final int bleValue = newTimeoutState ? 1 : 2;
     
     // 3. Update UI and send to BLE
     emit(state.copyWith(team2Timeout: newTimeoutState));
@@ -337,7 +337,9 @@ void toggleTeam2Timeout() {
   void incrementRoundPlayed() {
     try {
       if (state.roundPlayed < state.totalGameRound) {
-        emit(state.copyWith(roundPlayed: state.roundPlayed + 1));
+        int newValue = state.roundPlayed + 1;
+        emit(state.copyWith(roundPlayed: newValue));
+        bleService.send( tableTennisBleMapper.setMatchNumber(newValue));
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to increment round played: $e');
@@ -347,7 +349,9 @@ void toggleTeam2Timeout() {
   void decrementRoundPlayed() {
     try {
       if (state.roundPlayed > 0) {
-        emit(state.copyWith(roundPlayed: state.roundPlayed - 1));
+        int newValue = state.roundPlayed - 1;
+        emit(state.copyWith(roundPlayed: newValue));
+        bleService.send(tableTennisBleMapper.setMatchNumber(newValue));
       }
     } catch (e) {
       globalErrorCubit.showError('Failed to decrement round played: $e');

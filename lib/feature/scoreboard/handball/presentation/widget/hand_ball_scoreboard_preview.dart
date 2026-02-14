@@ -13,30 +13,37 @@ class HandballScoreboardPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.black,
-      ),
+      decoration: BoxDecoration(color: Colors.black),
       child: Row(
-        children:  [
+        children: [
           Expanded(
             child: BlocBuilder<HandBallControlCubit, HandballControlState>(
-                builder: (context,snapshot){
-              return TeamPanel(teamName: snapshot.team1Name, score: snapshot.team1Score, timeout: snapshot.team1Timeout,
+              builder: (context, snapshot) {
+                return TeamPanel(
+                  teamName: snapshot.team1Name,
+                  score: snapshot.team1Score,
+                  timeout: snapshot.team1Timeout,
                   sevenM: snapshot.team1_7m,
-                  suspension:
-              snapshot.team1Suspension, titleColor: snapshot.team1Color);
-            }),
+                  suspension: snapshot.team1Suspension ? 1 : 0,
+                  titleColor: snapshot.team1Color,
+                );
+              },
+            ),
           ),
           HandBallCenterPanel(),
           Expanded(
             child: BlocBuilder<HandBallControlCubit, HandballControlState>(
-                builder: (context,snapshot){
-                  return TeamPanel(teamName: snapshot.team2Name, score: snapshot.team2Score, timeout: snapshot
-                      .team2Timeout,
-                      sevenM: snapshot.team2_7m,
-                      suspension:
-                      snapshot.team2Suspension, titleColor: snapshot.team2Color);
-                }),
+              builder: (context, snapshot) {
+                return TeamPanel(
+                  teamName: snapshot.team2Name,
+                  score: snapshot.team2Score,
+                  timeout: snapshot.team2Timeout,
+                  sevenM: snapshot.team2_7m,
+                  suspension: snapshot.team2Suspension ? 1 : 0,
+                  titleColor: snapshot.team2Color,
+                );
+              },
+            ),
           ),
         ],
       ),

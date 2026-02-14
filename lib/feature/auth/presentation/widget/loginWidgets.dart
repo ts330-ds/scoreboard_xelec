@@ -67,7 +67,7 @@ Widget buildOrDivider() {
     children: [
       Expanded(child: Divider(color: AppColors.inputBorderColor)),
       Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16.w),
+        padding: EdgeInsets.symmetric(horizontal: 16),
         child: Text('or continue with', style: AppStyles.orDivider),
       ),
       Expanded(child: Divider(color: AppColors.inputBorderColor)),

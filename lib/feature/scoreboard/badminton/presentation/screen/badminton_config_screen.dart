@@ -7,7 +7,6 @@ import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import '../../../../../service/dependency_injection/di_service.dart';
 
-
 class BadmintonConfigScreen extends StatefulWidget {
   const BadmintonConfigScreen({super.key});
 
@@ -30,6 +29,7 @@ class _BadmintonConfigScreenState extends State<BadmintonConfigScreen> {
 
     team1Controller = TextEditingController(text: controlState.team1Name);
     team2Controller = TextEditingController(text: controlState.team2Name);
+    timerController = TextEditingController();
 
     team1Color = controlState.team1Color;
     team2Color = controlState.team2Color;
@@ -51,9 +51,7 @@ class _BadmintonConfigScreenState extends State<BadmintonConfigScreen> {
   @override
   Widget build(BuildContext context) {
     return MultiBlocProvider(
-      providers: [
-        BlocProvider.value(value: sl<BadmintonControllerCubit>()),
-      ],
+      providers: [BlocProvider.value(value: sl<BadmintonControllerCubit>())],
       child: AdaptiveScaffold(
         title: 'Badminton Config',
         body: Padding(
@@ -71,9 +69,8 @@ class _BadmintonConfigScreenState extends State<BadmintonConfigScreen> {
                 onTeam2ColorChanged: (color) {
                   setState(() => team2Color = color);
                 },
+                showColorPicker: false,
               ),
-
-
 
               const SizedBox(height: 24),
               Builder(
@@ -84,7 +81,11 @@ class _BadmintonConfigScreenState extends State<BadmintonConfigScreen> {
                   return ElevatedButton(
                     onPressed: () {
                       if (!_isValid()) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter both team names')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter both team names'),
+                          ),
+                        );
                         return;
                       }
 

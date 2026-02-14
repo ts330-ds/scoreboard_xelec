@@ -8,14 +8,16 @@ import '../cubit/controller/archery_controller_cubit.dart';
 import '../cubit/timer/archery_timer_cubit.dart';
 
 class ArcheryConfigScreen extends StatefulWidget {
-  const ArcheryConfigScreen({super.key});
+  final ArcheryMode initialMode;
+
+  const ArcheryConfigScreen({super.key, this.initialMode = ArcheryMode.abcd});
 
   @override
   State<ArcheryConfigScreen> createState() => _ArcheryConfigScreenState();
 }
 
 class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
-  ArcheryMode _selectedMode = ArcheryMode.abcd;
+  late ArcheryMode _selectedMode;
   int _practiceEnds = 0;
   int _scoringEnds = 6;
   int _greenTime = 90;
@@ -26,6 +28,7 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedMode = widget.initialMode;
     _greenTimeController = TextEditingController(text: _greenTime.toString());
   }
 
@@ -341,9 +344,7 @@ class _ArcheryConfigScreenState extends State<ArcheryConfigScreen> {
     controllerCubit.setMode(_selectedMode);
     controllerCubit.setPracticeEnds(_practiceEnds);
     controllerCubit.setScoringEnds(_scoringEnds);
-
     timerCubit.setMatchTime(_greenTime);
-
     // Initialize match
     controllerCubit.initializeMatch();
 

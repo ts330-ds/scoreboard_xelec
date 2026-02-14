@@ -10,10 +10,14 @@ class ArcheryControllerState extends Equatable {
   final int scoringEnds;
   final int greenTime;
 
+  final int currentPracticeEnd;
+  final int currentScoringEnd;
+
   final MatchPhase matchPhase;
   final int currentEndNumber;
   final String currentTeam; // 'AB' or 'CD' for AB-CD mode
-  final int currentTurnInRound; // 1 = first turn (AB), 2 = second turn (CD) for AB-CD mode
+  final int
+  currentTurnInRound; // 1 = first turn (AB), 2 = second turn (CD) for AB-CD mode
 
   final bool isMatchComplete;
   final bool isPracticeSkipped;
@@ -29,6 +33,8 @@ class ArcheryControllerState extends Equatable {
     this.practiceEnds = 0,
     this.scoringEnds = 6,
     this.greenTime = 90,
+    this.currentPracticeEnd = 1,
+    this.currentScoringEnd = 1,
     this.matchPhase = MatchPhase.sighter,
     this.currentEndNumber = 1,
     this.currentTeam = 'AB',
@@ -78,6 +84,8 @@ class ArcheryControllerState extends Equatable {
     int? practiceEnds,
     int? scoringEnds,
     int? greenTime,
+    int? currentPracticeEnd,
+    int? currentScoringEnd,
     MatchPhase? matchPhase,
     int? currentEndNumber,
     String? currentTeam,
@@ -94,6 +102,8 @@ class ArcheryControllerState extends Equatable {
       practiceEnds: practiceEnds ?? this.practiceEnds,
       scoringEnds: scoringEnds ?? this.scoringEnds,
       greenTime: greenTime ?? this.greenTime,
+      currentPracticeEnd: currentPracticeEnd ?? this.currentPracticeEnd,
+      currentScoringEnd: currentScoringEnd ?? this.currentScoringEnd,
       matchPhase: matchPhase ?? this.matchPhase,
       currentEndNumber: currentEndNumber ?? this.currentEndNumber,
       currentTeam: currentTeam ?? this.currentTeam,
@@ -109,19 +119,21 @@ class ArcheryControllerState extends Equatable {
 
   @override
   List<Object?> get props => [
-        mode,
-        practiceEnds,
-        scoringEnds,
-        greenTime,
-        matchPhase,
-        currentEndNumber,
-        currentTeam,
-        currentTurnInRound,
-        isMatchComplete,
-        isPracticeSkipped,
-        isIdleScreen,
-        brightness,
-        buzzerOn,
-        setTempBrightness,
-      ];
+    mode,
+    practiceEnds,
+    scoringEnds,
+    greenTime,
+    currentPracticeEnd,
+    currentScoringEnd,
+    matchPhase,
+    currentEndNumber,
+    currentTeam,
+    currentTurnInRound,
+    isMatchComplete,
+    isPracticeSkipped,
+    isIdleScreen,
+    brightness,
+    buzzerOn,
+    setTempBrightness,
+  ];
 }

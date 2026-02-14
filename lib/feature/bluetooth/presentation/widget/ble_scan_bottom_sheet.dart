@@ -94,40 +94,11 @@ class BleScanBottomSheet extends StatelessWidget {
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
 
-                        onTap: () async {
+                        onTap: () {
                           final cubit = context.read<BleCubit>();
-                          await cubit.connectToDevice(device);
-
-                          BleState resultState;
-                          try {
-                            resultState = await cubit.stream
-                                .firstWhere(
-                                  (state) =>
-                                      state.status == BleStatus.connected ||
-                                      state.status == BleStatus.error,
-                                )
-                                .timeout(const Duration(seconds: 6));
-                          } catch (_) {
-                            resultState = const BleState(
-                              status: BleStatus.error,
-                              error: 'Connection timed out',
-                            );
-                          }
-
+                          cubit.connectToDevice(device);
                           if (!context.mounted) return;
-
-                          if (resultState.status == BleStatus.connected) {
-                            context.pop(true); // Return true on success
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  resultState.error ??
-                                      'Failed to connect - Check again',
-                                ),
-                              ),
-                            );
-                          }
+                          context.pop(true);
                         },
                       );
                     },

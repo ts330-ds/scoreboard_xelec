@@ -106,7 +106,7 @@ class BasketScoreboardPreviewUI extends StatelessWidget {
                   
                   // Shot Clock Timer Button
                   GestureDetector(
-                    onTap: () => context.read<ShotClockCubit>().reset(),
+                  //  onTap: () => context.read<ShotClockCubit>().reset(),
                     child: BlocBuilder<ShotClockCubit, ShotClockState>(
                       builder: (context, state) {
                         return Container(

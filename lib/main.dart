@@ -1,5 +1,6 @@
 import 'package:device_preview_plus/device_preview_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -19,10 +20,10 @@ void main() {
   FlutterBluePlus.setLogLevel(LogLevel.warning, color: false);
   final bluetoothPermission = BluetoothPermissionService();
   // SocketService().connect("ws://scoreboard.local:81");
-  /*SystemChrome.setPreferredOrientations([
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ]);*/
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitDown,
+    DeviceOrientation.portraitUp,
+  ]);
 
   runApp(
     MultiBlocProvider(

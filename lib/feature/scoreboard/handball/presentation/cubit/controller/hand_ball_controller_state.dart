@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 enum MatchHalf { first, second, extra }
 
 class HandballControlState {
@@ -17,8 +18,8 @@ class HandballControlState {
   final int team1_7m;
   final int team2_7m;
 
-  final int team1Suspension;
-  final int team2Suspension;
+  final bool team1Suspension;
+  final bool team2Suspension;
   final MatchHalf matchHalf;
   final int brightness; // 0 - 255
   final int tempBrightness;
@@ -53,10 +54,11 @@ class HandballControlState {
       team2Timeout: 3,
       team1_7m: 0,
       team2_7m: 0,
-      team1Suspension: 0,
-      team2Suspension: 0,
+      team1Suspension: false,
+      team2Suspension: false,
       matchHalf: MatchHalf.first,
-      team1Color: Colors.blue, team2Color: Colors.red,
+      team1Color: Colors.blue,
+      team2Color: Colors.red,
       brightness: 220,
       tempBrightness: 220,
       buzzerOn: false,
@@ -72,8 +74,8 @@ class HandballControlState {
     int? team2Timeout,
     int? team1_7m,
     int? team2_7m,
-    int? team1Suspension,
-    int? team2Suspension,
+    bool? team1Suspension,
+    bool? team2Suspension,
     Color? team1Color,
     Color? team2Color,
     MatchHalf? matchHalf,
@@ -98,7 +100,6 @@ class HandballControlState {
       brightness: brightness ?? this.brightness,
       tempBrightness: tempBrightness ?? this.tempBrightness,
       buzzerOn: buzzerOn ?? this.buzzerOn,
-
     );
   }
 

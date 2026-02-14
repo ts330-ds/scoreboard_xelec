@@ -33,9 +33,8 @@ class ArcheryTimerCubit extends Cubit<ArcheryTimerState> {
         );
         return;
       }
-
       _matchTime = seconds;
-      //bleService.send(archeryBleMapper.startMatch(matchTime));
+      bleService.send(archeryBleMapper.startMatch(matchTime));
     } catch (e) {
       globalErrorToastListener.showError('Failed to set match time: $e');
     }
