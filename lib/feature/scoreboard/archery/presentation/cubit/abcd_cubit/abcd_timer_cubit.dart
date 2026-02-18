@@ -141,6 +141,7 @@ class AbcdTimerCubit extends Cubit<AbcdTimerState> {
     final updated = round.clamp(1, state.totalSighterRounds);
     emit(state.copyWith(currentSighterRound: updated));
     bleService.send(bleMapper.setEndInfo('SI END $updated'));
+    _playBuzzerPattern(count: 3, intervalMs: 500);
     reset();
   }
 
@@ -154,6 +155,7 @@ class AbcdTimerCubit extends Cubit<AbcdTimerState> {
     final updated = round.clamp(1, state.totalScoringRounds);
     emit(state.copyWith(currentScoringRound: updated));
     bleService.send(bleMapper.setEndInfo('SC END $updated'));
+    _playBuzzerPattern(count: 3, intervalMs: 500);
     reset();
   }
 
@@ -235,6 +237,22 @@ class AbcdTimerCubit extends Cubit<AbcdTimerState> {
     );
   }
 
+  void _playBuzzerPattern({int count = 3, int intervalMs = 500}) {
+    for (var i = 0; i < count; i++) {
+      Future.delayed(Duration(milliseconds: intervalMs), () {
+        try {
+          bleService.send(bleMapper.triggerBuzzer());
+        } catch (e) {
+          globalErrorCubit.showError('Failed to trigger buzzer: $e');
+        }
+      });
+    }
+  }
+
+  void triggerBuzzer() {
+    _playBuzzerPattern();
+  }
+
   void setTempBrightness(int value) {
     try {
       final clamped = value.clamp(0, 220);
@@ -271,6 +289,8 @@ class AbcdTimerCubit extends Cubit<AbcdTimerState> {
   }
 
   void _advanceRound() {
+    _playBuzzerPattern();
+
     if (state.roundPhase == AbcdRoundPhase.sighter) {
       // Round khatam -> timer, koi auto-round/phase change nahi
       emit(
@@ -330,7 +350,7 @@ class AbcdTimerCubit extends Cubit<AbcdTimerState> {
 
       if (state.seconds <= 0) {
         timer.cancel();
-       // _advanceRound();
+        _playBuzzerPattern();
       } else {
         emit(state.copyWith(seconds: state.seconds - 1));
       }

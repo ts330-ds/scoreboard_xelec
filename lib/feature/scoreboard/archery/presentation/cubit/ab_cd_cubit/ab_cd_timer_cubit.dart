@@ -100,8 +100,18 @@ class Ab_CdTimerCubit extends Cubit<AbCdTimerState> {
   void setCurrentSighterRound(int round) {
     if (state.totalSighterRounds <= 0) return;
     final updated = round.clamp(1, state.totalSighterRounds);
-    emit(state.copyWith(currentSighterRound: updated));
+    // Har nayi sighter round par first team + first turn se shuru karo
+    final firstTeam = state.getFirstTeamForRound(updated);
+    emit(
+      state.copyWith(
+        currentSighterRound: updated,
+        currentTeam: firstTeam,
+        currentTurnInRound: 1,
+      ),
+    );
     bleService.send(bleMapper.setEndInfo('SI END $updated'));
+    _playBuzzerPattern(count: 3, intervalMs: 500);
+    reset();
   }
 
   void incrementCurrentSighterRound() =>
@@ -112,8 +122,18 @@ class Ab_CdTimerCubit extends Cubit<AbCdTimerState> {
 
   void setCurrentScoringRound(int round) {
     final updated = round.clamp(1, state.totalScoringRounds);
-    emit(state.copyWith(currentScoringRound: updated));
+    // Har nayi scoring round par first team + first turn se shuru karo
+    final firstTeam = state.getFirstTeamForRound(updated);
+    emit(
+      state.copyWith(
+        currentScoringRound: updated,
+        currentTeam: firstTeam,
+        currentTurnInRound: 1,
+      ),
+    );
     bleService.send(bleMapper.setEndInfo('SC END $updated'));
+    _playBuzzerPattern(count: 3, intervalMs: 500);
+    reset();
   }
 
   void incrementCurrentScoringRound() =>
@@ -143,6 +163,7 @@ class Ab_CdTimerCubit extends Cubit<AbCdTimerState> {
         bleMapper.setEndInfo('SC END ${state.currentScoringRound}'),
       );
     }
+    reset();
   }
 
   void start() {
@@ -271,14 +292,34 @@ class Ab_CdTimerCubit extends Cubit<AbCdTimerState> {
     }
   }
 
+void _playBuzzerPattern({int count = 3, int intervalMs = 500}) {
+    for (var i = 0; i < count; i++) {
+      Future.delayed(Duration(milliseconds: intervalMs), () {
+        try {
+          bleService.send(bleMapper.triggerBuzzer());
+        } catch (e) {
+          globalErrorCubit.showError('Failed to trigger buzzer: $e');
+        }
+      });
+    }
+  }
+
   /// Called when timer completes for one team
   void _handleTimerComplete() {
     if (state.currentTurnInRound == 1) {
-      // First team completed, switch to second team
+      // First team completed, switch to second team automatically
       _switchToSecondTeam();
     } else {
-      // Second team completed, round is complete
-      _advanceRound();
+      // Second team completed, stop timer & reset for manual control
+      emit(
+        state.copyWith(
+          status: AbCdTimerStatus.initial,
+          seconds: state.initialSeconds,
+          phase: AbCdTimerPhase.main,
+        ),
+      );
+      // NOTE: No automatic round/phase change; user will set next round
+      reset();
     }
   }
 
@@ -295,9 +336,17 @@ class Ab_CdTimerCubit extends Cubit<AbCdTimerState> {
         phase: AbCdTimerPhase.main,
       ),
     );
-    
+
     // Send BLE command for second team
     _sendTeamBleCommand(secondTeam);
+    reset();
+
+    // Restart firmware and local timer for second team's turn
+    try {
+      bleService.send(bleMapper.startAlternateTimer());
+    } catch (_) {}
+
+    _startTicker();
   }
 
   /// Advance to next round after both teams complete

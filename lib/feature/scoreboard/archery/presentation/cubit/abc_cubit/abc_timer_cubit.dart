@@ -140,6 +140,7 @@ class AbcTimerCubit extends Cubit<AbcTimerState> {
     final updated = round.clamp(1, state.totalSighterRounds);
     emit(state.copyWith(currentSighterRound: updated));
     bleService.send(bleMapper.setEndInfo('SI END $updated'));
+    _playBuzzerPattern(count: 3, intervalMs: 500);
     reset();
   }
 
@@ -166,9 +167,11 @@ class AbcTimerCubit extends Cubit<AbcTimerState> {
       setCurrentSighterRound(state.currentSighterRound - 1);
 
   void setCurrentScoringRound(int round) {
+    _playBuzzerPattern(count: 3, intervalMs: 500);
     final updated = round.clamp(1, state.totalScoringRounds);
     emit(state.copyWith(currentScoringRound: updated));
     bleService.send(bleMapper.setEndInfo('SC END $updated'));
+    _playBuzzerPattern(count: 3, intervalMs: 500);
     reset();
   }
 
@@ -313,6 +316,18 @@ class AbcTimerCubit extends Cubit<AbcTimerState> {
     }
   }
 
+void _playBuzzerPattern({int count = 3, int intervalMs = 500}) {
+    for (var i = 0; i < count; i++) {
+      Future.delayed(Duration(milliseconds: intervalMs), () {
+        try {
+          bleService.send(bleMapper.triggerBuzzer());
+        } catch (e) {
+          globalErrorCubit.showError('Failed to trigger buzzer: $e');
+        }
+      });
+    }
+  }
+
   void _startTicker() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -340,6 +355,8 @@ class AbcTimerCubit extends Cubit<AbcTimerState> {
       if (state.seconds <= 0) {
         timer.cancel();
         // _advanceRound();
+        _playBuzzerPattern(count:5, intervalMs: 500);
+        
       } else {
         emit(state.copyWith(seconds: state.seconds - 1));
       }
