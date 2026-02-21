@@ -10,7 +10,7 @@ class ResponsiveLayout extends StatelessWidget {
     super.key,
     required this.mobile,
     required this.tablet,
-    required this.desktop,
+    required this.desktop
   });
 
   @override

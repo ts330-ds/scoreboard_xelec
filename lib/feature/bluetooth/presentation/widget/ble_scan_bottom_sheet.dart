@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:xelex_esp/feature/bluetooth/presentation/cubit/ble/ble_state.dart';
 import 'package:xelex_esp/utility/theme_extension.dart';
 import '../cubit/ble/ble_cubit.dart';
 import '../cubit/scan/ble_scan_cubit.dart';

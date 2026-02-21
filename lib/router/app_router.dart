@@ -1,13 +1,21 @@
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/auth/presentation/screen/loginScreen.dart';
-import 'package:xelex_esp/feature/bluetooth/presentation/screen/ble_scan_screen.dart';
 import 'package:xelex_esp/feature/bluetooth/presentation/screen/device_selection_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/presentation/screen/heart_rate_ble_selection_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/cubit/navigation_cubit/shell_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_activity_mobile.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_home_mobile.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_profile_mobile.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/screen/indivi_main_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/profile_registration/presentation/screen/profile_choose_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/profile_registration/presentation/screen/profile_registration_screen.dart';
 import 'package:xelex_esp/feature/home/presentation/screen/home_screen.dart';
 import 'package:xelex_esp/feature/feature_selection/presentation/screen/feature_selection_screen.dart';
 import 'package:xelex_esp/feature/permission/bluetooth/presentation/permissoin_gate.dart';
 import 'package:xelex_esp/feature/scoreboard/Kabaddi/presentation/screen/khabaddi_config_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/Kabaddi/presentation/screen/khabaddi_screen.dart';
-import 'package:xelex_esp/feature/scoreboard/archery/presentation/layout/archery_individual_round_mobile.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/all_abcd_screens/ab_cd_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/all_abcd_screens/abc_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/all_abcd_screens/abcd_screen.dart';
@@ -40,6 +48,7 @@ import 'package:xelex_esp/feature/scoreboard/universal/presentation/screen/unive
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_config_screen.dart';
 import 'package:xelex_esp/router/app_path.dart';
+import 'package:xelex_esp/router/heart_tracker_path.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 
 import '../feature/scoreboard/badminton/presentation/screen/badminton_config_screen.dart';
@@ -345,5 +354,71 @@ GoRoute(
         child: const PermissionGate(child: FeatureSelectionScreen()),
       ),
     ),
+    /// Heart Tracker Routes Start from Here
+    /// 
+    GoRoute(
+      path: HeartTrackerPaths.chooseProfile,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: const ProfileChooseScreen(),
+      ),
+    ),
+
+GoRoute(
+      path: HeartTrackerPaths.individualProfileRegistration,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: const IndiviProfileRegistrationScreen(),
+      ),
+    ),
+
+
+ ShellRoute(
+      builder: (context, state, child) {
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (_) => ShellCubit()),
+            BlocProvider.value(value: sl<HeartBleCubit>()),
+          ],
+          child: IndiviMainScreen(child: child),
+        );
+      },
+      routes: [
+        // Tab 0 — Feature Selection
+        GoRoute(
+          path: HeartTrackerPaths.indiviHomeMobile,
+          pageBuilder: (context, state) => adaptivePage(
+            state: state,
+            child: const IndiviHomeMobile(),
+          ),
+        ),
+        // Tab 1 — Scoreboard Home
+        GoRoute(
+          path: HeartTrackerPaths.indiviActivityMobile,
+          pageBuilder: (context, state) => adaptivePage(
+            state: state,
+            child: const IndiviActivityMobile(),
+          ),
+        ),
+
+        // Tab 2 — Heart Tracker
+        GoRoute(
+          path: HeartTrackerPaths.indiviProfileMobile,
+          pageBuilder: (context, state) => adaptivePage(
+            state: state,
+            child: const IndiviProfileMobile(),
+          ),
+        ),
+      ],
+    ),
+    
+    GoRoute(
+      path: HeartTrackerPaths.heartBleSelectionScreen,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: const HeartRateBleSelectionScreen(),
+      ),
+    ),
+
   ],
 );

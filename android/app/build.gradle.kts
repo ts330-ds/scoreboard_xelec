@@ -28,6 +28,10 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        ndk {
+            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a"))
+        }
     }
 
     buildTypes {
@@ -41,4 +45,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation(files("libs/chileaf_wear_sdk_1.0.0.aar"))
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
 }

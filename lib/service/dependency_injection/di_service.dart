@@ -6,6 +6,8 @@ import 'package:xelex_esp/feature/bluetooth/mapper/football_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/hockey_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/kabaddi_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/table_tennis_ble_mapper.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/profile_registration/presentation/cubit/indivi_profile_registration_cubit/profile_registration_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/ab_cd_cubit/ab_cd_timer_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/abc_cubit/abc_timer_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/abcd_cubit/abcd_timer_cubit.dart';
@@ -244,9 +246,8 @@ void setupDI() {
     ),
   );
 
-
   /// ALL ABCD Cubits can be registered here in the future
-  
+
   sl.registerLazySingleton<AbcdTimerCubit>(
     () => AbcdTimerCubit(
       bleService: sl(),
@@ -263,7 +264,7 @@ void setupDI() {
     ),
   );
 
-sl.registerLazySingleton<Ab_CdTimerCubit>(
+  sl.registerLazySingleton<Ab_CdTimerCubit>(
     () => Ab_CdTimerCubit(
       bleService: sl(),
       bleMapper: sl(),
@@ -271,5 +272,10 @@ sl.registerLazySingleton<Ab_CdTimerCubit>(
     ),
   );
 
-  //  ----- Error Cubit ---- ////ƒ
+  sl.registerLazySingleton<IndiviProfileRegistrationCubit>(
+    () => IndiviProfileRegistrationCubit(),
+    );
+
+  sl.registerLazySingleton<HeartBleCubit>(
+    () => HeartBleCubit(errorCubit: sl()));
 }

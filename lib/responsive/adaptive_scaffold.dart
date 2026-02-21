@@ -13,6 +13,7 @@ class AdaptiveScaffold extends StatelessWidget {
   final Color appBarBackground;
   final Color bodyBackground;
   final Color textColor;
+  final Widget settingsIcon;
 
   const AdaptiveScaffold({
     super.key,
@@ -24,6 +25,7 @@ class AdaptiveScaffold extends StatelessWidget {
     this.appBarBackground = Colors.blue,
     this.textColor = Colors.white,
     this.bodyBackground = Colors.white,
+    this.settingsIcon = const Icon(Icons.settings),
   });
 
   @override
@@ -46,7 +48,7 @@ class AdaptiveScaffold extends StatelessWidget {
           actions: onSettingsPressed != null
               ? [
                   IconButton(
-                    icon: const Icon(Icons.settings),
+                    icon: settingsIcon,
                     onPressed: onSettingsPressed,
                     color: context.colors.surface,
                   ),
@@ -104,7 +106,7 @@ class AdaptiveScaffold extends StatelessWidget {
         actions: onSettingsPressed != null
             ? [
                 IconButton(
-                  icon: const Icon(Icons.settings),
+                  icon: settingsIcon,
                   onPressed: onSettingsPressed,
                   color: context.colors.surface,
                 ),
