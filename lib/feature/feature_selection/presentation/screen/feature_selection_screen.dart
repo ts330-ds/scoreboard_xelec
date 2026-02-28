@@ -18,7 +18,7 @@ class FeatureSelectionScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _FeatureCard(
-              title: 'Scoreboard',
+              title: 'Smart Scoreboard and Timer',
               icon: Icons.scoreboard_outlined,
               color: Colors.orange,
               onTap: () => context.push(
@@ -27,7 +27,7 @@ class FeatureSelectionScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             _FeatureCard(
-              title: 'Time Gate',
+              title: 'Heart Rate Sensors',
               icon: Icons.timer_outlined,
               color: Colors.blue,
               onTap: () {
@@ -37,9 +37,30 @@ class FeatureSelectionScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             _FeatureCard(
-              title: 'Heart Tracker',
+              title: 'Electronic Timing Gates',
               icon: Icons.favorite_outline,
               color: Colors.red,
+              onTap: () => context.push(HeartTrackerPaths.chooseProfile),
+            ),
+            const SizedBox(height: 24),
+            _FeatureCard(
+              title: 'VBT ( Velocity-Based Training )',
+              icon: Icons.fitness_center,
+              color: Colors.green,
+              onTap: () => context.push(HeartTrackerPaths.chooseProfile),
+            ),
+            const SizedBox(height: 24),
+            _FeatureCard(
+              title: 'EEG ( Electroencephalography )',
+              icon: Icons.psychology_outlined,
+              color: Colors.purple,
+              onTap: () => context.push(HeartTrackerPaths.chooseProfile),
+            ),
+            const SizedBox(height: 24),
+            _FeatureCard(
+              title: 'AMS ( Athlete Management System )',
+              icon: Icons.manage_accounts,
+              color: Colors.cyan,
               onTap: () => context.push(HeartTrackerPaths.chooseProfile),
             ),
           ],
@@ -69,32 +90,34 @@ class _FeatureCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.5), width: 2),
+          border: Border.all(color: color.withValues(alpha: 0.5), width: 2),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
+                color: color.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 40, color: color),
+              child: Icon(icon, size: 24, color: color),
             ),
             const SizedBox(width: 20),
-            Text(
-              title,
-              style: context.text.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: color.withOpacity(0.8),
+            Expanded(
+              child: Text(
+                title,
+                style: context.text.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: color.withValues(alpha: 0.8),
+                ),
               ),
             ),
-            const Spacer(),
-            Icon(Icons.arrow_forward_ios, color: color.withOpacity(0.5)),
+            Icon(Icons.arrow_forward_ios, color: color.withValues(alpha: 0.5)),
           ],
         ),
       ),

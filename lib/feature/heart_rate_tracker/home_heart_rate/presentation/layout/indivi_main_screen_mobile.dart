@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/cubit/navigation_cubit/shell_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_activity_mobile.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_history_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_home_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_profile_mobile.dart';
 import 'package:xelex_esp/router/heart_tracker_path.dart';
@@ -32,15 +33,22 @@ class IndiviMainScreenMobile extends StatelessWidget {
       activeIcon: Icons.person,
       path: HeartTrackerPaths.indiviProfileMobile,
     ),
+    _NavItem(
+      label: 'History',
+      icon: Icons.history,
+      activeIcon: Icons.history,
+      path: HeartTrackerPaths.indiviHistoryMobile,
+    ),
   ];
 
   static final List<GlobalKey<NavigatorState>> _navigatorKeys =
       List.generate(_navItems.length, (_) => GlobalKey<NavigatorState>());
 
   static const List<Widget> _pages = [
-    IndiviHomeMobile(),  // Tab 0
-    IndiviActivityMobile(),              // Tab 1
-    IndiviProfileMobile(),     // Tab 2
+    IndiviHomeMobile(),       // Tab 0
+    IndiviActivityMobile(),   // Tab 1
+    IndiviProfileMobile(),    // Tab 2
+    IndiviHistoryMobile(),    // Tab 3
   ];
 
   int _locationToIndex(String location) {

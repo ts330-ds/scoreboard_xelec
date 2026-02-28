@@ -29,6 +29,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Sends a data command to the device (wraps -BLEReadData:)
 + (void)sendCommand:(NSString *)command;
 
+/// Start polling RSSI every intervalSeconds. The callback is called on the main thread.
++ (void)startRSSIPolling:(void (^)(int rssi))callback interval:(NSTimeInterval)intervalSeconds;
+
+/// Stop RSSI polling.
++ (void)stopRSSIPolling;
+
 @end
 
 NS_ASSUME_NONNULL_END

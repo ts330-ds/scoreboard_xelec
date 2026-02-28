@@ -11,6 +11,8 @@ import CoreBluetooth
     private var eventSink: FlutterEventSink?
     private var userInitiatedDisconnect = false
     private var reconnectTimer: Timer?
+    private var rssiTimer: Timer?
+    private weak var connectedPeripheral: CBPeripheral?
 
     private var scannedDevices: [String: FitBLEModel] = [:]
 
@@ -127,7 +129,24 @@ import CoreBluetooth
             reconnectTimer?.invalidate()
             userInitiatedDisconnect = false
             sendToFlutter(type: "STATUS", value: "Connected")
+
+            // Start RSSI polling every 3 seconds
+            rssiTimer?.invalidate()
+            if let peripheral = FitBLECentralManager.shareInstance().peripheral {
+                connectedPeripheral = peripheral
+                peripheral.delegate = self
+                rssiTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self, weak peripheral] _ in
+                    peripheral?.readRSSI()
+                }
+                // Read immediately on connect
+                peripheral.readRSSI()
+            }
         } else {
+            // Stop RSSI polling
+            rssiTimer?.invalidate()
+            rssiTimer = nil
+            connectedPeripheral = nil
+
             sendToFlutter(type: "STATUS", value: "Disconnected")
             if !userInitiatedDisconnect {
                 reconnectTimer?.invalidate()
@@ -171,5 +190,14 @@ extension AppDelegate: FlutterStreamHandler {
     func onCancel(withArguments arguments: Any?) -> FlutterError? {
         eventSink = nil
         return nil
+    }
+}
+
+// MARK: - CBPeripheralDelegate (RSSI)
+
+extension AppDelegate: CBPeripheralDelegate {
+    func peripheral(_ peripheral: CBPeripheral, didReadRSSI RSSI: NSNumber, error: Error?) {
+        guard error == nil else { return }
+        sendToFlutter(type: "RSSI", value: RSSI.intValue)
     }
 }

@@ -31,7 +31,7 @@ class HeartBleIllustration extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      height: 240,
+      height: 160,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         gradient: const LinearGradient(
@@ -49,8 +49,8 @@ class HeartBleIllustration extends StatelessWidget {
         children: [
           // ── Outer Ring ───────────────────────────────────────────────
           Container(
-            width: 170,
-            height: 170,
+            width: 120,
+            height: 120,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(

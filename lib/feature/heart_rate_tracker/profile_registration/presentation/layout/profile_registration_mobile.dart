@@ -184,13 +184,15 @@ class IndiviRegistrationMobile extends StatelessWidget {
                               .read<IndiviProfileRegistrationCubit>()
                               .updateEmail,
                           validator: (v) {
-                            if (v == null || v.trim().isEmpty)
+                            if (v == null || v.trim().isEmpty) {
                               return 'Email is required';
+                            }
                             final regex = RegExp(
                               r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
                             );
-                            if (!regex.hasMatch(v))
+                            if (!regex.hasMatch(v)) {
                               return 'Enter a valid email';
+                            }
                             return null;
                           },
                         ),
@@ -210,10 +212,12 @@ class IndiviRegistrationMobile extends StatelessWidget {
                               .read<IndiviProfileRegistrationCubit>()
                               .updateMobile,
                           validator: (v) {
-                            if (v == null || v.trim().isEmpty)
+                            if (v == null || v.trim().isEmpty) {
                               return 'Mobile number is required';
-                            if (v.length != 10)
+                            }
+                            if (v.length != 10) {
                               return 'Enter a valid 10-digit number';
+                            }
                             return null;
                           },
                         ),
@@ -233,10 +237,12 @@ class IndiviRegistrationMobile extends StatelessWidget {
                               .read<IndiviProfileRegistrationCubit>()
                               .updateAadhar,
                           validator: (v) {
-                            if (v == null || v.trim().isEmpty)
+                            if (v == null || v.trim().isEmpty) {
                               return 'Aadhaar number is required';
-                            if (v.length != 12)
+                            }
+                            if (v.length != 12) {
                               return 'Aadhaar must be 12 digits';
+                            }
                             return null;
                           },
                         ),
@@ -317,7 +323,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
 
                         // Dominant Hand
                         DropdownButtonFormField<String>(
-                          value: state.dominantHand,
+                          initialValue: state.dominantHand,
                           decoration: _inputDecoration(
                             label: 'Dominant Hand',
                             hint: 'Select dominant hand',
@@ -585,7 +591,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
                       icon: Icons.sports_outlined,
                       children: [
                         DropdownButtonFormField<String>(
-                          value: state.sportType,
+                          initialValue: state.sportType,
                           decoration: _inputDecoration(
                             label: 'Sport Type',
                             hint: 'Select your sport',

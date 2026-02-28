@@ -48,6 +48,6 @@ flutter {
 }
 
 dependencies {
-    implementation(files("libs/chileaf_wear_sdk_1.0.0.aar"))
+    implementation(files("libs/chileaf_wear_sdk_v3.0.5.aar"))
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
 }

@@ -6,6 +6,7 @@ import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/presen
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/cubit/navigation_cubit/shell_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_activity_mobile.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_history_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_home_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_profile_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/screen/indivi_main_screen.dart';
@@ -407,6 +408,15 @@ GoRoute(
           pageBuilder: (context, state) => adaptivePage(
             state: state,
             child: const IndiviProfileMobile(),
+          ),
+        ),
+
+        // Tab 3 — History
+        GoRoute(
+          path: HeartTrackerPaths.indiviHistoryMobile,
+          pageBuilder: (context, state) => adaptivePage(
+            state: state,
+            child: const IndiviHistoryMobile(),
           ),
         ),
       ],

@@ -22,9 +22,10 @@ class HeartBleConnectButton extends StatelessWidget {
       return;
     }
 
-    // Start scan then show the device sheet
-    await cubit.startScan();
+    // Start scan — agar false return ho (BT off, permission denied) toh sheet mat kholo
+    final scanStarted = await cubit.startScan();
     if (!context.mounted) return;
+    if (!scanStarted) return;
 
     showModalBottomSheet(
       context: context,

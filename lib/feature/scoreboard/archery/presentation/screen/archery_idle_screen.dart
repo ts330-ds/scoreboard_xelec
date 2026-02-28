@@ -10,7 +10,7 @@ class ArcheryIdleScreen extends StatefulWidget {
   final VoidCallback onLetsPlay;
   final BleService bleService;
   final ArcheryBleMapper archeryBleMapper;
-  ArcheryIdleScreen({
+  const ArcheryIdleScreen({
     super.key,
     required this.onLetsPlay,
     required this.bleService,

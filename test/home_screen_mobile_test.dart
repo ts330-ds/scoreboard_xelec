@@ -16,7 +16,7 @@ void main() {
     registerFallbackValue(BleState.idle());
   });
 
-  Widget _wrapWithApp(Widget child, BleCubit cubit) {
+  Widget wrapWithApp(Widget child, BleCubit cubit) {
     return ScreenUtilInit(
       designSize: const Size(360, 800),
       minTextAdapt: true,
@@ -38,7 +38,7 @@ void main() {
       initialState: BleState.idle(),
     );
 
-    await tester.pumpWidget(_wrapWithApp(const HomeScreenMobile(), cubit));
+    await tester.pumpWidget(wrapWithApp(const HomeScreenMobile(), cubit));
     await tester.pumpAndSettle();
 
     expect(find.text('Bluetooth not connected'), findsOneWidget);
@@ -61,7 +61,7 @@ void main() {
       initialState: connectedState,
     );
 
-    await tester.pumpWidget(_wrapWithApp(const HomeScreenMobile(), cubit));
+    await tester.pumpWidget(wrapWithApp(const HomeScreenMobile(), cubit));
     await tester.pumpAndSettle();
 
     expect(find.text('Test Device'), findsOneWidget);
