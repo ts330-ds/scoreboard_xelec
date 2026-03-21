@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/router/heart_tracker_path.dart';
+import 'package:xelex_esp/router/timing_gate_path.dart';
 import 'package:xelex_esp/utility/theme_extension.dart';
 
 class FeatureSelectionScreen extends StatelessWidget {
@@ -40,7 +41,7 @@ class FeatureSelectionScreen extends StatelessWidget {
               title: 'Electronic Timing Gates',
               icon: Icons.favorite_outline,
               color: Colors.red,
-              onTap: () => context.push(HeartTrackerPaths.chooseProfile),
+              onTap: () => context.go(TimingGatePaths.timingGateHomeMobile),
             ),
             const SizedBox(height: 24),
             _FeatureCard(

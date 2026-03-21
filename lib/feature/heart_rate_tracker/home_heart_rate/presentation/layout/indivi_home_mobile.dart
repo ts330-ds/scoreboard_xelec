@@ -90,7 +90,7 @@ class _ActivityRow extends StatelessWidget {
       children: [
         _activityItem(Icons.directions_walk, "${state.steps}", "Steps", Colors.blueAccent),
         _activityItem(Icons.local_fire_department, "${state.calorie}", "kcal", Colors.orangeAccent),
-        _activityItem(Icons.straighten, "${(state.distance / 1000).toStringAsFixed(1)}", "km", Colors.purpleAccent),
+        _activityItem(Icons.straighten, (state.distance / 1000).toStringAsFixed(1), "km", Colors.purpleAccent),
       ],
     );
   }

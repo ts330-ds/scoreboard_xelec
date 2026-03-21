@@ -1,0 +1,11 @@
+name,athlete_id,bib,team,dob,age,sex,discipline,trials
+Rohit Sharma,ATH-001,11,Team Alpha,15/07/1998,26,Male,Sprint,3
+Priya Patel,ATH-002,22,Team Beta,20/03/2000,24,Female,Sprint,3
+Arjun Singh,ATH-003,33,Team Alpha,05/11/1999,25,Male,400m,3
+Ananya Mehta,ATH-004,44,Team Beta,18/09/2001,23,Female,Sprint,3
+Vikram Rao,ATH-005,55,Team Gamma,30/01/1997,28,Male,Sprint,3
+Sneha Kulkarni,ATH-006,66,Team Alpha,12/06/2002,22,Female,400m,3
+Karan Verma,ATH-007,77,Team Gamma,25/08/1999,25,Male,Sprint,3
+Neha Joshi,ATH-008,88,Team Beta,08/04/2000,24,Female,Sprint,3
+Aditya Kumar,ATH-009,99,Team Alpha,14/12/1998,26,Male,Sprint,3
+Pooja Nair,ATH-010,10,Team Gamma,22/02/2001,24,Female,400m,3

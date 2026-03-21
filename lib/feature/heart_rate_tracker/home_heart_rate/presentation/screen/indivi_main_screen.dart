@@ -10,6 +10,8 @@ class IndiviMainScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return ResponsiveLayout(
       mobile: IndiviMainScreenMobile(child: child), 
+
+      
       tablet: IndiviMainScreenMobile(child: child),
       desktop: IndiviMainScreenMobile(child: child) 
       );

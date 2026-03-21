@@ -7,6 +7,12 @@ import 'package:xelex_esp/feature/bluetooth/mapper/hockey_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/kabaddi_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/table_tennis_ble_mapper.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
+import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/athletes/athletes_cubit.dart';
+import 'package:xelex_esp/feature/timing_gates/session/data/repository/athlete_repository.dart';
+import 'package:xelex_esp/feature/timing_gates/session/data/repository/session_repository.dart';
+import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/session/timing_session_cubit.dart';
+import 'package:xelex_esp/feature/timing_gates/ble_connection/data/timing_gate_ble_service.dart';
+import 'package:xelex_esp/feature/timing_gates/ble_connection/presentation/cubit/timing_gate_bluetooth_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/profile_registration/presentation/cubit/indivi_profile_registration_cubit/profile_registration_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/ab_cd_cubit/ab_cd_timer_cubit.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/cubit/abc_cubit/abc_timer_cubit.dart';
@@ -278,4 +284,26 @@ void setupDI() {
 
   sl.registerLazySingleton<HeartBleCubit>(
     () => HeartBleCubit(errorCubit: sl()));
+
+  // Timing Gate — BLE
+  sl.registerLazySingleton<TimingGateBleService>(() => TimingGateBleService());
+  sl.registerLazySingleton<TimingGateBleCubit>(
+    () => TimingGateBleCubit(errorCubit: sl(), bleService: sl()),
+  );
+
+  // Timing Gate — Athletes
+  sl.registerLazySingleton<AthleteRepository>(() => AthleteRepository());
+  sl.registerFactory<AthletesCubit>(
+    () => AthletesCubit(repository: sl(), errorCubit: sl()),
+  );
+
+  // Timing Gate — Sessions
+  sl.registerLazySingleton<SessionRepository>(() => SessionRepository());
+  sl.registerFactory<TimingSessionCubit>(
+    () => TimingSessionCubit(
+      errorCubit: sl(),
+      sessionRepository: sl(),
+      bleService: sl(),
+    ),
+  );
 }

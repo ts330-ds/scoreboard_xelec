@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/auth/presentation/screen/loginScreen.dart';
@@ -48,8 +50,21 @@ import 'package:xelex_esp/feature/scoreboard/universal/presentation/screen/unive
 import 'package:xelex_esp/feature/scoreboard/universal/presentation/screen/universal_game_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_screen.dart';
 import 'package:xelex_esp/feature/scoreboard/archery/presentation/screen/archery_config_screen.dart';
+import 'package:xelex_esp/feature/timing_gates/main_screen/presentation/screen/timing_gate_main_screen.dart';
+import 'package:xelex_esp/feature/timing_gates/ble_connection/presentation/cubit/timing_gate_bluetooth_cubit.dart';
+import 'package:xelex_esp/feature/timing_gates/ble_connection/presentation/screen/timing_gate_ble_screen.dart';
+import 'package:xelex_esp/feature/timing_gates/main_screen/presentation/layout/timing_gate_home_mobile.dart';
+import 'package:xelex_esp/feature/timing_gates/main_screen/presentation/layout/timing_gate_results_mobile.dart';
+import 'package:xelex_esp/feature/timing_gates/main_screen/presentation/layout/timing_gate_athletes_mobile.dart';
+import 'package:xelex_esp/feature/timing_gates/main_screen/presentation/layout/timing_gate_profile_mobile.dart';
+import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/athletes/athletes_cubit.dart';
+import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/session/timing_session_cubit.dart';
+import 'package:xelex_esp/feature/timing_gates/session/presentation/screen/session_detail_screen.dart';
+import 'package:xelex_esp/feature/timing_gates/session/presentation/screen/timing_session_screen.dart';
+import 'package:xelex_esp/feature/timing_gates/session/data/model/test_session_model.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/router/heart_tracker_path.dart';
+import 'package:xelex_esp/router/timing_gate_path.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 
 import '../feature/scoreboard/badminton/presentation/screen/badminton_config_screen.dart';
@@ -60,6 +75,24 @@ import '../responsive/adaptive_page.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: AppPaths.login,
+  // redirect: (context, routerState) {
+  //   final loc = routerState.matchedLocation;
+  //   final isTimingGateRoute = loc.startsWith('/timing-gate');
+  //   final isBleScreen = loc == TimingGatePaths.timingGateBle;
+  //   final isConnected = sl<TimingGateBleCubit>().state.isConnected;
+
+  //   // Already connected but landed on BLE screen → go straight to main
+  //   if (isBleScreen && isConnected) {
+  //     return TimingGatePaths.timingGateHomeMobile;
+  //   }
+
+  //   // Trying to reach any timing-gate route without being connected → gate it
+  //   if (isTimingGateRoute && !isBleScreen && !isConnected) {
+  //     return TimingGatePaths.timingGateBle;
+  //   }
+
+  //   return null;
+  // },
   routes: [
     /// 🏀 Basketball Screen
     GoRoute(
@@ -256,7 +289,7 @@ final GoRouter appRouter = GoRouter(
           adaptivePage(state: state, child: const AbcScreen()),
     ),
 
-GoRoute(
+    GoRoute(
       path: AppPaths.archeryAb_CdScreen,
       pageBuilder: (context, state) =>
           adaptivePage(state: state, child: const Ab_CdScreen()),
@@ -275,14 +308,13 @@ GoRoute(
           adaptivePage(state: state, child: const AbcConfigScreen()),
     ),
 
-     GoRoute(
+    GoRoute(
       path: AppPaths.archeryAb_CdConfig,
       pageBuilder: (context, state) =>
           adaptivePage(state: state, child: const Ab_CdConfigScreen()),
     ),
 
-
-/////////   Archery Mode Selection Screen /////////
+    /////////   Archery Mode Selection Screen /////////
     GoRoute(
       path: AppPaths.archeryModeSelection,
       pageBuilder: (context, state) => adaptivePage(
@@ -355,17 +387,16 @@ GoRoute(
         child: const PermissionGate(child: FeatureSelectionScreen()),
       ),
     ),
+
     /// Heart Tracker Routes Start from Here
-    /// 
+    ///
     GoRoute(
       path: HeartTrackerPaths.chooseProfile,
-      pageBuilder: (context, state) => adaptivePage(
-        state: state,
-        child: const ProfileChooseScreen(),
-      ),
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const ProfileChooseScreen()),
     ),
 
-GoRoute(
+    GoRoute(
       path: HeartTrackerPaths.individualProfileRegistration,
       pageBuilder: (context, state) => adaptivePage(
         state: state,
@@ -373,8 +404,7 @@ GoRoute(
       ),
     ),
 
-
- ShellRoute(
+    ShellRoute(
       builder: (context, state, child) {
         return MultiBlocProvider(
           providers: [
@@ -388,40 +418,32 @@ GoRoute(
         // Tab 0 — Feature Selection
         GoRoute(
           path: HeartTrackerPaths.indiviHomeMobile,
-          pageBuilder: (context, state) => adaptivePage(
-            state: state,
-            child: const IndiviHomeMobile(),
-          ),
+          pageBuilder: (context, state) =>
+              adaptivePage(state: state, child: const IndiviHomeMobile()),
         ),
         // Tab 1 — Scoreboard Home
         GoRoute(
           path: HeartTrackerPaths.indiviActivityMobile,
-          pageBuilder: (context, state) => adaptivePage(
-            state: state,
-            child: const IndiviActivityMobile(),
-          ),
+          pageBuilder: (context, state) =>
+              adaptivePage(state: state, child: const IndiviActivityMobile()),
         ),
 
         // Tab 2 — Heart Tracker
         GoRoute(
           path: HeartTrackerPaths.indiviProfileMobile,
-          pageBuilder: (context, state) => adaptivePage(
-            state: state,
-            child: const IndiviProfileMobile(),
-          ),
+          pageBuilder: (context, state) =>
+              adaptivePage(state: state, child: const IndiviProfileMobile()),
         ),
 
         // Tab 3 — History
         GoRoute(
           path: HeartTrackerPaths.indiviHistoryMobile,
-          pageBuilder: (context, state) => adaptivePage(
-            state: state,
-            child: const IndiviHistoryMobile(),
-          ),
+          pageBuilder: (context, state) =>
+              adaptivePage(state: state, child: const IndiviHistoryMobile()),
         ),
       ],
     ),
-    
+
     GoRoute(
       path: HeartTrackerPaths.heartBleSelectionScreen,
       pageBuilder: (context, state) => adaptivePage(
@@ -430,5 +452,119 @@ GoRoute(
       ),
     ),
 
+    /// Timing Gate BLE Connection Screen (gate before main screen)
+    GoRoute(
+      path: TimingGatePaths.timingGateBle,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const TimingGateBleScreen()),
+    ),
+
+    /// Timing Gate Session Detail (full-screen, outside shell)
+    GoRoute(
+      path: TimingGatePaths.timingGateSessionDetail,
+      pageBuilder: (context, state) {
+        final session = state.extra as TestSessionModel;
+        return adaptivePage(
+          state: state,
+          child: SessionDetailScreen(session: session),
+        );
+      },
+    ),
+
+    /// Timing Gate Session Wizard (full-screen, outside shell)
+    GoRoute(
+      path: TimingGatePaths.timingGateSession,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: BlocProvider(
+          create: (ctx) => sl<TimingSessionCubit>(),
+          child: const TimingSessionScreen(),
+        ),
+      ),
+    ),
+
+    /// Timing Gate Routes Start from Here
+    ShellRoute(
+      builder: (context, state, child) {
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (_) => ShellCubit()),
+            BlocProvider.value(value: sl<TimingGateBleCubit>()),
+            BlocProvider(
+              create: (_) => sl<AthletesCubit>()..initialize(),
+            ),
+          ],
+          child: BackButtonListener(
+            onBackButtonPressed: () async {
+              if (GoRouter.of(context).canPop()) {
+                GoRouter.of(context).pop();
+                return true;
+              }
+              final shouldExit = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  title: const Row(children: [
+                    Icon(Icons.exit_to_app, color: Color(0xFF1565C0)),
+                    SizedBox(width: 8),
+                    Text('Exit Sports IQ?',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w700)),
+                  ]),
+                  content: const Text(
+                      'Kya aap Sports IQ se bahar jaana chahte hain?',
+                      style: TextStyle(color: Color(0xFF6B7A8D))),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1565C0),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8))),
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      child: const Text('Exit',
+                          style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                ),
+              );
+              if (shouldExit == true) SystemNavigator.pop();
+              return true;
+            },
+            child: const TimingGateMainScreen(),
+          ),
+        );
+      },
+      routes: [
+        GoRoute(
+          path: TimingGatePaths.timingGateHomeMobile,
+          pageBuilder: (context, state) =>
+              adaptivePage(state: state, child: const TimingGateHomeMobile()),
+        ),
+        GoRoute(
+          path: TimingGatePaths.timingGateResultsMobile,
+          pageBuilder: (context, state) =>
+              adaptivePage(state: state, child: const TimingGateResultsMobile()),
+        ),
+        GoRoute(
+          path: TimingGatePaths.timingGateAthletesMobile,
+          pageBuilder: (context, state) => adaptivePage(
+            state: state,
+            child: const TimingGateAthletesMobile(),
+          ),
+        ),
+        GoRoute(
+          path: TimingGatePaths.timingGateProfileMobile,
+          pageBuilder: (context, state) => adaptivePage(
+            state: state,
+            child: const TimingGateProfileMobile(),
+          ),
+        ),
+      ],
+    ),
   ],
 );

@@ -58,9 +58,9 @@
 		<string>_flutter._tcp</string>
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Bluetooth scanning requires location access.</string>
+	<string>Location is used to auto-fill the session venue and for Bluetooth device scanning.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Bluetooth scanning requires location access.</string>
+	<string>Location is used to auto-fill the session venue and for Bluetooth device scanning.</string>
 
 </dict>
 </plist>

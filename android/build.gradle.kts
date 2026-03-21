@@ -37,6 +37,9 @@ subprojects {
     // Add flutter.jar and androidx dependencies to plugin subprojects for compilation
     afterEvaluate {
         if (project.plugins.hasPlugin("com.android.library")) {
+            (project.extensions.getByName("android") as com.android.build.gradle.LibraryExtension).apply {
+                compileSdk = 36
+            }
             project.dependencies {
                 add("compileOnly", files("$flutterSdkPath/bin/cache/artifacts/engine/android-arm-release/flutter.jar"))
                 add("implementation", "androidx.annotation:annotation:1.7.1")

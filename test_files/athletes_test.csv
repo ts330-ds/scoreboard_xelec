@@ -1,0 +1,9 @@
+Full Name,Athlete ID,BIB,Team / Group,Date of Birth,Age,Sex,Discipline,Trials
+Rahul Sharma,ATH001,101,Sprint A,1998-05-12,26,Male,Sprint,3
+Priya Singh,ATH002,102,Sprint A,2000-08-20,24,Female,Sprint,3
+,ATH003,103,Sprint B,1999-01-15,25,Male,Sprint,3
+Amit Kumar,ATH004,,Sprint B,1995-03-22,29,Male,T-Test,3
+Neha Gupta,,105,Sprint A,2001-11-08,23,Female,Sprint,3
+Vikram Patel,ATH006,106,,1997-07-30,27,Male,Shuttle,3
+,,107,Sprint C,2002-04-18,22,Female,Sprint,3
+Sunita Rao,ATH008,108,Sprint C,1996-09-14,28,Female,T-Test,3

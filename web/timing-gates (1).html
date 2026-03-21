@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APEX Timing Gates — Athletic Performance System</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111417;
+    --surface2: #181c21;
+    --border: #1e2530;
+    --accent: #00e5ff;
+    --accent2: #ff3d57;
+    --accent3: #ffd600;
+    --text: #e8edf2;
+    --muted: #5a6678;
+    --success: #00e676;
+    --warning: #ffab40;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; min-height: 100vh; overflow-x: hidden; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 16px 32px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 100; }
+  .logo-main { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 4px; color: var(--accent); }
+  .logo-sub { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-left: 8px; }
+  .status-bar { display: flex; align-items: center; gap: 24px; }
+  .status-dot { display: flex; align-items: center; gap: 6px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent2); }
+  .dot.live { background: var(--success); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; box-shadow: 0 0 6px var(--success); } 50% { opacity:0.4; box-shadow:none; } }
+  .steps-nav { display: flex; align-items: center; padding: 0 32px; background: var(--surface2); border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .step { display: flex; align-items: center; gap: 10px; padding: 16px 20px; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap; color: var(--muted); user-select: none; }
+  .step.active { border-bottom-color: var(--accent); color: var(--text); }
+  .step.done { color: var(--success); }
+  .step-num { width: 22px; height: 22px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 11px; flex-shrink: 0; }
+  .step.active .step-num { background: var(--accent); color: var(--bg); }
+  .step.done .step-num { background: var(--success); color: var(--bg); }
+  .step-arrow { color: var(--border); font-size: 18px; padding: 0 4px; }
+  .main { display: grid; grid-template-columns: 1fr 320px; min-height: calc(100vh - 101px); }
+  .content { padding: 32px; border-right: 1px solid var(--border); }
+  .sidebar { padding: 24px; background: var(--surface); }
+  .panel { display: none; animation: fadeIn 0.3s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  .section-title { font-family: 'Bebas Neue', sans-serif; font-size: 32px; letter-spacing: 2px; margin-bottom: 4px; }
+  .section-sub { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px; }
+  .form-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group.full { grid-column: 1 / -1; }
+  label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+  input, select, textarea { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border-color 0.2s; width: 100%; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,229,255,0.08); }
+  select option { background: var(--surface2); }
+  .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+  .badge-cyan { background: rgba(0,229,255,0.1); color: var(--accent); border: 1px solid rgba(0,229,255,0.2); }
+  .badge-red { background: rgba(255,61,87,0.1); color: var(--accent2); border: 1px solid rgba(255,61,87,0.2); }
+  .badge-green { background: rgba(0,230,118,0.1); color: var(--success); border: 1px solid rgba(0,230,118,0.2); }
+  .badge-yellow { background: rgba(255,214,0,0.1); color: var(--accent3); border: 1px solid rgba(255,214,0,0.2); }
+  .btn { padding: 10px 22px; border-radius: 6px; border: none; cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 13px; transition: all 0.2s; display: inline-flex; align-items: center; gap: 7px; }
+  .btn-primary { background: var(--accent); color: var(--bg); }
+  .btn-primary:hover { background: #33eaff; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,229,255,0.25); }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger { background: var(--accent2); color: white; }
+  .btn-danger:hover { background: #ff5c72; }
+  .btn-success { background: var(--success); color: var(--bg); }
+  .btn-lg { padding: 13px 28px; font-size: 14px; border-radius: 8px; }
+  .btn-xl { padding: 18px 44px; font-size: 20px; font-weight: 700; border-radius: 10px; letter-spacing: 3px; font-family: 'Bebas Neue', sans-serif; }
+  .upload-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 28px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--surface2); margin-bottom: 22px; }
+  .upload-zone:hover { border-color: var(--accent); background: rgba(0,229,255,0.02); }
+  .athlete-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  .athlete-table th { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  .athlete-table td { padding: 11px 14px; border-bottom: 1px solid rgba(30,37,48,0.5); font-size: 13px; }
+  .athlete-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .gate-diagram { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 28px; margin-bottom: 22px; }
+  .gate-track { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; position: relative; }
+  .gate-track::before { content: ''; position: absolute; top: 50%; left: 60px; right: 60px; height: 2px; background: linear-gradient(90deg, var(--accent) 0%, var(--muted) 50%, var(--accent2) 100%); }
+  .gate-unit { display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 1; }
+  .gate-icon { width: 50px; height: 50px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 22px; border: 2px solid; }
+  .gate-master .gate-icon { background: rgba(0,229,255,0.1); border-color: var(--accent); box-shadow: 0 0 20px rgba(0,229,255,0.2); }
+  .gate-slave .gate-icon { background: rgba(255,61,87,0.1); border-color: var(--accent2); }
+  .gate-label { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .distance-markers { display: flex; align-items: center; justify-content: space-between; padding: 0 65px; margin-top: -8px; margin-bottom: 16px; }
+  .dist-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .dist-wrap input { width: 76px; text-align: center; padding: 6px 8px; font-family: 'DM Mono', monospace; }
+  .signal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
+  .signal-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .signal-title { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 10px; }
+  .signal-bars { display: flex; align-items: flex-end; gap: 3px; height: 32px; }
+  .signal-bar { width: 6px; border-radius: 2px; background: var(--border); }
+  .signal-bar.on { background: var(--success); animation: barPulse 1.2s ease infinite; }
+  .signal-bar.warn { background: var(--accent3); }
+  @keyframes barPulse { 0%,100%{opacity:1;} 50%{opacity:0.6;} }
+  .signal-value { font-family: 'DM Mono', monospace; font-size: 22px; margin-top: 8px; }
+  .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+  .setup-opt { background: var(--surface2); border: 2px solid var(--border); border-radius: 10px; padding: 18px; cursor: pointer; transition: all 0.2s; text-align: center; }
+  .setup-opt.selected { border-color: var(--accent); background: rgba(0,229,255,0.04); }
+  .setup-opt svg { width: 100%; height: 90px; margin-bottom: 10px; }
+  .setup-opt-name { font-weight: 600; font-size: 13px; margin-bottom: 3px; }
+  .setup-opt-desc { font-size: 11px; color: var(--muted); }
+  .current-athlete { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin-bottom: 22px; display: flex; align-items: center; gap: 16px; }
+  .athlete-avatar { width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--bg); flex-shrink: 0; }
+  .trial-dots { display: flex; gap: 6px; margin-top: 6px; }
+  .tdot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
+  .tdot.done { background: var(--success); }
+  .tdot.current { background: var(--accent); animation: pulse 1.5s infinite; }
+  .countdown-wrap { font-family: 'Bebas Neue', sans-serif; font-size: 110px; line-height: 1; color: var(--accent); text-shadow: 0 0 60px rgba(0,229,255,0.5); letter-spacing: 4px; margin: 28px 0; text-align: center; display: none; }
+  .countdown-wrap.show { display: block; }
+  .live-timer-wrap { font-family: 'Bebas Neue', sans-serif; font-size: 68px; color: var(--accent3); text-align: center; letter-spacing: 4px; text-shadow: 0 0 40px rgba(255,214,0,0.3); margin: 18px 0; display: none; }
+  .live-timer-wrap.show { display: block; }
+  .start-center { text-align: center; padding: 32px 0; }
+  .results-hero { background: linear-gradient(135deg, rgba(0,229,255,0.07), rgba(255,61,87,0.04)); border: 1px solid rgba(0,229,255,0.15); border-radius: 14px; padding: 26px; margin-bottom: 22px; position: relative; overflow: hidden; }
+  .results-hero::after { content: 'BEST'; font-family: 'Bebas Neue', sans-serif; font-size: 130px; color: rgba(0,229,255,0.03); position: absolute; right: 16px; top: -16px; line-height: 1; pointer-events: none; }
+  .best-time { font-family: 'Bebas Neue', sans-serif; font-size: 60px; color: var(--accent); letter-spacing: 4px; text-shadow: 0 0 30px rgba(0,229,255,0.4); line-height: 1; }
+  .best-label { font-family: 'DM Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: var(--muted); margin-bottom: 6px; }
+  .results-table { width: 100%; border-collapse: collapse; }
+  .results-table th { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+  .results-table td { padding: 11px 12px; border-bottom: 1px solid rgba(30,37,48,0.5); font-size: 13px; }
+  .results-table tr.gold td { background: rgba(255,214,0,0.04); }
+  .results-table tr.silver td { background: rgba(192,192,192,0.03); }
+  .results-table tr.bronze td { background: rgba(205,127,50,0.03); }
+  .rank-badge { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 600; }
+  .r1 { background: rgba(255,214,0,0.2); color: var(--accent3); border: 1px solid rgba(255,214,0,0.3); }
+  .r2 { background: rgba(192,192,192,0.15); color: #c0c0c0; border: 1px solid rgba(192,192,192,0.25); }
+  .r3 { background: rgba(205,127,50,0.2); color: #cd7f32; border: 1px solid rgba(205,127,50,0.3); }
+  .rn { background: var(--border); color: var(--muted); }
+  .mono { font-family: 'DM Mono', monospace; }
+  .time-best { color: var(--accent); }
+  .imp-pos { background: rgba(0,230,118,0.1); color: var(--success); font-family: 'DM Mono', monospace; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+  .imp-neg { background: rgba(255,61,87,0.1); color: var(--accent2); font-family: 'DM Mono', monospace; font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+  .bar-chart { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .bar-row { display: flex; align-items: center; gap: 12px; }
+  .bar-name { width: 96px; font-size: 12px; text-align: right; color: var(--muted); flex-shrink: 0; }
+  .bar-track { flex: 1; height: 24px; background: var(--border); border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--bg); font-weight: 600; }
+  .nav-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--border); }
+  .divider { height: 1px; background: var(--border); margin: 22px 0; }
+  .inline-flex { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .sidebar-section { margin-bottom: 22px; }
+  .sidebar-title { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 10px; padding-bottom: 7px; border-bottom: 1px solid var(--border); }
+  .info-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(30,37,48,0.4); font-size: 12px; }
+  .info-label { color: var(--muted); }
+  .gate-mini { display: flex; align-items: center; gap: 8px; padding: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; }
+  .gate-mini-icon { width: 30px; height: 30px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .gate-mini-info { flex: 1; }
+  .gate-mini-name { font-size: 12px; font-weight: 600; }
+  .gate-mini-id { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); }
+  .pbar { background: var(--border); border-radius: 3px; height: 5px; overflow: hidden; margin-top: 4px; }
+  .pbar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--success)); }
+  .hidden { display: none !important; }
+  .proto-box { background: var(--surface2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px; padding: 14px; margin-bottom: 22px; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <span class="logo-main">⚡ APEX</span>
+    <span class="logo-sub">Timing Gates System v2.4</span>
+  </div>
+  <div class="status-bar">
+    <div class="status-dot">
+      <div class="dot live"></div>
+      <span id="connLabel">MASTER CONNECTED</span>
+    </div>
+    <div class="status-dot">
+      <div class="dot" style="background:var(--accent3)"></div>
+      <span id="sessLabel">NO SESSION</span>
+    </div>
+    <div class="status-dot mono" id="clockEl" style="color:var(--accent);font-size:12px;"></div>
+  </div>
+</header>
+
+<nav class="steps-nav">
+  <div class="step active" id="sb1" onclick="goTo(1)"><div class="step-num" id="sn1">1</div>Test Setup</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="sb2" onclick="goTo(2)"><div class="step-num" id="sn2">2</div>Athletes</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="sb3" onclick="goTo(3)"><div class="step-num" id="sn3">3</div>Gate Alignment</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="sb4" onclick="goTo(4)"><div class="step-num" id="sn4">4</div>Test Config</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="sb5" onclick="goTo(5)"><div class="step-num" id="sn5">5</div>Run Test</div>
+  <div class="step-arrow">›</div>
+  <div class="step" id="sb6" onclick="goTo(6)"><div class="step-num" id="sn6">6</div>Results</div>
+</nav>
+
+<div class="main">
+<div class="content">
+
+<!-- PANEL 1: TEST SETUP -->
+<div class="panel active" id="p1">
+  <div class="section-title">TEST SETUP</div>
+  <div class="section-sub">Define the test protocol, location, and session parameters.</div>
+  <div class="form-grid">
+    <div class="form-group full">
+      <label>Test Name</label>
+      <input id="testName" placeholder="e.g., 40m Sprint — Pre-Season 2026" oninput="syncSidebar()">
+    </div>
+    <div class="form-group">
+      <label>Test Protocol</label>
+      <select id="testProto" onchange="onProtoChange()">
+        <option value="">— Select Protocol —</option>
+        <option value="10m">10m Sprint (Acceleration)</option>
+        <option value="20m">20m Sprint</option>
+        <option value="30m">30m Sprint</option>
+        <option value="40m">40m Sprint (NFL Standard)</option>
+        <option value="505">505 Agility Test</option>
+        <option value="t-test">T-Test Agility</option>
+        <option value="illinois">Illinois Agility Run</option>
+        <option value="flying10">Flying 10m</option>
+        <option value="flying20">Flying 20m</option>
+        <option value="5-10-5">5-10-5 Shuttle</option>
+        <option value="custom">Custom Protocol</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Category</label>
+      <select>
+        <option>Sprint Speed</option>
+        <option>Agility</option>
+        <option>Max Velocity</option>
+        <option>Power / Acceleration</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Date</label>
+      <input type="date" id="testDate">
+    </div>
+    <div class="form-group">
+      <label>Time</label>
+      <input type="time" id="testTime">
+    </div>
+    <div class="form-group full">
+      <label>Location / Venue</label>
+      <input id="testLoc" placeholder="e.g., Main Stadium Track — Lane 3" oninput="syncSidebar()">
+    </div>
+    <div class="form-group">
+      <label>Surface</label>
+      <select>
+        <option>Synthetic Track</option><option>Natural Grass</option><option>Artificial Turf</option><option>Indoor Court</option><option>Concrete</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Environment</label>
+      <select><option>Outdoor</option><option>Indoor</option></select>
+    </div>
+    <div class="form-group full">
+      <label>Notes / Conditions</label>
+      <textarea rows="3" placeholder="Weather, wind speed, equipment notes..."></textarea>
+    </div>
+  </div>
+  <div id="protoBox" class="proto-box hidden">
+    <div style="font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:6px;">PROTOCOL DETAILS</div>
+    <div id="protoDesc" style="font-size:13px;line-height:1.7;"></div>
+  </div>
+  <div class="nav-actions"><div></div><button class="btn btn-primary btn-lg" onclick="goTo(2)">Continue to Athletes ›</button></div>
+</div>
+
+<!-- PANEL 2: ATHLETES -->
+<div class="panel" id="p2">
+  <div class="section-title">ATHLETES</div>
+  <div class="section-sub">Import athletes via Excel/CSV or add manually. Set trial counts per athlete.</div>
+  <div class="upload-zone" onclick="document.getElementById('xlsIn').click()"
+       ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+       ondragleave="this.style.borderColor='var(--border)'"
+       ondrop="handleDrop(event)" id="uploadZone">
+    <input type="file" id="xlsIn" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleXLS(event)">
+    <div style="font-size:36px;margin-bottom:10px;opacity:0.6;">📊</div>
+    <p><strong style="color:var(--accent);">Upload Excel / CSV</strong></p>
+    <p style="margin-top:5px;font-size:12px;color:var(--muted);">Drag & drop or click — columns: ID, Name, Team, DOB</p>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div class="inline-flex">
+      <input id="searchA" placeholder="🔍  Search..." style="width:200px;padding:8px 12px;" oninput="filterA()">
+      <select id="teamFilter" style="width:130px;" onchange="filterA()"><option value="">All Teams</option></select>
+    </div>
+    <button class="btn btn-outline" onclick="showAddModal()">+ Add Athlete</button>
+  </div>
+  <div id="noAthletes" style="text-align:center;padding:40px;color:var(--muted);">
+    <div style="font-size:32px;margin-bottom:10px;">🏃</div>No athletes yet. Upload or add manually.
+  </div>
+  <table class="athlete-table"><thead><tr><th>#</th><th>Athlete ID</th><th>Name</th><th>Team</th><th>Trials</th><th>Status</th><th></th></tr></thead><tbody id="athleteBody"></tbody></table>
+
+  <!-- Modal -->
+  <div id="addModal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:200;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:30px;width:430px;max-width:95vw;">
+      <div class="section-title" style="font-size:24px;margin-bottom:18px;">ADD ATHLETE</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Athlete ID</label><input id="nId" placeholder="ATH-001"></div>
+        <div class="form-group"><label>Trials</label><input id="nTrials" type="number" value="3" min="1" max="10"></div>
+        <div class="form-group full"><label>Full Name</label><input id="nName" placeholder="First Last"></div>
+        <div class="form-group"><label>Team / Group</label><input id="nTeam" placeholder="Sprint Group A"></div>
+        <div class="form-group"><label>Date of Birth</label><input id="nDob" type="date"></div>
+      </div>
+      <div class="nav-actions" style="margin-top:12px;padding-top:12px;">
+        <button class="btn btn-outline" onclick="hideAddModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="addAthlete()">Add Athlete</button>
+      </div>
+    </div>
+  </div>
+  <div class="nav-actions"><button class="btn btn-outline" onclick="goTo(1)">‹ Back</button><button class="btn btn-primary btn-lg" onclick="goTo(3)">Continue to Alignment ›</button></div>
+</div>
+
+<!-- PANEL 3: GATE ALIGNMENT -->
+<div class="panel" id="p3">
+  <div class="section-title">GATE ALIGNMENT</div>
+  <div class="section-sub">Position Master and Slave gates. Verify beam alignment and signal quality.</div>
+  <div class="gate-diagram">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);">TIMING GATE LAYOUT</div>
+        <div style="font-size:13px;margin-top:3px;" id="layoutLabel">Linear Sprint Setup</div>
+      </div>
+      <div class="inline-flex">
+        <span class="badge badge-green" id="alignBadge">● ALIGNED</span>
+        <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" onclick="scanGates()">🔄 Scan</button>
+      </div>
+    </div>
+    <div class="gate-track" id="gateTrack">
+      <div class="gate-unit gate-master">
+        <div class="gate-icon">🔵</div>
+        <div class="badge badge-cyan">MASTER</div>
+        <div class="gate-label">Start Gate</div>
+        <div class="badge badge-green" style="font-size:9px;">● ONLINE</div>
+      </div>
+      <div id="middleGates" style="display:flex;gap:60px;z-index:1;"></div>
+      <div class="gate-unit gate-slave">
+        <div class="gate-icon" style="background:rgba(255,61,87,0.1);border-color:var(--accent2);">🔴</div>
+        <div class="badge badge-red">SLAVE 1</div>
+        <div class="gate-label">Finish Gate</div>
+        <div class="badge badge-green" style="font-size:9px;">● ONLINE</div>
+      </div>
+    </div>
+    <div class="distance-markers">
+      <div class="dist-wrap"><label>Start (m)</label><input type="number" value="0"></div>
+      <div id="midDist" style="display:flex;gap:60px;"></div>
+      <div class="dist-wrap"><label>Finish (m)</label><input type="number" id="distFinish" value="40" oninput="syncSidebar()"></div>
+    </div>
+  </div>
+  <div class="signal-grid">
+    <div class="signal-card">
+      <div class="signal-title">Master Signal Strength</div>
+      <div class="signal-bars">
+        <div class="signal-bar on" style="height:40%"></div>
+        <div class="signal-bar on" style="height:60%"></div>
+        <div class="signal-bar on" style="height:80%"></div>
+        <div class="signal-bar on" style="height:100%"></div>
+        <div class="signal-bar on" style="height:85%"></div>
+      </div>
+      <div class="signal-value" style="color:var(--success);">-42 dBm</div>
+      <div style="font-size:11px;color:var(--success);margin-top:4px;">EXCELLENT — Beam Aligned ✓</div>
+    </div>
+    <div class="signal-card">
+      <div class="signal-title">Slave 1 Signal Strength</div>
+      <div class="signal-bars">
+        <div class="signal-bar on" style="height:40%"></div>
+        <div class="signal-bar on" style="height:60%"></div>
+        <div class="signal-bar warn" style="height:72%"></div>
+        <div class="signal-bar" style="height:100%"></div>
+        <div class="signal-bar" style="height:85%"></div>
+      </div>
+      <div class="signal-value" style="color:var(--accent3);">-67 dBm</div>
+      <div style="font-size:11px;color:var(--accent3);margin-top:4px;">GOOD — Minor Adjustment Needed</div>
+    </div>
+  </div>
+  <div style="margin-top:20px;">
+    <div style="font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px;">MANAGE SLAVE GATES</div>
+    <div class="inline-flex">
+      <button class="btn btn-outline" onclick="addSlave()">+ Add Intermediate Gate</button>
+      <button class="btn btn-outline" onclick="removeSlave()">− Remove Last</button>
+      <span id="gateCount" style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);">2 gates total</span>
+    </div>
+  </div>
+  <div class="nav-actions"><button class="btn btn-outline" onclick="goTo(2)">‹ Back</button><button class="btn btn-primary btn-lg" onclick="goTo(4)">Continue to Config ›</button></div>
+</div>
+
+<!-- PANEL 4: TEST CONFIG -->
+<div class="panel" id="p4">
+  <div class="section-title">TEST CONFIGURATION</div>
+  <div class="section-sub">Select a test setup diagram and configure timing parameters.</div>
+  <div style="font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px;">TEST LAYOUT DIAGRAM</div>
+  <div class="setup-grid">
+    <div class="setup-opt selected" onclick="pickSetup(this)">
+      <svg viewBox="0 0 200 90"><line x1="20" y1="45" x2="180" y2="45" stroke="#1e2530" stroke-width="2"/><rect x="14" y="28" width="8" height="34" fill="none" stroke="#00e5ff" stroke-width="2" rx="2"/><rect x="178" y="28" width="8" height="34" fill="none" stroke="#ff3d57" stroke-width="2" rx="2"/><line x1="18" y1="45" x2="178" y2="45" stroke="#00e5ff" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/><circle cx="38" cy="62" r="5" fill="#ffd600" opacity="0.8"/><line x1="38" y1="57" x2="38" y2="38" stroke="#ffd600" stroke-width="2" opacity="0.8"/><text x="18" y="16" fill="#5a6678" font-size="9" text-anchor="middle">START</text><text x="182" y="16" fill="#5a6678" font-size="9" text-anchor="middle">FINISH</text></svg>
+      <div class="setup-opt-name">Linear Sprint</div><div class="setup-opt-desc">Straight-line speed test</div>
+    </div>
+    <div class="setup-opt" onclick="pickSetup(this)">
+      <svg viewBox="0 0 200 90"><line x1="100" y1="12" x2="100" y2="70" stroke="#1e2530" stroke-width="2"/><line x1="38" y1="70" x2="162" y2="70" stroke="#1e2530" stroke-width="2"/><rect x="94" y="8" width="12" height="14" fill="none" stroke="#00e5ff" stroke-width="2" rx="2"/><rect x="32" y="66" width="12" height="14" fill="none" stroke="#ff3d57" stroke-width="2" rx="2"/><rect x="94" y="66" width="12" height="14" fill="none" stroke="#ff3d57" stroke-width="2" rx="2"/><rect x="156" y="66" width="12" height="14" fill="none" stroke="#ff3d57" stroke-width="2" rx="2"/></svg>
+      <div class="setup-opt-name">T-Test Agility</div><div class="setup-opt-desc">Multi-directional agility</div>
+    </div>
+    <div class="setup-opt" onclick="pickSetup(this)">
+      <svg viewBox="0 0 200 90"><line x1="10" y1="45" x2="190" y2="45" stroke="#1e2530" stroke-width="2"/><rect x="4" y="30" width="8" height="30" fill="none" stroke="#5a6678" stroke-width="1.5" stroke-dasharray="3,2" rx="2"/><rect x="74" y="28" width="8" height="34" fill="none" stroke="#00e5ff" stroke-width="2" rx="2"/><rect x="138" y="28" width="8" height="34" fill="none" stroke="#ff3d57" stroke-width="2" rx="2"/><text x="8" y="18" fill="#5a6678" font-size="8" text-anchor="middle">RUN-UP</text><text x="78" y="18" fill="#00e5ff" font-size="8" text-anchor="middle">START</text><text x="142" y="18" fill="#ff3d57" font-size="8" text-anchor="middle">FINISH</text><circle cx="34" cy="62" r="5" fill="#ffd600" opacity="0.8"/></svg>
+      <div class="setup-opt-name">Flying Sprint</div><div class="setup-opt-desc">Max velocity zone</div>
+    </div>
+    <div class="setup-opt" onclick="pickSetup(this)">
+      <svg viewBox="0 0 200 90"><line x1="100" y1="8" x2="100" y2="78" stroke="#1e2530" stroke-width="2"/><path d="M100 18 Q136 45 100 72" stroke="#1e2530" stroke-width="1" stroke-dasharray="3,2" fill="none"/><rect x="94" y="4" width="12" height="16" fill="none" stroke="#00e5ff" stroke-width="2" rx="2"/><rect x="94" y="68" width="12" height="16" fill="none" stroke="#ff3d57" stroke-width="2" rx="2"/><circle cx="100" cy="44" r="7" fill="none" stroke="#ffd600" stroke-width="2"/><text x="100" y="88" fill="#5a6678" font-size="8" text-anchor="middle">PIVOT</text></svg>
+      <div class="setup-opt-name">505 Agility</div><div class="setup-opt-desc">Change of direction test</div>
+    </div>
+  </div>
+  <div class="divider"></div>
+  <div style="font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:12px;">TIMING PARAMETERS</div>
+  <div class="form-grid three">
+    <div class="form-group"><label>Trigger Mode</label><select><option>Auto (Beam Break)</option><option>Manual Start</option><option>Remote Trigger</option><option>Sound Start</option></select></div>
+    <div class="form-group"><label>False Start Threshold (ms)</label><input type="number" value="100" min="50" max="500"></div>
+    <div class="form-group"><label>Reset Delay (s)</label><input type="number" value="5" min="1" max="60"></div>
+    <div class="form-group"><label>Timing Resolution</label><select><option>0.001s (1ms)</option><option>0.01s (10ms)</option><option>0.0001s (0.1ms)</option></select></div>
+    <div class="form-group"><label>Units</label><select><option>Seconds (s)</option><option>Milliseconds (ms)</option></select></div>
+    <div class="form-group"><label>Auto-Advance Athletes</label><select><option>Yes</option><option>No (Manual)</option></select></div>
+  </div>
+  <div class="nav-actions"><button class="btn btn-outline" onclick="goTo(3)">‹ Back</button><button class="btn btn-primary btn-lg" onclick="goTo(5)">Proceed to Test ›</button></div>
+</div>
+
+<!-- PANEL 5: RUN TEST -->
+<div class="panel" id="p5">
+  <div class="section-title">RUN TEST</div>
+  <div class="section-sub">System armed. Position athlete at start line.</div>
+  <div class="current-athlete" id="curAthlCard">
+    <div class="athlete-avatar" id="curInitials">JS</div>
+    <div style="flex:1;">
+      <div style="font-size:16px;font-weight:600;" id="curName">Jordan Smith</div>
+      <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);" id="curId">ATH-001 · Sprint Group A</div>
+      <div class="trial-dots" id="trialDots"></div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">TRIAL</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--accent);line-height:1;" id="curTrialNum">1 / 3</div>
+    </div>
+  </div>
+  <div class="countdown-wrap" id="cdWrap">3</div>
+  <div class="live-timer-wrap" id="liveTimer">0.000</div>
+  <div class="start-center">
+    <div id="readyState">
+      <div style="font-size:14px;color:var(--muted);margin-bottom:22px;">All gates armed. Athlete in position?</div>
+      <button class="btn btn-success btn-xl" onclick="startCountdown()">▶ ARM &amp; START</button>
+    </div>
+    <div id="runState" class="hidden">
+      <div style="font-size:14px;color:var(--muted);margin-bottom:14px;">Timer running — waiting for finish gate...</div>
+      <button class="btn btn-danger btn-lg" onclick="manualStop()">⏹ Manual Stop</button>
+    </div>
+    <div id="resState" class="hidden" style="text-align:center;">
+      <div style="font-family:'DM Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:6px;">TRIAL RESULT</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:80px;color:var(--accent3);line-height:1;text-shadow:0 0 40px rgba(255,214,0,0.35);" id="trialResult">4.521s</div>
+      <div class="inline-flex" style="justify-content:center;gap:12px;margin-top:18px;">
+        <button class="btn btn-danger btn-lg" onclick="rejectTrial()">✕ Reject</button>
+        <button class="btn btn-success btn-lg" onclick="acceptTrial()">✓ Accept & Next</button>
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:28px;">
+    <div style="font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px;">UPCOMING ATHLETES</div>
+    <div id="queueList"></div>
+  </div>
+  <div class="nav-actions"><button class="btn btn-outline" onclick="goTo(4)">‹ Back</button><button class="btn btn-primary btn-lg" onclick="goTo(6)">View Results ›</button></div>
+</div>
+
+<!-- PANEL 6: RESULTS -->
+<div class="panel" id="p6">
+  <div class="section-title">TEST RESULTS</div>
+  <div class="section-sub">Final rankings, best times, and session performance analysis.</div>
+  <div class="results-hero">
+    <div class="best-label">🏆 BEST TIME OF SESSION</div>
+    <div class="best-time" id="bestTimeEl">4.498 s</div>
+    <div style="margin-top:8px;font-weight:600;font-size:18px;" id="bestAthlEl">Jordan Smith <span style="color:var(--muted);font-weight:400;font-size:14px;">· ATH-001 · Trial 2</span></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div class="inline-flex">
+      <span class="badge badge-cyan" id="rBadge">40m Sprint</span>
+      <span class="badge badge-yellow" id="rDate"></span>
+    </div>
+    <div class="inline-flex">
+      <button class="btn btn-outline" style="font-size:12px;" onclick="exportCSV()">📥 Export CSV</button>
+      <button class="btn btn-outline" style="font-size:12px;" onclick="window.print()">🖨 Print</button>
+    </div>
+  </div>
+  <table class="results-table">
+    <thead><tr><th>Rank</th><th>Athlete</th><th>ID</th><th>Trial 1</th><th>Trial 2</th><th>Trial 3</th><th>Best</th><th>Avg</th><th>Δ Best</th></tr></thead>
+    <tbody id="resultsBody"></tbody>
+  </table>
+  <div class="divider"></div>
+  <div style="font-family:'DM Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px;">PERFORMANCE CHART — BEST TIMES</div>
+  <div class="bar-chart" id="barChart"></div>
+  <div class="nav-actions">
+    <button class="btn btn-outline" onclick="goTo(5)">‹ Back</button>
+    <button class="btn btn-primary btn-lg" onclick="if(confirm('Start new session?'))location.reload()">+ New Session</button>
+  </div>
+</div>
+
+</div><!-- /content -->
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-title">SESSION SUMMARY</div>
+    <div class="info-row"><span class="info-label">Test</span><span class="mono" style="font-size:12px;" id="sb-test">—</span></div>
+    <div class="info-row"><span class="info-label">Protocol</span><span class="mono" style="font-size:12px;" id="sb-proto">—</span></div>
+    <div class="info-row"><span class="info-label">Distance</span><span class="mono" style="font-size:12px;" id="sb-dist">—</span></div>
+    <div class="info-row"><span class="info-label">Date</span><span class="mono" style="font-size:12px;" id="sb-date">—</span></div>
+    <div class="info-row"><span class="info-label">Location</span><span class="mono" style="font-size:12px;" id="sb-loc">—</span></div>
+    <div class="info-row"><span class="info-label">Athletes</span><span class="mono" style="font-size:12px;" id="sb-ath">0</span></div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-title">GATE STATUS</div>
+    <div class="gate-mini">
+      <div class="gate-mini-icon" style="background:rgba(0,229,255,0.1);">🔵</div>
+      <div class="gate-mini-info">
+        <div class="gate-mini-name">Master — Start</div>
+        <div class="gate-mini-id">APEX-M01 · 0m</div>
+        <div class="pbar"><div class="pbar-fill" style="width:95%"></div></div>
+      </div>
+      <span class="badge badge-green" style="font-size:9px;">LIVE</span>
+    </div>
+    <div class="gate-mini">
+      <div class="gate-mini-icon" style="background:rgba(255,61,87,0.1);">🔴</div>
+      <div class="gate-mini-info">
+        <div class="gate-mini-name">Slave 1 — Finish</div>
+        <div class="gate-mini-id" id="sb-slaveId">APEX-S01 · 40m</div>
+        <div class="pbar"><div class="pbar-fill" style="width:72%;background:linear-gradient(90deg,var(--accent3),var(--success))"></div></div>
+      </div>
+      <span class="badge badge-yellow" style="font-size:9px;">OK</span>
+    </div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-title">PROGRESS</div>
+    <div class="info-row"><span class="info-label">Registered</span><span class="mono" style="font-size:12px;" id="sb-reg">0</span></div>
+    <div class="info-row"><span class="info-label">Trials/Athlete</span><span class="mono" style="font-size:12px;" id="sb-trials">3</span></div>
+    <div class="info-row"><span class="info-label">Completed</span><span class="mono" style="font-size:12px;color:var(--success);" id="sb-done">0 / 0</span></div>
+  </div>
+  <div class="sidebar-section" id="quickRes" style="display:none;">
+    <div class="sidebar-title">QUICK RESULTS</div>
+    <div id="quickResBody"></div>
+  </div>
+</div>
+</div><!-- /main -->
+
+<script>
+// ===== STATE =====
+let step = 1;
+let athletes = [
+  { id:'ATH-001', name:'Jordan Smith', team:'Sprint Group A', dob:'2000-03-15', trials:3 },
+  { id:'ATH-002', name:'Marcus Chen', team:'Sprint Group A', dob:'1999-07-22', trials:3 },
+  { id:'ATH-003', name:'Aisha Okafor', team:'Sprint Group B', dob:'2001-11-08', trials:3 },
+  { id:'ATH-004', name:'Rafael Torres', team:'Sprint Group B', dob:'2000-05-30', trials:3 },
+];
+let extraGates = 0;
+let curAthIdx = 0, curTrial = 1;
+let timerIv, timerStart, timerRunning = false;
+
+const demoResults = [
+  { id:'ATH-001', name:'Jordan Smith', team:'Sprint Group A', t:[4.521,4.498,4.512] },
+  { id:'ATH-002', name:'Marcus Chen', team:'Sprint Group A', t:[4.612,4.589,4.601] },
+  { id:'ATH-003', name:'Aisha Okafor', team:'Sprint Group B', t:[4.734,4.701,4.718] },
+  { id:'ATH-004', name:'Rafael Torres', team:'Sprint Group B', t:[4.823,4.799,4.812] },
+];
+
+const protoData = {
+  '10m': { d:10, desc:'10m acceleration sprint. Master + Slave at 10m. Tests explosive starting power.' },
+  '20m': { d:20, desc:'20m sprint. Gate pair at start and 20m. Measures initial acceleration.' },
+  '30m': { d:30, desc:'30m sprint. Optional 10m and 20m splits for velocity profiling.' },
+  '40m': { d:40, desc:'40m sprint (NFL Combine standard). Optional splits at 10m and 20m.' },
+  '505': { d:5, desc:'505 agility: 5m run-in, pivot at gate, 5m return. Measures COD speed.' },
+  't-test': { d:10, desc:'T-Test: 10m forward, 5m lateral shuffles x2, 10m backward. Multi-gate.' },
+  'illinois': { d:18, desc:'Illinois agility: 18m course with 8-cone slalom. Agility and coordination.' },
+  'flying10': { d:10, desc:'Flying 10m — 30m run-up before gate. Isolates peak velocity.' },
+  'flying20': { d:20, desc:'Flying 20m — 30m run-up. Best measure for maximum speed assessment.' },
+  '5-10-5': { d:10, desc:'5-10-5 Shuttle: start mid-point, sprint 5m each side. COD test.' },
+  'custom': { d:null, desc:'Define your own gate distances and timing sequence.' },
+};
+
+// ===== INIT =====
+window.onload = () => {
+  const now = new Date();
+  document.getElementById('testDate').value = now.toISOString().split('T')[0];
+  document.getElementById('testTime').value = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  renderAthletes();
+  syncSidebar();
+  setInterval(() => { document.getElementById('clockEl').textContent = new Date().toLocaleTimeString(); }, 1000);
+  renderQueue();
+  renderTrialDots();
+  updateCurAthlete();
+};
+
+// ===== NAV =====
+function goTo(n) {
+  document.getElementById(`p${step}`).classList.remove('active');
+  document.getElementById(`sb${step}`).classList.remove('active');
+  if (n > step) {
+    document.getElementById(`sn${step}`).textContent = '✓';
+    document.getElementById(`sb${step}`).classList.add('done');
+  }
+  step = n;
+  document.getElementById(`p${n}`).classList.add('active');
+  document.getElementById(`sb${n}`).classList.remove('done');
+  document.getElementById(`sb${n}`).classList.add('active');
+  document.getElementById(`sn${n}`).textContent = n;
+  if (n === 6) { renderResults(); document.getElementById('quickRes').style.display='block'; }
+  syncSidebar();
+}
+
+// ===== STEP 1 =====
+function onProtoChange() {
+  const v = document.getElementById('testProto').value;
+  const box = document.getElementById('protoBox');
+  if (v && protoData[v]) {
+    document.getElementById('protoDesc').textContent = protoData[v].desc;
+    box.classList.remove('hidden');
+    if (protoData[v].d) document.getElementById('distFinish').value = protoData[v].d;
+  } else {
+    box.classList.add('hidden');
+  }
+  syncSidebar();
+}
+
+// ===== STEP 2 =====
+function renderAthletes(list = athletes) {
+  const body = document.getElementById('athleteBody');
+  const none = document.getElementById('noAthletes');
+  none.style.display = list.length ? 'none' : 'block';
+  body.innerHTML = list.map((a,i) => `
+    <tr>
+      <td style="font-family:'DM Mono',monospace;color:var(--muted);font-size:12px;">${String(i+1).padStart(2,'0')}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;">${a.id}</td>
+      <td style="font-weight:500;">${a.name}</td>
+      <td><span style="background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:12px;">${a.team}</span></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button onclick="chTrials('${a.id}',-1)" style="background:var(--border);border:none;color:var(--text);width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">−</button>
+          <span style="font-family:'DM Mono',monospace;font-size:13px;width:16px;text-align:center;">${a.trials}</span>
+          <button onclick="chTrials('${a.id}',1)" style="background:var(--border);border:none;color:var(--text);width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">+</button>
+        </div>
+      </td>
+      <td><span class="badge badge-cyan">READY</span></td>
+      <td><button onclick="removeA('${a.id}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;" title="Remove">✕</button></td>
+    </tr>
+  `).join('');
+  syncSidebar();
+}
+
+function chTrials(id, d) {
+  const a = athletes.find(x => x.id === id);
+  if (a) { a.trials = Math.max(1, Math.min(10, a.trials + d)); renderAthletes(); }
+}
+
+function removeA(id) { athletes = athletes.filter(x => x.id !== id); renderAthletes(); }
+
+function filterA() {
+  const s = document.getElementById('searchA').value.toLowerCase();
+  const t = document.getElementById('teamFilter').value;
+  renderAthletes(athletes.filter(a => (a.name.toLowerCase().includes(s)||a.id.toLowerCase().includes(s)) && (!t||a.team===t)));
+}
+
+function showAddModal() { document.getElementById('addModal').classList.remove('hidden'); document.getElementById('addModal').style.display='flex'; }
+function hideAddModal() { document.getElementById('addModal').style.display='none'; }
+
+function addAthlete() {
+  const name = document.getElementById('nName').value.trim();
+  if (!name) { alert('Please enter a name.'); return; }
+  const id = document.getElementById('nId').value.trim() || `ATH-${String(athletes.length+1).padStart(3,'0')}`;
+  const team = document.getElementById('nTeam').value.trim() || 'Default';
+  const trials = parseInt(document.getElementById('nTrials').value) || 3;
+  athletes.push({ id, name, team, dob: document.getElementById('nDob').value, trials });
+  const sel = document.getElementById('teamFilter');
+  if (![...sel.options].find(o => o.value === team)) {
+    const o = document.createElement('option'); o.value = team; o.textContent = team; sel.appendChild(o);
+  }
+  renderAthletes();
+  hideAddModal();
+}
+
+function handleXLS(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const sim = [
+    { id:'IMP-001', name:'Alex Johnson', team:'Imported', dob:'2002-04-10', trials:3 },
+    { id:'IMP-002', name:'Sam Williams', team:'Imported', dob:'2001-09-22', trials:3 },
+  ];
+  athletes.push(...sim);
+  renderAthletes();
+  document.getElementById('uploadZone').innerHTML = `<div style="font-size:32px;margin-bottom:8px;">✅</div><p><strong style="color:var(--success);">${f.name}</strong> imported — ${sim.length} athletes added</p>`;
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  handleXLS({ target:{ files: e.dataTransfer.files } });
+}
+
+// ===== STEP 3 =====
+function scanGates() {
+  const b = document.getElementById('alignBadge');
+  b.textContent = '⟳ SCANNING...'; b.className = 'badge badge-yellow';
+  setTimeout(() => { b.textContent = '● ALIGNED'; b.className = 'badge badge-green'; }, 1800);
+}
+
+function addSlave() {
+  extraGates++;
+  const mg = document.getElementById('middleGates');
+  const md = document.getElementById('midDist');
+  const el = document.createElement('div');
+  el.className = 'gate-unit gate-slave'; el.id = `eg${extraGates}`;
+  el.innerHTML = `<div class="gate-icon" style="background:rgba(255,214,0,0.08);border-color:var(--accent3);">🟡</div><div class="badge badge-yellow">SLAVE ${extraGates}</div><div class="gate-label">Split ${extraGates}</div><div class="badge badge-green" style="font-size:9px;">● ONLINE</div>`;
+  mg.appendChild(el);
+  const dv = document.createElement('div'); dv.className='dist-wrap'; dv.id=`ed${extraGates}`;
+  dv.innerHTML=`<label>Split ${extraGates} (m)</label><input type="number" value="${extraGates*10}" min="0">`;
+  md.appendChild(dv);
+  document.getElementById('gateCount').textContent = `${2+extraGates} gates total`;
+}
+
+function removeSlave() {
+  if (!extraGates) return;
+  document.getElementById(`eg${extraGates}`)?.remove();
+  document.getElementById(`ed${extraGates}`)?.remove();
+  extraGates--;
+  document.getElementById('gateCount').textContent = `${2+extraGates} gates total`;
+}
+
+// ===== STEP 4 =====
+function pickSetup(el) {
+  document.querySelectorAll('.setup-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// ===== STEP 5 =====
+function updateCurAthlete() {
+  if (!athletes.length) return;
+  const a = athletes[curAthIdx] || athletes[0];
+  document.getElementById('curInitials').textContent = a.name.split(' ').map(w=>w[0]).join('');
+  document.getElementById('curName').textContent = a.name;
+  document.getElementById('curId').textContent = `${a.id} · ${a.team}`;
+  document.getElementById('curTrialNum').textContent = `${curTrial} / ${a.trials}`;
+  renderTrialDots();
+}
+
+function renderTrialDots() {
+  const a = athletes[curAthIdx];
+  if (!a) return;
+  document.getElementById('trialDots').innerHTML = Array.from({length:a.trials},(_,i)=>
+    `<div class="tdot ${i < curTrial-1 ? 'done' : i===curTrial-1 ? 'current' : ''}"></div>`).join('');
+}
+
+function renderQueue() {
+  document.getElementById('queueList').innerHTML = athletes.slice(curAthIdx+1, curAthIdx+4).map(a =>
+    `<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:7px;">
+      <div class="athlete-avatar" style="width:36px;height:36px;font-size:14px;">${a.name.split(' ').map(w=>w[0]).join('')}</div>
+      <div><div style="font-size:13px;font-weight:500;">${a.name}</div><div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);">${a.id} · ${a.trials} trials</div></div>
+    </div>`).join('');
+}
+
+function startCountdown() {
+  document.getElementById('readyState').classList.add('hidden');
+  const cd = document.getElementById('cdWrap');
+  cd.classList.add('show');
+  let n = 3; cd.textContent = n;
+  const iv = setInterval(() => {
+    n--;
+    if (n === 0) {
+      clearInterval(iv); cd.textContent = 'GO!';
+      setTimeout(() => { cd.classList.remove('show'); startTimer(); }, 500);
+    } else { cd.textContent = n; }
+  }, 1000);
+}
+
+function startTimer() {
+  timerStart = performance.now(); timerRunning = true;
+  const lt = document.getElementById('liveTimer');
+  lt.classList.add('show');
+  document.getElementById('runState').classList.remove('hidden');
+  timerIv = setInterval(() => { lt.textContent = ((performance.now()-timerStart)/1000).toFixed(3)+'s'; }, 16);
+  const rand = 4.2 + Math.random()*0.9;
+  setTimeout(() => { if (timerRunning) stopTimer(rand); }, rand*1000);
+}
+
+function manualStop() { stopTimer(); }
+
+function stopTimer(forced) {
+  if (!timerRunning) return;
+  clearInterval(timerIv); timerRunning = false;
+  const t = forced !== undefined ? forced : (performance.now()-timerStart)/1000;
+  document.getElementById('liveTimer').textContent = t.toFixed(3)+'s';
+  document.getElementById('runState').classList.add('hidden');
+  document.getElementById('trialResult').textContent = t.toFixed(3)+'s';
+  document.getElementById('resState').classList.remove('hidden');
+}
+
+function acceptTrial() {
+  document.getElementById('resState').classList.add('hidden');
+  document.getElementById('liveTimer').classList.remove('show');
+  document.getElementById('readyState').classList.remove('hidden');
+  const a = athletes[curAthIdx];
+  if (curTrial < a.trials) { curTrial++; }
+  else { curAthIdx = (curAthIdx+1) % athletes.length; curTrial = 1; }
+  updateCurAthlete(); renderQueue();
+  document.getElementById('sb-done').textContent = `${Math.min(curAthIdx*3+curTrial-1, athletes.length*3)} / ${athletes.length*3}`;
+}
+
+function rejectTrial() {
+  document.getElementById('resState').classList.add('hidden');
+  document.getElementById('liveTimer').classList.remove('show');
+  document.getElementById('readyState').classList.remove('hidden');
+}
+
+// ===== STEP 6 =====
+function renderResults() {
+  const sorted = [...demoResults].sort((a,b) => Math.min(...a.t)-Math.min(...b.t));
+  const best = Math.min(...sorted.map(r => Math.min(...r.t)));
+  const worst = Math.max(...sorted.map(r => Math.min(...r.t)));
+  document.getElementById('bestTimeEl').textContent = best.toFixed(3)+' s';
+  document.getElementById('bestAthlEl').innerHTML = `${sorted[0].name} <span style="color:var(--muted);font-weight:400;font-size:14px;">· ${sorted[0].id} · Trial ${sorted[0].t.indexOf(Math.min(...sorted[0].t))+1}</span>`;
+  document.getElementById('rDate').textContent = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  const p = document.getElementById('testProto')?.value;
+  document.getElementById('rBadge').textContent = (protoData[p]?.d || 40)+'m Sprint';
+
+  document.getElementById('resultsBody').innerHTML = sorted.map((r,i) => {
+    const bestT = Math.min(...r.t);
+    const avg = (r.t.reduce((a,b)=>a+b,0)/r.t.length).toFixed(3);
+    const delta = (bestT-best).toFixed(3);
+    const rc = ['gold','silver','bronze',''][i] || '';
+    const rb = ['r1','r2','r3','rn'][i] || 'rn';
+    return `<tr class="${rc}">
+      <td><span class="rank-badge ${rb}">${i+1}</span></td>
+      <td style="font-weight:600;">${r.name}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">${r.id}</td>
+      ${r.t.map(t=>`<td><span class="mono ${t===bestT?'time-best':''}">${t.toFixed(3)}</span></td>`).join('')}
+      <td><span class="mono time-best">${bestT.toFixed(3)}s</span></td>
+      <td><span class="mono" style="color:var(--muted);">${avg}s</span></td>
+      <td><span class="${delta==0?'imp-pos':'imp-neg'}">${delta==0?'—BEST—':'+'+delta+'s'}</span></td>
+    </tr>`;
+  }).join('');
+
+  const range = worst - best || 0.5;
+  document.getElementById('barChart').innerHTML = sorted.map((r,i) => {
+    const t = Math.min(...r.t);
+    const pct = 100 - ((t-best)/range*100*0.28);
+    const colors = ['var(--accent3)','var(--accent)','var(--success)','var(--muted)'];
+    return `<div class="bar-row">
+      <div class="bar-name">${r.name.split(' ')[0]}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${colors[i]||'var(--muted)'};">${t.toFixed(3)}s</div></div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('quickResBody').innerHTML = sorted.slice(0,3).map((r,i)=>{
+    const t = Math.min(...r.t);
+    return `<div class="info-row"><span class="info-label">${['🥇','🥈','🥉'][i]} ${r.name.split(' ')[0]}</span><span class="mono" style="font-size:12px;color:${['var(--accent3)','var(--text)','var(--muted)'][i]};">${t.toFixed(3)}s</span></div>`;
+  }).join('');
+}
+
+function exportCSV() {
+  const rows = ['Rank,Name,ID,T1,T2,T3,Best,Avg'];
+  [...demoResults].sort((a,b)=>Math.min(...a.t)-Math.min(...b.t)).forEach((r,i)=>{
+    const best = Math.min(...r.t);
+    rows.push(`${i+1},${r.name},${r.id},${r.t.join(',')},${best.toFixed(3)},${(r.t.reduce((a,b)=>a+b)/r.t.length).toFixed(3)}`);
+  });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv'}));
+  a.download = 'apex-timing-results.csv'; a.click();
+}
+
+// ===== SIDEBAR =====
+function syncSidebar() {
+  const name = document.getElementById('testName')?.value||'—';
+  const proto = document.getElementById('testProto')?.value||'—';
+  const dist = document.getElementById('distFinish')?.value||'—';
+  const date = document.getElementById('testDate')?.value||'—';
+  const loc = document.getElementById('testLoc')?.value||'—';
+  document.getElementById('sb-test').textContent = name.length>18?name.slice(0,16)+'…':name;
+  document.getElementById('sb-proto').textContent = proto.toUpperCase();
+  document.getElementById('sb-dist').textContent = dist!=='—'?dist+'m':'—';
+  document.getElementById('sb-date').textContent = date;
+  document.getElementById('sb-loc').textContent = loc.length>16?loc.slice(0,14)+'…':loc;
+  document.getElementById('sb-ath').textContent = athletes.length;
+  document.getElementById('sb-reg').textContent = athletes.length+' registered';
+  document.getElementById('sb-slaveId').textContent = `APEX-S01 · ${dist}m`;
+  document.getElementById('sb-done').textContent = `0 / ${athletes.length*3}`;
+  document.getElementById('sessLabel').textContent = name!=='—' ? 'SESSION ACTIVE' : 'NO SESSION';
+}
+
+// Seed team filter
+setTimeout(() => {
+  const s = document.getElementById('teamFilter');
+  [...new Set(athletes.map(a=>a.team))].forEach(t=>{
+    const o=document.createElement('option'); o.value=t; o.textContent=t; s.appendChild(o);
+  });
+}, 50);
+</script>
+</body>
+</html>
