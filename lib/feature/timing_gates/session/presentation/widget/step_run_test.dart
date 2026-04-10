@@ -7,7 +7,6 @@ import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/sessio
 class StepRunTest extends StatelessWidget {
   const StepRunTest({super.key});
 
-  static const _bg = Color(0xFFF4F6F9);
   static const _surface = Color(0xFFFFFFFF);
   static const _primary = Color(0xFF1565C0);
   static const _primaryLight = Color(0xFFE3F2FD);

@@ -33,6 +33,9 @@ class TimingGateBleService {
   StreamSubscription<List<ScanResult>>? _scanSub;
   Timer? _rssiTimer;
 
+  /// Stores the last successfully connected device for auto-reconnect.
+  BluetoothDevice? _lastDevice;
+
   final _lineBuffer = StringBuffer();
 
   // ── Public streams ────────────────────────────────────────────────────────
@@ -127,12 +130,33 @@ class TimingGateBleService {
     await _char!.setNotifyValue(true);
     _notifySub = _char!.lastValueStream.listen(_onData);
 
+    // Save for auto-reconnect
+    _lastDevice = device;
+
     _startRssi();
+  }
+
+  // ── Reconnect ───────────────────────────────────────────────────────────
+
+  /// Returns true if there is a previously connected device to reconnect to.
+  bool get canReconnect => _lastDevice != null;
+
+  /// Attempts to reconnect to the last connected device.
+  /// Throws if no previous device or connection fails.
+  Future<void> reconnect() async {
+    final device = _lastDevice;
+    if (device == null) {
+      throw Exception('No previous device to reconnect to.');
+    }
+    await connect(device);
   }
 
   // ── Disconnect ────────────────────────────────────────────────────────────
 
-  Future<void> disconnect() async {
+  /// Disconnects from the current device.
+  /// If [clearLastDevice] is true, auto-reconnect won't be possible.
+  /// Pass true when the user manually disconnects.
+  Future<void> disconnect({bool clearLastDevice = false}) async {
     _stopRssi();
     await _notifySub?.cancel();
     await _connSub?.cancel();
@@ -142,6 +166,7 @@ class TimingGateBleService {
     _device = null;
     _char = null;
     _lineBuffer.clear();
+    if (clearLastDevice) _lastDevice = null;
     _connController.add(false);
   }
 
@@ -203,10 +228,10 @@ class TimingGateBleService {
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
 
-  void dispose() {
-    disconnect();
-    _lineController.close();
-    _scanController.close();
+  Future<void> dispose() async {
+    await disconnect();
+    await _lineController.close();
+    await _scanController.close();
     _rssiController.close();
     _connController.close();
   }

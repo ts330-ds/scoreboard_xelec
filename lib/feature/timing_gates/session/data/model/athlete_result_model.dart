@@ -43,13 +43,21 @@ class AthleteResultModel {
       trials.where((t) => t.isCompleted).toList();
 
   double? get bestTime {
-    final times = completedTrials.map((t) => t.totalTime!).toList();
+    // Safe: filter out null totalTime to prevent crash
+    final times = completedTrials
+        .where((t) => t.totalTime != null)
+        .map((t) => t.totalTime!)
+        .toList();
     if (times.isEmpty) return null;
     return times.reduce((a, b) => a < b ? a : b);
   }
 
   double? get avgTime {
-    final times = completedTrials.map((t) => t.totalTime!).toList();
+    // Safe: filter out null totalTime to prevent crash
+    final times = completedTrials
+        .where((t) => t.totalTime != null)
+        .map((t) => t.totalTime!)
+        .toList();
     if (times.isEmpty) return null;
     return times.reduce((a, b) => a + b) / times.length;
   }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -15,18 +16,38 @@ class TimingGateBleCubit extends Cubit<TimingGateBleState> {
   StreamSubscription<int>? _rssiSub;
   StreamSubscription<bool>? _connSub;
 
+  /// When true, the user manually disconnected → skip auto-reconnect.
+  bool _userDisconnected = false;
+
+  /// Tracks if a reconnect loop is currently running to avoid duplicates.
+  bool _reconnectInProgress = false;
+
   TimingGateBleCubit({
     required this.errorCubit,
     required this.bleService,
   }) : super(const TimingGateBleState()) {
-    // Unexpected disconnects
+    // Listen for connection state changes
     _connSub = bleService.connectionStream.listen((connected) {
       if (!connected && state.isConnected) {
-        emit(const TimingGateBleState(
-          status: 'Disconnected',
-          isConnected: false,
-        ));
-        errorCubit.showWarning('Timing gate disconnected.');
+        // ── Connection lost ──
+        if (_userDisconnected) {
+          // User pressed disconnect → just reset state, no auto-reconnect
+          emit(const TimingGateBleState(
+            status: 'Disconnected',
+            isConnected: false,
+          ));
+        } else {
+          // Unexpected disconnect → start auto-reconnect
+          final deviceName = state.connectedDeviceName;
+          emit(state.copyWith(
+            isConnected: false,
+            isReconnecting: true,
+            reconnectAttempt: 0,
+            status: 'Connection lost. Reconnecting...',
+          ));
+          errorCubit.showWarning('Connection lost. Attempting to reconnect...');
+          _startAutoReconnect(deviceName);
+        }
       }
     });
 
@@ -36,6 +57,101 @@ class TimingGateBleCubit extends Cubit<TimingGateBleState> {
         emit(state.copyWith(connectedRssi: rssi));
       }
     });
+  }
+
+  // ── Auto-Reconnect ─────────────────────────────────────────────────────
+
+  Future<void> _startAutoReconnect(String deviceName) async {
+    // Guard: only one reconnect loop at a time
+    if (_reconnectInProgress) return;
+    _reconnectInProgress = true;
+
+    const maxAttempts = TimingGateBleState.maxReconnectAttempts;
+
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      // Stop if cubit is closed, user manually disconnected, or already reconnected
+      if (isClosed || _userDisconnected || state.isConnected) break;
+
+      // Check if the service still has a device to reconnect to
+      if (!bleService.canReconnect) {
+        debugPrint('[BLE] No previous device — cannot auto-reconnect.');
+        break;
+      }
+
+      // Update UI: show which attempt we're on
+      emit(state.copyWith(
+        isReconnecting: true,
+        reconnectAttempt: attempt,
+        status: 'Reconnecting ($attempt/$maxAttempts)...',
+      ));
+
+      // Wait before attempting (exponential backoff: 2s, 4s, 8s, 16s, 32s)
+      final delay = Duration(seconds: 1 << attempt); // 2^attempt seconds
+      await Future.delayed(delay);
+
+      // Re-check guards after the delay
+      if (isClosed || _userDisconnected || state.isConnected) break;
+
+      try {
+        debugPrint('[BLE] Auto-reconnect attempt $attempt/$maxAttempts');
+        await bleService.reconnect();
+
+        // ── Success! ──
+        if (isClosed) break;
+        emit(state.copyWith(
+          isConnected: true,
+          isReconnecting: false,
+          reconnectAttempt: 0,
+          status: 'Connected',
+          connectedDeviceName: deviceName,
+        ));
+        errorCubit.showWarning('Reconnected successfully!');
+        _reconnectInProgress = false;
+        return;
+      } catch (e) {
+        debugPrint('[BLE] Auto-reconnect attempt $attempt failed: $e');
+        // Continue to next attempt
+      }
+    }
+
+    // ── All attempts failed ──
+    _reconnectInProgress = false;
+    if (!isClosed && !_userDisconnected && !state.isConnected) {
+      emit(state.copyWith(
+        isReconnecting: false,
+        reconnectAttempt: 0,
+        status: 'Reconnect failed',
+        connectedDeviceName: '',
+      ));
+      errorCubit.showError(
+        'Could not reconnect after $maxAttempts attempts. Please reconnect manually.',
+      );
+    }
+  }
+
+  /// Call this to cancel any ongoing auto-reconnect (e.g. user wants to stop).
+  void cancelReconnect() {
+    _userDisconnected = true;
+    _reconnectInProgress = false;
+    if (!isClosed) {
+      emit(state.copyWith(
+        isReconnecting: false,
+        reconnectAttempt: 0,
+        status: 'Disconnected',
+      ));
+    }
+  }
+
+  // ── Send Command ─────────────────────────────────────────────────────────
+  /// BLE se connected device ko command bhejta hai (e.g. 'RESET').
+  /// Agar connected nahi hai toh silently ignore karega.
+  void sendCommand(String command) {
+    if (!state.isConnected) {
+      debugPrint('[BLE] ⚠️ Cannot send "$command" — not connected');
+      return;
+    }
+    debugPrint('[BLE] 📤 Sending command: $command');
+    bleService.send(command);
   }
 
   // ── Scan ──────────────────────────────────────────────────────────────────
@@ -97,6 +213,9 @@ class TimingGateBleCubit extends Cubit<TimingGateBleState> {
   // ── Connect ───────────────────────────────────────────────────────────────
 
   Future<void> connectToDevice(TimingGateBleDevice device) async {
+    // User is manually connecting → reset the flag so auto-reconnect works later
+    _userDisconnected = false;
+
     await stopScan();
     emit(state.copyWith(
       connectedDeviceName: device.name,
@@ -138,9 +257,14 @@ class TimingGateBleCubit extends Cubit<TimingGateBleState> {
 
   // ── Disconnect ────────────────────────────────────────────────────────────
 
+  /// User manually disconnects → set flag so auto-reconnect does NOT trigger.
   Future<void> disconnect() async {
-    await bleService.disconnect();
-    if (!isClosed) emit(const TimingGateBleState());
+    _userDisconnected = true;
+    _reconnectInProgress = false;
+    await bleService.disconnect(clearLastDevice: true);
+    if (!isClosed) {
+      emit(const TimingGateBleState());
+    }
   }
 
   // ── Permission helper ─────────────────────────────────────────────────────

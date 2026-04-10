@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:xelex_esp/core/theme/app_colors.dart';
 
 class HeartBleDeviceTile extends StatelessWidget {
   final String name;
@@ -23,9 +24,9 @@ class HeartBleDeviceTile extends StatelessWidget {
   }
 
   Color get _signalColor {
-    if (rssi >= -60) return const Color(0xFF66BB6A);
-    if (rssi >= -70) return const Color(0xFFFFA726);
-    return const Color(0xFFEF5350);
+    if (rssi >= -60) return AppColors.success;
+    if (rssi >= -70) return AppColors.warning;
+    return AppColors.error;
   }
 
   IconData get _signalIcon {
@@ -44,28 +45,20 @@ class HeartBleDeviceTile extends StatelessWidget {
           vertical: 14,
         ),
         decoration: BoxDecoration(
-          color: const Color(0xFF1A2235),
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isPaired
-                ? const Color(0xFF4A90E2).withOpacity(0.4)
-                : const Color(0xFF4A90E2).withOpacity(0.08),
+                ? AppColors.primary.withOpacity(0.4)
+                : AppColors.border,
             width: 1.2,
           ),
         ),
         child: Row(
           children: [
-            // ── Device Icon ───────────────────────────────────────────
             _buildDeviceIcon(),
-
             const SizedBox(width: 14),
-
-            // ── Device Info ───────────────────────────────────────────
-            Expanded(
-              child: _buildDeviceInfo(),
-            ),
-
-            // ── Signal Strength ───────────────────────────────────────
+            Expanded(child: _buildDeviceInfo()),
             _buildSignalStrength(),
           ],
         ),
@@ -73,39 +66,36 @@ class HeartBleDeviceTile extends StatelessWidget {
     );
   }
 
-  // ── Device Icon ───────────────────────────────────────────────────────────
   Widget _buildDeviceIcon() {
     return Container(
       width: 44,
       height: 44,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: const Color(0xFF4A90E2).withOpacity(0.1),
+        color: AppColors.primaryLight,
         border: Border.all(
-          color: const Color(0xFF4A90E2).withOpacity(0.2),
+          color: AppColors.primary.withOpacity(0.2),
         ),
       ),
       child: const Icon(
         Icons.watch,
-        color: Color(0xFF4A90E2),
+        color: AppColors.primary,
         size: 20,
       ),
     );
   }
 
-  // ── Device Info ───────────────────────────────────────────────────────────
   Widget _buildDeviceInfo() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Name + Paired Badge
         Row(
           children: [
             Flexible(
               child: Text(
                 name,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.text,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -118,14 +108,11 @@ class HeartBleDeviceTile extends StatelessWidget {
             ],
           ],
         ),
-
         const SizedBox(height: 4),
-
-        // MAC Address
         Text(
           mac,
           style: const TextStyle(
-            color: Colors.white38,
+            color: AppColors.subtext,
             fontSize: 11,
           ),
         ),
@@ -133,18 +120,17 @@ class HeartBleDeviceTile extends StatelessWidget {
     );
   }
 
-  // ── Paired Badge ──────────────────────────────────────────────────────────
   Widget _buildPairedBadge() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFF4A90E2).withOpacity(0.15),
+        color: AppColors.primaryLight,
         borderRadius: BorderRadius.circular(10),
       ),
       child: const Text(
         'Paired',
         style: TextStyle(
-          color: Color(0xFF4A90E2),
+          color: AppColors.primary,
           fontSize: 10,
           fontWeight: FontWeight.w600,
         ),
@@ -152,7 +138,6 @@ class HeartBleDeviceTile extends StatelessWidget {
     );
   }
 
-  // ── Signal Strength ───────────────────────────────────────────────────────
   Widget _buildSignalStrength() {
     return Column(
       mainAxisSize: MainAxisSize.min,

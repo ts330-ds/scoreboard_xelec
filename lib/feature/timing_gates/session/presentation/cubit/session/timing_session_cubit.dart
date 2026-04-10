@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:uuid/uuid.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
@@ -22,7 +23,6 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
   static const _uuid = Uuid();
   StreamSubscription<String>? _bleSub;
 
-  int _falseStartExpectedGates = 0;
 
   TimingSessionCubit({
     required this.errorCubit,
@@ -126,6 +126,11 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
     ));
   }
 
+  /// Shuttle: update lane count (max 3)
+  void selectShuttleLanes(int lanes) {
+    emit(state.copyWith(shuttleNumLanes: lanes.clamp(1, 3)));
+  }
+
   // ── Step 1: Test info ──────────────────────────────────────────────────────
 
   void updateTestName(String v) => emit(state.copyWith(testName: v));
@@ -192,13 +197,14 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
       yoyoLaneStatuses: laneStatuses,
     ));
     final expectedGates = state.expectedGatesCount;
+    bleService.send('RESET');
     bleService.send(state.firmwareModeCommand);
-    bleService.send('SETUP:$expectedGates');
+    bleService.send('SETUP');
     _addSetupLog('Sent: ${state.firmwareModeCommand}');
     if (state.mode == 'yoyo') {
-      _addSetupLog('Sent: SETUP:$expectedGates — Trigger FINISH gate first, then TURN gate per lane.');
+      _addSetupLog('Sent: SETUP — Trigger FINISH gate first, then TURN gate per lane.');
     } else {
-      _addSetupLog('Sent: SETUP:$expectedGates — Walk through $expectedGates gate(s) in order.');
+      _addSetupLog('Sent: SETUP — Walk through $expectedGates gate(s) in order.');
     }
   }
 
@@ -215,45 +221,7 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
     _addSetupLog('✓ Setup confirmed — ${state.registeredGatesCount} gate(s) ready.');
   }
 
-  /// DEV ONLY — simulates gates registering without BLE hardware.
-  void simulateGatesForTesting({int gateCount = 3}) {
-    if (state.mode == 'yoyo') {
-      // Simulate YOYO: 2 gates per lane
-      final lanes = List.generate(state.yoyoNumLanes, (i) {
-        return YoYoLaneStatus(
-          laneNumber: i + 1,
-          finishGateOk: true,
-          turnGateOk: true,
-        );
-      });
-      final logs = <String>[
-        '[DEV] Simulating ${state.yoyoNumLanes * 2} YOYO gates...',
-        for (int i = 0; i < state.yoyoNumLanes; i++) ...[
-          '✓ Lane ${i + 1} Finish gate registered (ID ${i * 2 + 1})',
-          '✓ Lane ${i + 1} Turn gate registered (ID ${i * 2 + 2})',
-        ],
-        '✓ All YOYO gates ready — tap Start to begin.',
-      ];
-      emit(state.copyWith(
-        yoyoLaneStatuses: lanes,
-        registeredGatesCount: state.yoyoNumLanes * 2,
-        allGatesReady: true,
-        gateSetupLog: logs,
-      ));
-      return;
-    }
 
-    final logs = <String>[
-      '[DEV] Simulating $gateCount gates...',
-      for (int i = 1; i <= gateCount; i++) '✓ Gate $i registered',
-      '✓ All gates ready — tap Start to begin.',
-    ];
-    emit(state.copyWith(
-      registeredGatesCount: gateCount,
-      allGatesReady: true,
-      gateSetupLog: logs,
-    ));
-  }
 
   /// DEV ONLY — injects a fake result for non-YOYO modes.
   Future<void> simulateTrialResult() async {
@@ -283,8 +251,8 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
   // ── Step 4: Run test ───────────────────────────────────────────────────────
 
   Future<void> startTest() async {
-    if (!state.allGatesReady) {
-      errorCubit.showWarning('Gates are not ready yet.');
+    if (state.registeredGatesCount == 0) {
+      errorCubit.showWarning('No gates registered yet. Walk through at least one gate.');
       return;
     }
     if (state.mode != 'yoyo' && state.athletes.isEmpty) {
@@ -388,11 +356,14 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
     bleService.send('START');
   }
 
-  void feedBleData(String line) => _parser.feed(line);
+  void feedBleData(String line) {
+    debugPrint('[SESSION] 📥 BLE raw: "$line"');
+    _parser.feed(line);
+  }
 
   // ── BLE callbacks ──────────────────────────────────────────────────────────
 
-  void _onParsedResult(ParsedResult parsed) {
+  Future<void> _onParsedResult(ParsedResult parsed) async {
     if (state.mode == 'shuttle' && parsed.lane != null) {
       _onShuttleLaneResult(parsed);
       return;
@@ -400,7 +371,7 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
     final item = state.currentQueueItem;
     if (item == null) return;
     final trial = parsed.toTrialResult(item.trialNumber);
-    _saveTrialAndAdvance(item, trial);
+    await _saveTrialAndAdvance(item, trial);
   }
 
   Future<void> _onShuttleLaneResult(ParsedResult parsed) async {
@@ -453,27 +424,13 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
   }
 
   void _onBleEvent(BleEvent event) {
+    debugPrint('[SESSION] 🔔 BLE event: ${event.type} | raw: ${event.raw}');
     switch (event.type) {
       // ── Standard events ────────────────────────────────────────────────────
       case BleEventType.gateRegistered:
         final newCount = state.registeredGatesCount + 1;
         emit(state.copyWith(registeredGatesCount: newCount));
-        if (state.phase == RunTestPhase.reArming) {
-          // False-start re-arm: confirm when all gates re-registered
-          if (_falseStartExpectedGates > 0 && newCount >= _falseStartExpectedGates) {
-            _falseStartExpectedGates = 0;
-            emit(state.copyWith(allGatesReady: true, phase: RunTestPhase.ready));
-            _addSetupLog('✓ Gates re-armed ($newCount / ${state.expectedGatesCount}) — ready to start.');
-          }
-        } else {
-          // Normal setup: auto-confirm when expected gate count reached
-          final expected = state.expectedGatesCount;
-          _addSetupLog('✓ Gate $newCount / $expected registered');
-          if (newCount >= expected) {
-            emit(state.copyWith(allGatesReady: true));
-            _addSetupLog('✓ All $expected gate(s) ready — tap Start to begin.');
-          }
-        }
+        _addSetupLog('✓ Gate $newCount registered');
         break;
 
       case BleEventType.allGatesReady:
@@ -804,15 +761,10 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
           } catch (_) {}
         }
       }
-      _falseStartExpectedGates = state.expectedGatesCount;
-      bleService.send('RESET');
-      bleService.send(state.firmwareModeCommand);
-      bleService.send('SETUP:${state.expectedGatesCount}');
+      // False start → sirf race cancel, gates dobara setup nahi
       emit(state.copyWith(
-        phase: RunTestPhase.reArming,
+        phase: RunTestPhase.ready,
         clearLastTrialResult: true,
-        registeredGatesCount: 0,
-        allGatesReady: false,
         shuttleBatchResults: const {},
       ));
       return;
@@ -831,15 +783,12 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
         trial: fs,
       );
     }
-    _falseStartExpectedGates = state.registeredGatesCount > 0 ? state.registeredGatesCount : 1;
-    bleService.send('RESET');
-    bleService.send(state.firmwareModeCommand);
-    bleService.send('SETUP');
+    // False start → sirf race cancel karo, gates dobara register nahi karne
+    // RESET bhejne se gates bhi reset ho jaate — isliye sirf START bhejenge
+    // jab user ready ho
     emit(state.copyWith(
-      phase: RunTestPhase.reArming,
+      phase: RunTestPhase.ready,
       clearLastTrialResult: true,
-      registeredGatesCount: 0,
-      allGatesReady: false,
     ));
   }
 
@@ -851,6 +800,7 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
     final queue = <TrialQueueItem>[];
 
     if (state.mode == 'shuttle') {
+      final numLanes = state.shuttleNumLanes;
       if (state.trialMode == 'round_robin') {
         for (int t = 1; t <= trials; t++) {
           for (int i = 0; i < athletes.length; i++) {
@@ -858,7 +808,7 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
               athleteId: athletes[i].id,
               athleteName: athletes[i].fullName,
               trialNumber: t,
-              shuttleLane: (i % 3) + 1,
+              shuttleLane: (i % numLanes) + 1,
             ));
           }
         }
@@ -869,7 +819,7 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
               athleteId: athletes[i].id,
               athleteName: athletes[i].fullName,
               trialNumber: t,
-              shuttleLane: (i % 3) + 1,
+              shuttleLane: (i % numLanes) + 1,
             ));
           }
         }

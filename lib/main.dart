@@ -6,6 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/error/screen/global_error_screen.dart';
+import 'package:xelex_esp/feature/timing_gates/main_screen/data/cubit/bluetooth_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/profile/data/model/timing_gate_profile_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/athlete_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/athlete_result_model.dart';
@@ -17,7 +18,6 @@ import 'package:xelex_esp/service/permission/bluetooth_permission_service.dart';
 import 'package:xelex_esp/utility/theme.dart';
 
 import 'feature/bluetooth/presentation/cubit/ble/ble_cubit.dart';
-import 'feature/permission/bluetooth/cubit/bluetooth_cubit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

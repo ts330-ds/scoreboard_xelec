@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/feature/timing_gates/profile/data/model/timing_gate_profile_model.dart';
+import 'package:xelex_esp/feature/timing_gates/profile/presentation/cubit/profile_cubit.dart';
+import 'package:xelex_esp/feature/timing_gates/profile/presentation/cubit/profile_state.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/session/timing_session_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/session/timing_session_state.dart';
 
@@ -16,6 +19,15 @@ class StepResults extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Profile — safely read, null agar provider nahi mila
+    TimingGateProfileModel? profile;
+    try {
+      final profileState = context.read<ProfileCubit>().state;
+      if (profileState is ProfileLoaded) profile = profileState.profile;
+    } catch (_) {
+      // ProfileCubit not in widget tree — skip
+    }
+
     return BlocBuilder<TimingSessionCubit, TimingSessionState>(
       builder: (context, state) {
         return Scaffold(
@@ -24,7 +36,7 @@ class StepResults extends StatelessWidget {
             child: Column(
               children: [
                 _buildHeader(context, state),
-                Expanded(child: _buildResults(state)),
+                Expanded(child: _buildResults(state, profile)),
               ],
             ),
           ),
@@ -60,7 +72,10 @@ class StepResults extends StatelessWidget {
     );
   }
 
-  Widget _buildResults(TimingSessionState state) {
+  Widget _buildResults(
+    TimingSessionState state,
+    TimingGateProfileModel? profile,
+  ) {
     if (state.results.isEmpty) {
       return const Center(
         child: Text(
@@ -74,9 +89,15 @@ class StepResults extends StatelessWidget {
 
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: state.results.length,
+      // +1 for conductor card at the bottom (only if profile is set)
+      itemCount: state.results.length + (profile != null ? 1 : 0),
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
+        // Last item = conductor card (only if profile is set)
+        if (profile != null && index == state.results.length) {
+          return _buildConductorCard(profile);
+        }
+
         final result = state.results[index];
         final best = result.bestTime;
         final completed = result.completedTrials.length;
@@ -197,6 +218,79 @@ class StepResults extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  // ── Conductor Card ────────────────────────────────────────────────────────
+  Widget _buildConductorCard(TimingGateProfileModel profile) {
+    final sub = [
+      profile.roleLabel,
+      if (profile.organization != null && profile.organization!.isNotEmpty)
+        profile.organization!,
+      if (profile.sport != null && profile.sport!.isNotEmpty) profile.sport!,
+    ].join(' · ');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE3F2FD),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF90CAF9)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: const BoxDecoration(
+              color: _primary,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                profile.name.isNotEmpty
+                    ? profile.name[0].toUpperCase()
+                    : '?',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Conducted by',
+                  style: TextStyle(
+                    color: _primary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                Text(
+                  profile.name,
+                  style: const TextStyle(
+                    color: _text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (sub.isNotEmpty)
+                  Text(
+                    sub,
+                    style: const TextStyle(color: _subtext, fontSize: 12),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

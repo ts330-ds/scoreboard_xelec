@@ -8,7 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:xelex_esp/feature/bluetooth/presentation/cubit/ble/ble_cubit.dart';
 import 'package:xelex_esp/feature/bluetooth/presentation/cubit/ble/ble_state.dart';
-import 'package:xelex_esp/feature/permission/bluetooth/cubit/bluetooth_cubit.dart';
+import 'package:xelex_esp/feature/timing_gates/main_screen/data/cubit/bluetooth_cubit.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/service/permission/permission_status.dart';

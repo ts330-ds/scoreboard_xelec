@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:xelex_esp/feature/timing_gates/main_screen/data/cubit/bluetooth_cubit.dart';
 
 import '../../../../service/permission/permission_status.dart';
-import '../cubit/bluetooth_cubit.dart';
 
 class PermissionGate extends StatelessWidget {
   final Widget child;

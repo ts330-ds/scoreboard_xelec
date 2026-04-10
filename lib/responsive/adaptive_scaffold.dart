@@ -14,6 +14,7 @@ class AdaptiveScaffold extends StatelessWidget {
   final Color bodyBackground;
   final Color textColor;
   final Widget settingsIcon;
+  final List<Widget>? actions; // optional extra actions (e.g. notification icon)
 
   const AdaptiveScaffold({
     super.key,
@@ -26,7 +27,22 @@ class AdaptiveScaffold extends StatelessWidget {
     this.textColor = Colors.white,
     this.bodyBackground = Colors.white,
     this.settingsIcon = const Icon(Icons.settings),
+    this.actions,
   });
+
+  /// Settings icon + extra actions ko merge karta hai
+  List<Widget>? _buildActions(BuildContext context) {
+    final list = <Widget>[
+      if (actions != null) ...actions!,
+      if (onSettingsPressed != null)
+        IconButton(
+          icon: settingsIcon,
+          onPressed: onSettingsPressed,
+          color: context.colors.surface,
+        ),
+    ];
+    return list.isEmpty ? null : list;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,15 +61,7 @@ class AdaptiveScaffold extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: context.text.titleSmall!.copyWith(color: textColor),
           ),
-          actions: onSettingsPressed != null
-              ? [
-                  IconButton(
-                    icon: settingsIcon,
-                    onPressed: onSettingsPressed,
-                    color: context.colors.surface,
-                  ),
-                ]
-              : null,
+          actions: _buildActions(context),
         ),
         floatingActionButton: floatingActionButton,
         body: SafeArea(child: body),
@@ -62,6 +70,7 @@ class AdaptiveScaffold extends StatelessWidget {
 
     // 🍎 iOS
     if (Platform.isIOS) {
+      final iosActions = _buildActions(context);
       return CupertinoPageScaffold(
         resizeToAvoidBottomInset: resizeToAvoidBottomInset,
         backgroundColor: bodyBackground,
@@ -74,14 +83,10 @@ class AdaptiveScaffold extends StatelessWidget {
               color: context.colors.primary,
             ),
           ),
-          trailing: onSettingsPressed != null
-              ? CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  onPressed: onSettingsPressed,
-                  child: Icon(
-                    CupertinoIcons.settings,
-                    color: context.colors.primary,
-                  ),
+          trailing: iosActions != null
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: iosActions,
                 )
               : null,
         ),
@@ -103,15 +108,7 @@ class AdaptiveScaffold extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: context.text.titleSmall!.copyWith(color: textColor),
         ),
-        actions: onSettingsPressed != null
-            ? [
-                IconButton(
-                  icon: settingsIcon,
-                  onPressed: onSettingsPressed,
-                  color: context.colors.surface,
-                ),
-              ]
-            : null,
+        actions: _buildActions(context),
       ),
       floatingActionButton: floatingActionButton,
       body: SafeArea(child: body),

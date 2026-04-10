@@ -1,8 +1,8 @@
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/service/permission/bluetooth_permission_service.dart';
+import 'package:xelex_esp/service/permission/permission_status.dart';
 
-import '../../../../service/permission/bluetooth_permission_service.dart';
-import '../../../../service/permission/permission_status.dart';
 
 class PermissionCubit extends Cubit<AppPermissionStatus> {
   final BluetoothPermissionService service;

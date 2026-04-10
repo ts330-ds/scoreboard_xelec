@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/services.dart';
 import 'package:excel/excel.dart' as excel_lib;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -1055,23 +1056,23 @@ class _StepAthletesState extends State<StepAthletes> {
                   ],
                 ),
               ),
-              Row(
-                children: [
-                  _iconBtn(Icons.remove, () => cubit.changeTrials(a.id, -1)),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      '${a.trials}',
-                      style: const TextStyle(
-                        color: _primary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  _iconBtn(Icons.add, () => cubit.changeTrials(a.id, 1)),
-                ],
-              ),
+              // Row(
+              //   children: [
+              //     _iconBtn(Icons.remove, () => cubit.changeTrials(a.id, -1)),
+              //     Padding(
+              //       padding: const EdgeInsets.symmetric(horizontal: 8),
+              //       child: Text(
+              //         '${a.trials}',
+              //         style: const TextStyle(
+              //           color: _primary,
+              //           fontSize: 14,
+              //           fontWeight: FontWeight.w700,
+              //         ),
+              //       ),
+              //     ),
+              //     _iconBtn(Icons.add, () => cubit.changeTrials(a.id, 1)),
+              //   ],
+              // ),
               const SizedBox(width: 8),
               GestureDetector(
                 onTap: () => cubit.removeAthlete(a.id),
@@ -1144,6 +1145,7 @@ class _StepAthletesState extends State<StepAthletes> {
 
   // ── Add Manually Modal ────────────────────────────────────────
   void _showAddModal(BuildContext context, TimingSessionCubit cubit) {
+    final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController();
     final athleteIdCtrl = TextEditingController();
     final bibCtrl = TextEditingController();
@@ -1161,7 +1163,9 @@ class _StepAthletesState extends State<StepAthletes> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
-            child: Column(
+            child: Form(
+              key: formKey,
+              child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1174,16 +1178,41 @@ class _StepAthletesState extends State<StepAthletes> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _modalField('Full Name *', nameCtrl, hint: 'First Last'),
+                _modalField(
+                  'Full Name *',
+                  nameCtrl,
+                  hint: 'First Last',
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Name is required';
+                    if (v.trim().length < 2) return 'Min 2 characters';
+                    if (RegExp(r'[0-9]').hasMatch(v)) return 'Name cannot contain numbers';
+                    return null;
+                  },
+                ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
-                      child: _modalField('Athlete ID', athleteIdCtrl, hint: 'ATH-001'),
+                      child: _modalField(
+                        'Athlete ID',
+                        athleteIdCtrl,
+                        hint: 'ATH-001',
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _modalField('BIB', bibCtrl, hint: '42'),
+                      child: _modalField(
+                        'BIB',
+                        bibCtrl,
+                        hint: '42',
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return null;
+                          final n = int.tryParse(v);
+                          if (n == null) return 'Numbers only';
+                          return null;
+                        },
+                      ),
                     ),
                   ],
                 ),
@@ -1191,11 +1220,43 @@ class _StepAthletesState extends State<StepAthletes> {
                 Row(
                   children: [
                     Expanded(
-                      child: _modalField('Date of Birth', dobCtrl, hint: 'DD/MM/YYYY'),
+                      child: _modalField(
+                        'Date of Birth',
+                        dobCtrl,
+                        hint: 'DD/MM/YYYY',
+                        isNumber: true,
+                        inputFormatters: [_DobInputFormatter()],
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return null;
+                          final regex = RegExp(r'^\d{2}/\d{2}/\d{4}$');
+                          if (!regex.hasMatch(v)) return 'Format: DD/MM/YYYY';
+                          final parts = v.split('/');
+                          final day = int.parse(parts[0]);
+                          final month = int.parse(parts[1]);
+                          final year = int.parse(parts[2]);
+                          if (day < 1 || day > 31) return 'Invalid day';
+                          if (month < 1 || month > 12) return 'Invalid month';
+                          if (year < 1900 || year > DateTime.now().year) return 'Invalid year';
+                          return null;
+                        },
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _modalField('Age', ageCtrl, hint: '22', isNumber: true),
+                      child: _modalField(
+                        'Age',
+                        ageCtrl,
+                        hint: '22',
+                        isNumber: true,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return null;
+                          final n = int.tryParse(v);
+                          if (n == null) return 'Numbers only';
+                          if (n < 1 || n > 120) return '1 - 120';
+                          return null;
+                        },
+                      ),
                     ),
                   ],
                 ),
@@ -1256,34 +1317,34 @@ class _StepAthletesState extends State<StepAthletes> {
                 const SizedBox(height: 12),
                 _modalField('Team / Group', teamCtrl, hint: 'Sprint A'),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Text(
-                      'Trials',
-                      style: TextStyle(color: _subtext, fontSize: 11),
-                    ),
-                    const Spacer(),
-                    _iconBtn(
-                      Icons.remove,
-                      () => setModalState(() => trials = (trials - 1).clamp(1, 10)),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Text(
-                        '$trials',
-                        style: const TextStyle(
-                          color: _primary,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    _iconBtn(
-                      Icons.add,
-                      () => setModalState(() => trials = (trials + 1).clamp(1, 10)),
-                    ),
-                  ],
-                ),
+                // Row(
+                //   children: [
+                //     const Text(
+                //       'Trials',
+                //       style: TextStyle(color: _subtext, fontSize: 11),
+                //     ),
+                //     const Spacer(),
+                //     _iconBtn(
+                //       Icons.remove,
+                //       () => setModalState(() => trials = (trials - 1).clamp(1, 10)),
+                //     ),
+                //     Padding(
+                //       padding: const EdgeInsets.symmetric(horizontal: 10),
+                //       child: Text(
+                //         '$trials',
+                //         style: const TextStyle(
+                //           color: _primary,
+                //           fontSize: 18,
+                //           fontWeight: FontWeight.bold,
+                //         ),
+                //       ),
+                //     ),
+                //     _iconBtn(
+                //       Icons.add,
+                //       () => setModalState(() => trials = (trials + 1).clamp(1, 10)),
+                //     ),
+                //   ],
+                // ),
                 const SizedBox(height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -1295,7 +1356,7 @@ class _StepAthletesState extends State<StepAthletes> {
                     const SizedBox(width: 8),
                     ElevatedButton(
                       onPressed: () {
-                        if (nameCtrl.text.trim().isEmpty) return;
+                        if (!formKey.currentState!.validate()) return;
                         final athlete = AthleteModel(
                           id: const Uuid().v4(),
                           fullName: nameCtrl.text.trim(),
@@ -1306,7 +1367,7 @@ class _StepAthletesState extends State<StepAthletes> {
                           sex: selectedSex,
                           discipline: disciplineCtrl.text.trim(),
                           team: teamCtrl.text.trim(),
-                          trials: trials,
+                          trials: 3,
                         );
                         cubit.addAthlete(athlete);
                         sl<AthleteRepository>().save(athlete);
@@ -1319,12 +1380,13 @@ class _StepAthletesState extends State<StepAthletes> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text('Add Athlete'),
+                      child: const Text(' Add '),
                     ),
                   ],
                 ),
               ],
             ),
+            ),  // Form
           ),
         ),
       ),
@@ -1336,6 +1398,8 @@ class _StepAthletesState extends State<StepAthletes> {
     TextEditingController ctrl, {
     String hint = '',
     bool isNumber = false,
+    List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1349,9 +1413,12 @@ class _StepAthletesState extends State<StepAthletes> {
           ),
         ),
         const SizedBox(height: 6),
-        TextField(
+        TextFormField(
           controller: ctrl,
           keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+          inputFormatters: inputFormatters,
+          validator: validator,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           style: const TextStyle(color: _text, fontSize: 13),
           decoration: InputDecoration(
             hintText: hint,
@@ -1371,6 +1438,15 @@ class _StepAthletesState extends State<StepAthletes> {
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: _primary, width: 1.5),
             ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: _error),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: _error, width: 1.5),
+            ),
+            errorStyle: const TextStyle(color: _error, fontSize: 10),
           ),
         ),
       ],
@@ -1461,200 +1537,230 @@ class _SelectFromSavedSheetState extends State<_SelectFromSavedSheet> {
     final allSelected =
         filtered.isNotEmpty && filtered.every((a) => _selectedIds.contains(a.id));
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      height: MediaQuery.of(context).size.height * 0.80,
-      child: Column(
-        children: [
-          // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  const Text(
-                    'Select Athletes',
-                    style: TextStyle(
-                      color: _text,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (_available.isNotEmpty)
-                    TextButton(
-                      onPressed: _toggleAll,
-                      child: Text(
-                        allSelected ? 'Deselect All' : 'Select All',
-                        style: const TextStyle(
-                            color: _primary, fontWeight: FontWeight.w600),
+    return SafeArea(
+      child: Container(
+        decoration: const BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        height: MediaQuery.of(context).size.height * 0.80,
+        child: Column(
+          children: [
+            // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Select Athletes',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                ],
+                    const Spacer(),
+                    if (_available.isNotEmpty)
+                      TextButton(
+                        onPressed: _toggleAll,
+                        child: Text(
+                          allSelected ? 'Deselect All' : 'Select All',
+                          style: const TextStyle(
+                              color: _primary, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            // Search
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: TextField(
-                onChanged: (v) => setState(() => _search = v),
-                style: const TextStyle(color: _text, fontSize: 13),
-                decoration: InputDecoration(
-                  prefixIcon:
-                      const Icon(Icons.search, color: _subtext, size: 18),
-                  hintText: 'Search by name, ID, team...',
-                  hintStyle: const TextStyle(color: _subtext, fontSize: 13),
-                  filled: true,
-                  fillColor: _surface2,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _border),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _primary, width: 1.5),
+              // Search
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: TextField(
+                  onChanged: (v) => setState(() => _search = v),
+                  style: const TextStyle(color: _text, fontSize: 13),
+                  decoration: InputDecoration(
+                    prefixIcon:
+                        const Icon(Icons.search, color: _subtext, size: 18),
+                    hintText: 'Search by name, ID, team...',
+                    hintStyle: const TextStyle(color: _subtext, fontSize: 13),
+                    filled: true,
+                    fillColor: _surface2,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: _border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: _border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: _primary, width: 1.5),
+                    ),
                   ),
                 ),
               ),
-            ),
-            // List
-            Expanded(
-              child: _available.isEmpty
-                  ? const Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.group_off_outlined,
-                              color: _subtext, size: 40),
-                          SizedBox(height: 10),
-                          Text(
-                            'All saved athletes are already\nin this session',
-                            style: TextStyle(color: _subtext, fontSize: 13),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    )
-                  : filtered.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No athletes match your search',
-                            style: TextStyle(color: _subtext, fontSize: 13),
-                          ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, __) =>
-                              const Divider(color: _border, height: 1),
-                          itemBuilder: (_, i) {
-                            final a = filtered[i];
-                            final isSelected = _selectedIds.contains(a.id);
-                            final subtitle = [
-                              if (a.athleteId.isNotEmpty) a.athleteId,
-                              if (a.bib.isNotEmpty) 'BIB: ${a.bib}',
-                              if (a.team.isNotEmpty) a.team,
-                            ].join(' · ');
-                            return ListTile(
-                              contentPadding:
-                                  const EdgeInsets.symmetric(horizontal: 4),
-                              leading: CircleAvatar(
-                                radius: 18,
-                                backgroundColor:
-                                    isSelected ? _primary : _primaryLight,
-                                child: Text(
-                                  a.initials,
-                                  style: TextStyle(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : _primary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
+              // List
+              Expanded(
+                child: _available.isEmpty
+                    ? const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.group_off_outlined,
+                                color: _subtext, size: 40),
+                            SizedBox(height: 10),
+                            Text(
+                              'All saved athletes are already\nin this session',
+                              style: TextStyle(color: _subtext, fontSize: 13),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    : filtered.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'No athletes match your search',
+                              style: TextStyle(color: _subtext, fontSize: 13),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(color: _border, height: 1),
+                            itemBuilder: (_, i) {
+                              final a = filtered[i];
+                              final isSelected = _selectedIds.contains(a.id);
+                              final subtitle = [
+                                if (a.athleteId.isNotEmpty) a.athleteId,
+                                if (a.bib.isNotEmpty) 'BIB: ${a.bib}',
+                                if (a.team.isNotEmpty) a.team,
+                              ].join(' · ');
+                              return ListTile(
+                                contentPadding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                leading: CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor:
+                                      isSelected ? _primary : _primaryLight,
+                                  child: Text(
+                                    a.initials,
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? Colors.white
+                                          : _primary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              title: Text(
-                                a.fullName,
-                                style: const TextStyle(
-                                    color: _text,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600),
-                              ),
-                              subtitle: subtitle.isNotEmpty
-                                  ? Text(subtitle,
-                                      style: const TextStyle(
-                                          color: _subtext, fontSize: 11))
-                                  : null,
-                              trailing: Checkbox(
-                                value: isSelected,
-                                activeColor: _primary,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(4)),
-                                onChanged: (_) => setState(() {
+                                title: Text(
+                                  a.fullName,
+                                  style: const TextStyle(
+                                      color: _text,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                                subtitle: subtitle.isNotEmpty
+                                    ? Text(subtitle,
+                                        style: const TextStyle(
+                                            color: _subtext, fontSize: 11))
+                                    : null,
+                                trailing: Checkbox(
+                                  value: isSelected,
+                                  activeColor: _primary,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(4)),
+                                  onChanged: (_) => setState(() {
+                                    if (isSelected) {
+                                      _selectedIds.remove(a.id);
+                                    } else {
+                                      _selectedIds.add(a.id);
+                                    }
+                                  }),
+                                ),
+                                onTap: () => setState(() {
                                   if (isSelected) {
                                     _selectedIds.remove(a.id);
                                   } else {
                                     _selectedIds.add(a.id);
                                   }
                                 }),
-                              ),
-                              onTap: () => setState(() {
-                                if (isSelected) {
-                                  _selectedIds.remove(a.id);
-                                } else {
-                                  _selectedIds.add(a.id);
-                                }
-                              }),
-                            );
-                          },
-                        ),
-            ),
-            // Confirm button
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              decoration: const BoxDecoration(
-                color: _surface,
-                border: Border(top: BorderSide(color: _border)),
+                              );
+                            },
+                          ),
               ),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: selectedCount == 0
-                      ? null
-                      : () {
-                          final selected = _available
-                              .where((a) => _selectedIds.contains(a.id))
-                              .toList();
-                          widget.onConfirm(selected);
-                          Navigator.pop(context);
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primary,
-                    disabledBackgroundColor: _border,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: Text(
-                    selectedCount == 0
-                        ? 'Select athletes to add'
-                        : 'Add $selectedCount Athlete${selectedCount > 1 ? 's' : ''}',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600),
+              // Confirm button
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                decoration: const BoxDecoration(
+                  color: _surface,
+                  border: Border(top: BorderSide(color: _border)),
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: selectedCount == 0
+                        ? null
+                        : () {
+                            final selected = _available
+                                .where((a) => _selectedIds.contains(a.id))
+                                .toList();
+                            widget.onConfirm(selected);
+                            Navigator.pop(context);
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primary,
+                      disabledBackgroundColor: _border,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: Text(
+                      selectedCount == 0
+                          ? 'Select athletes to add'
+                          : 'Add $selectedCount Athlete${selectedCount > 1 ? 's' : ''}',
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+      ),
+    );
+  }
+}
+
+// ── DOB Auto Slash Formatter ──────────────────────────────────────────────────
+class _DobInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = newValue.text.replaceAll('/', ''); // sirf digits rakho
+
+    if (text.length > 8) return oldValue; // max 8 digits (DDMMYYYY)
+
+    final buffer = StringBuffer();
+    for (int i = 0; i < text.length; i++) {
+      buffer.write(text[i]);
+      // DD ke baad slash
+      if (i == 1 && text.length > 2) buffer.write('/');
+      // MM ke baad slash
+      if (i == 3 && text.length > 4) buffer.write('/');
+    }
+
+    final formatted = buffer.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }

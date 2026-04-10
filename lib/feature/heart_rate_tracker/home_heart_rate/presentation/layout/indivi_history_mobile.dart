@@ -1,31 +1,20 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
-const _kBg   = Color(0xFF0A0E1A);
-const _kCard = Color(0xFF1A2235);
-const _kBlue = Color(0xFF4A90E2);
-const _kHr   = Color(0xFFEF5350);
-
-/// Deduplicates HR data in two passes:
-///  1. Remove rows with a duplicate `stamp` (SDK sometimes sends same record twice).
-///  2. Remove consecutive rows where `heartRate` didn't change (run-length compress).
-/// 2511 similar readings → only the meaningful change-points are kept.
 List<Map<dynamic, dynamic>> _dedupeHrData(List<Map<dynamic, dynamic>> data) {
   if (data.isEmpty) return data;
 
-  // Pass 1 — unique stamps (Set<int> lookup = O(1) per row)
   final seenStamps = <int>{};
   final uniqueByStamp = data.where((r) {
     final s = (r['stamp'] as num?)?.toInt() ?? 0;
-    if (s <= 0) return true; // keep rows with no stamp
-    return seenStamps.add(s); // add() returns false if already present
+    if (s <= 0) return true;
+    return seenStamps.add(s);
   }).toList();
 
-  // Pass 2 — remove consecutive same-value readings
   final result = <Map<dynamic, dynamic>>[uniqueByStamp.first];
   for (int i = 1; i < uniqueByStamp.length; i++) {
     final prev = (result.last['heartRate'] as num?)?.toInt() ?? -1;
@@ -35,11 +24,6 @@ List<Map<dynamic, dynamic>> _dedupeHrData(List<Map<dynamic, dynamic>> data) {
   return result;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main screen
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Top-level wrapper: BlocBuilder only — never rebuilds on filter change.
 class IndiviHistoryMobile extends StatelessWidget {
   const IndiviHistoryMobile({super.key});
 
@@ -63,7 +47,7 @@ class _HistoryShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final syncing = state.status.contains('yncing');
     return Scaffold(
-      backgroundColor: _kBg,
+      backgroundColor: AppColors.bg,
       body: SafeArea(
         child: Column(
           children: [
@@ -94,11 +78,10 @@ class _Header extends StatelessWidget {
             height: 38,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: _kBlue.withValues(alpha: 0.12),
-              border:
-                  Border.all(color: _kBlue.withValues(alpha: 0.25)),
+              color: AppColors.primaryLight,
+              border: Border.all(color: AppColors.primary.withOpacity(0.25)),
             ),
-            child: const Icon(Icons.history, color: _kBlue, size: 20),
+            child: const Icon(Icons.history, color: AppColors.primary, size: 20),
           ),
           const SizedBox(width: 12),
           const Column(
@@ -106,12 +89,12 @@ class _Header extends StatelessWidget {
             children: [
               Text('Heart Rate History',
                   style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.text,
                       fontSize: 20,
                       fontWeight: FontWeight.w700)),
               Text('Synced heart rate data',
                   style: TextStyle(
-                      color: Colors.white38, fontSize: 11, height: 1.3)),
+                      color: AppColors.subtext, fontSize: 11, height: 1.3)),
             ],
           ),
           const Spacer(),
@@ -179,17 +162,17 @@ class _SyncButtonState extends State<_SyncButton>
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: connected
-                ? _kBlue.withValues(alpha: 0.12)
-                : const Color(0xFF1A2235),
+                ? AppColors.primaryLight
+                : AppColors.surfaceAlt,
             border: Border.all(
                 color: connected
-                    ? _kBlue.withValues(alpha: 0.35)
-                    : Colors.white12),
+                    ? AppColors.primary.withOpacity(0.35)
+                    : AppColors.border),
           ),
           child: RotationTransition(
             turns: _spin,
             child: Icon(Icons.sync,
-                color: connected ? _kBlue : Colors.white24, size: 18),
+                color: connected ? AppColors.primary : AppColors.textHint, size: 18),
           ),
         ),
       ),
@@ -197,7 +180,7 @@ class _SyncButtonState extends State<_SyncButton>
   }
 }
 
-// ─── Streaming progress bar (replaces full-screen overlay) ───────────────────
+// ─── Streaming progress bar ───────────────────────────────────────────────────
 
 class _StreamingBar extends StatelessWidget {
   final int count;
@@ -208,19 +191,19 @@ class _StreamingBar extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: _kBlue.withValues(alpha: 0.12),
+      color: AppColors.primaryLight,
       child: Row(
         children: [
           const SizedBox(
             width: 14, height: 14,
             child: CircularProgressIndicator(
-                color: _kBlue, strokeWidth: 2),
+                color: AppColors.primary, strokeWidth: 2),
           ),
           const SizedBox(width: 10),
           Text(
             'Streaming… $count readings received',
             style: const TextStyle(
-                color: _kBlue, fontSize: 12, fontWeight: FontWeight.w600),
+                color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -228,9 +211,7 @@ class _StreamingBar extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Heart Rate Tab
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Heart Rate Tab ───────────────────────────────────────────────────────────
 
 class _HeartRateTab extends StatelessWidget {
   final HeartBleState state;
@@ -238,7 +219,6 @@ class _HeartRateTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Dedupe then sort newest-first.
     final data = _dedupeHrData(state.historyHrData).toList()
       ..sort((a, b) {
         final sa = (a['stamp'] as num?)?.toInt() ?? 0;
@@ -248,8 +228,8 @@ class _HeartRateTab extends StatelessWidget {
     if (data.isEmpty) {
       return _EmptyState(
         icon: Icons.favorite,
-        color: _kHr,
-        message: 'No heart rate history.\nTap ⟳ to sync from device.',
+        color: AppColors.heartRed,
+        message: 'No heart rate history.\nTap \u27f3 to sync from device.',
       );
     }
 
@@ -273,10 +253,10 @@ class _HeartRateTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _StatsRow(children: [
-                  _StatCard('Avg',      '$avg',          'bpm', _kHr),
-                  _StatCard('Max',      '$max',          'bpm', _kHr),
-                  _StatCard('Min',      '$min',          'bpm', _kHr),
-                  _StatCard('Readings', '${data.length}', '',   _kHr),
+                  _StatCard('Avg',      '$avg',          'bpm', AppColors.heartRed),
+                  _StatCard('Max',      '$max',          'bpm', AppColors.heartRed),
+                  _StatCard('Min',      '$min',          'bpm', AppColors.heartRed),
+                  _StatCard('Readings', '${data.length}', '',   AppColors.heartRed),
                 ]),
                 const SizedBox(height: 14),
                 _HrLineChart(data: data),
@@ -319,8 +299,7 @@ class _HrLineChart extends StatelessWidget {
         .asMap()
         .entries
         .map((e) {
-          final y =
-              (e.value['heartRate'] as num?)?.toDouble() ?? 0;
+          final y = (e.value['heartRate'] as num?)?.toDouble() ?? 0;
           return FlSpot(e.key.toDouble(), y);
         })
         .where((s) => s.y > 0)
@@ -330,10 +309,11 @@ class _HrLineChart extends StatelessWidget {
       return Container(
         height: 180,
         decoration: BoxDecoration(
-            color: _kCard, borderRadius: BorderRadius.circular(16)),
+            color: AppColors.surface, borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border)),
         child: const Center(
             child: Text('No chart data',
-                style: TextStyle(color: Colors.white38))),
+                style: TextStyle(color: AppColors.subtext))),
       );
     }
 
@@ -345,7 +325,9 @@ class _HrLineChart extends StatelessWidget {
       height: 190,
       padding: const EdgeInsets.fromLTRB(4, 12, 12, 8),
       decoration: BoxDecoration(
-          color: _kCard, borderRadius: BorderRadius.circular(16)),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border)),
       child: LineChart(
         LineChartData(
           minY: minY,
@@ -353,13 +335,13 @@ class _HrLineChart extends StatelessWidget {
           lineBarsData: [
             LineChartBarData(
               spots: spots,
-              color: _kHr,
+              color: AppColors.heartRed,
               barWidth: 2,
               isCurved: true,
               dotData: FlDotData(show: pts.length <= 25),
               belowBarData: BarAreaData(
                   show: true,
-                  color: _kHr.withValues(alpha: 0.08)),
+                  color: AppColors.heartRed.withOpacity(0.08)),
             ),
           ],
           gridData: FlGridData(
@@ -367,7 +349,7 @@ class _HrLineChart extends StatelessWidget {
             drawVerticalLine: false,
             horizontalInterval: ((maxY - minY) / 4).clamp(1, 9999),
             getDrawingHorizontalLine: (_) =>
-                const FlLine(color: Colors.white12, strokeWidth: 0.5),
+                FlLine(color: AppColors.borderLight, strokeWidth: 0.5),
           ),
           titlesData: FlTitlesData(
             topTitles: const AxisTitles(
@@ -383,19 +365,16 @@ class _HrLineChart extends StatelessWidget {
                     : (pts.length / 4).ceilToDouble(),
                 getTitlesWidget: (val, _) {
                   final idx = val.toInt().clamp(0, pts.length - 1);
-                  final stamp =
-                      (pts[idx]['stamp'] as num?)?.toInt() ?? 0;
+                  final stamp = (pts[idx]['stamp'] as num?)?.toInt() ?? 0;
                   if (stamp <= 0) return const SizedBox.shrink();
-                  final ms =
-                      stamp > 9999999999 ? stamp : stamp * 1000;
-                  final dt =
-                      DateTime.fromMillisecondsSinceEpoch(ms);
+                  final ms = stamp > 9999999999 ? stamp : stamp * 1000;
+                  final dt = DateTime.fromMillisecondsSinceEpoch(ms);
                   return Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       '${_p(dt.hour)}:${_p(dt.minute)}',
                       style: const TextStyle(
-                          color: Colors.white38, fontSize: 8),
+                          color: AppColors.subtext, fontSize: 8),
                     ),
                   );
                 },
@@ -409,7 +388,7 @@ class _HrLineChart extends StatelessWidget {
                 getTitlesWidget: (v, _) => Text(
                   '${v.toInt()}',
                   style: const TextStyle(
-                      color: Colors.white38, fontSize: 9),
+                      color: AppColors.subtext, fontSize: 9),
                 ),
               ),
             ),
@@ -417,13 +396,12 @@ class _HrLineChart extends StatelessWidget {
           borderData: FlBorderData(show: false),
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
-              getTooltipColor: (_) =>
-                  _kCard.withValues(alpha: 0.9),
+              getTooltipColor: (_) => AppColors.surface,
               getTooltipItems: (spots) => spots
                   .map((s) => LineTooltipItem(
                         '${s.y.toStringAsFixed(0)} bpm',
                         const TextStyle(
-                            color: _kHr,
+                            color: AppColors.heartRed,
                             fontSize: 12,
                             fontWeight: FontWeight.w600),
                       ))
@@ -450,19 +428,21 @@ class _HrRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-          color: _kCard, borderRadius: BorderRadius.circular(10)),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.borderLight)),
       child: Row(
         children: [
           Container(
             width: 26,
             height: 26,
             decoration: BoxDecoration(
-                color: _kHr.withValues(alpha: 0.15),
+                color: AppColors.heartRed.withOpacity(0.10),
                 shape: BoxShape.circle),
             child: Center(
               child: Text('$index',
                   style: const TextStyle(
-                      color: _kHr,
+                      color: AppColors.heartRed,
                       fontSize: 9,
                       fontWeight: FontWeight.w700)),
             ),
@@ -470,13 +450,13 @@ class _HrRow extends StatelessWidget {
           const SizedBox(width: 10),
           Text(_fmtStamp(stamp),
               style:
-                  const TextStyle(color: Colors.white54, fontSize: 12)),
+                  const TextStyle(color: AppColors.subtext, fontSize: 12)),
           const Spacer(),
-          Icon(Icons.favorite, color: _kHr, size: 13),
+          const Icon(Icons.favorite, color: AppColors.heartRed, size: 13),
           const SizedBox(width: 4),
           Text('$bpm bpm',
               style: const TextStyle(
-                  color: _kHr,
+                  color: AppColors.heartRed,
                   fontSize: 14,
                   fontWeight: FontWeight.w700)),
         ],
@@ -485,9 +465,7 @@ class _HrRow extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared widgets
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Shared widgets ───────────────────────────────────────────────────────────
 
 class _StatsRow extends StatelessWidget {
   final List<Widget> children;
@@ -516,29 +494,29 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: _kCard,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(color: color.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
               style: TextStyle(
-                  color: color.withValues(alpha: 0.7),
+                  color: color.withOpacity(0.7),
                   fontSize: 9,
                   fontWeight: FontWeight.w500,
                   letterSpacing: 0.5)),
           const SizedBox(height: 3),
           Text(value,
               style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.text,
                   fontSize: 16,
                   fontWeight: FontWeight.w700)),
           if (unit.isNotEmpty)
             Text(unit,
                 style: TextStyle(
-                    color: color.withValues(alpha: 0.8), fontSize: 9)),
+                    color: color.withOpacity(0.8), fontSize: 9)),
         ],
       ),
     );
@@ -553,7 +531,7 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(text,
         style: const TextStyle(
-            color: Colors.white38,
+            color: AppColors.subtext,
             fontSize: 10,
             letterSpacing: 1.5,
             fontWeight: FontWeight.w600));
@@ -580,9 +558,8 @@ class _EmptyState extends StatelessWidget {
               height: 72,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _kCard,
-                border:
-                    Border.all(color: color.withValues(alpha: 0.25)),
+                color: AppColors.surface,
+                border: Border.all(color: color.withOpacity(0.25)),
               ),
               child: Icon(icon, color: color, size: 32),
             ),
@@ -590,7 +567,7 @@ class _EmptyState extends StatelessWidget {
             Text(message,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                    color: Colors.white54,
+                    color: AppColors.subtext,
                     fontSize: 13,
                     height: 1.6)),
           ],
@@ -600,12 +577,10 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 String _fmtStamp(int stamp) {
-  if (stamp <= 0) return '—';
+  if (stamp <= 0) return '\u2014';
   final ms = stamp > 9999999999 ? stamp : stamp * 1000;
   final dt = DateTime.fromMillisecondsSinceEpoch(ms);
   final now = DateTime.now();

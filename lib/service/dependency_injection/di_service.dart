@@ -1,4 +1,11 @@
 import 'package:get_it/get_it.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:xelex_esp/feature/auth/data/datasource/auth_remote_datasource.dart';
+import 'package:xelex_esp/feature/auth/data/repository/auth_repository_impl.dart';
+import 'package:xelex_esp/feature/auth/domain/repository/auth_repository.dart';
+import 'package:xelex_esp/feature/auth/domain/usecase/sign_in_with_google_usecase.dart';
+import 'package:xelex_esp/feature/auth/domain/usecase/sign_out_usecase.dart';
+import 'package:xelex_esp/feature/auth/presentation/cubit/auth_cubit.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/archery_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/badminton_ble_mapper.dart';
@@ -7,6 +14,9 @@ import 'package:xelex_esp/feature/bluetooth/mapper/hockey_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/kabaddi_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/table_tennis_ble_mapper.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
+import 'package:xelex_esp/feature/timing_gates/main_screen/data/cubit/bluetooth_cubit.dart';
+import 'package:xelex_esp/feature/timing_gates/profile/data/repository/profile_repository.dart';
+import 'package:xelex_esp/feature/timing_gates/profile/presentation/cubit/profile_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/athletes/athletes_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/repository/athlete_repository.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/repository/session_repository.dart';
@@ -31,7 +41,6 @@ import '../../feature/scoreboard/archery/presentation/cubit/timer/archery_timer_
 import '../../feature/bluetooth/presentation/cubit/ble/ble_cubit.dart';
 import '../../feature/bluetooth/presentation/cubit/scan/ble_scan_cubit.dart';
 import '../../feature/bluetooth/service/ble_service.dart';
-import '../../feature/permission/bluetooth/cubit/bluetooth_cubit.dart';
 import '../../feature/scoreboard/Kabaddi/presentation/cubit/controller/kabaddi_controller_cubit.dart';
 import '../../feature/scoreboard/Kabaddi/presentation/cubit/timer/kabaddi_timer_cubit.dart';
 import '../../feature/scoreboard/badminton/presentation/cubit/controller/badminton_controller_cubit.dart';
@@ -53,6 +62,26 @@ import '../permission/bluetooth_permission_service.dart';
 final sl = GetIt.instance;
 
 void setupDI() {
+  // Auth
+  sl.registerLazySingleton<GoogleSignIn>(
+    () => GoogleSignIn(scopes: ['email', 'profile']),
+  );
+  sl.registerLazySingleton<AuthRemoteDataSource>(
+    () => AuthRemoteDataSourceImpl(sl()),
+  );
+  sl.registerLazySingleton<AuthRepository>(
+    () => AuthRepositoryImpl(sl()),
+  );
+  sl.registerLazySingleton<SignInWithGoogleUseCase>(
+    () => SignInWithGoogleUseCase(sl()),
+  );
+  sl.registerLazySingleton<SignOutUseCase>(
+    () => SignOutUseCase(sl()),
+  );
+  sl.registerFactory<AuthCubit>(
+    () => AuthCubit(signInWithGoogle: sl(), signOut: sl()),
+  );
+
   // Services
   sl.registerLazySingleton<BleService>(() => BleService());
   sl.registerLazySingleton<BluetoothPermissionService>(
@@ -293,8 +322,14 @@ void setupDI() {
 
   // Timing Gate — Athletes
   sl.registerLazySingleton<AthleteRepository>(() => AthleteRepository());
-  sl.registerFactory<AthletesCubit>(
-    () => AthletesCubit(repository: sl(), errorCubit: sl()),
+  sl.registerLazySingleton<AthletesCubit>(
+    () => AthletesCubit(repository: sl(), errorCubit: sl())..initialize(),
+  );
+
+  // Timing Gate — Profile
+  sl.registerLazySingleton<ProfileRepository>(() => ProfileRepository());
+  sl.registerLazySingleton<ProfileCubit>(
+    () => ProfileCubit(repository: sl())..loadProfile(),
   );
 
   // Timing Gate — Sessions

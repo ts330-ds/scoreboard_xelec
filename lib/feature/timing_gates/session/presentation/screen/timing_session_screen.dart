@@ -64,11 +64,13 @@ class TimingSessionScreen extends StatelessWidget {
     final step = state.currentStep;
 
     if (step == 0) {
-      // First step — nothing to go back to, do nothing
+      // First step — exit session dialog dikhao
+      _confirmExit(context);
       return;
     }
     if (step == 5 || step == 6) {
-      // Run test / Results — physical back does nothing (use header ✕ to exit)
+      // Run test / Results — exit session dialog dikhao
+      _confirmExit(context);
       return;
     }
     if (step == 4) {

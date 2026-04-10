@@ -4,6 +4,16 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/auth/presentation/screen/loginScreen.dart';
 import 'package:xelex_esp/feature/bluetooth/presentation/screen/device_selection_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/cubit/shell_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_activity_mobile.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_history_mobile.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_home_mobile.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_profile_mobile.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/screen/athlete_main_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/notification/presentation/screen/athlete_notification_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/registration/presentation/screen/athlete_registration_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/dashboard/presentation/screen/coach_dashboard_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/registration/presentation/screen/coach_registration_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/presentation/screen/heart_rate_ble_selection_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/cubit/navigation_cubit/shell_cubit.dart';
@@ -57,6 +67,7 @@ import 'package:xelex_esp/feature/timing_gates/main_screen/presentation/layout/t
 import 'package:xelex_esp/feature/timing_gates/main_screen/presentation/layout/timing_gate_results_mobile.dart';
 import 'package:xelex_esp/feature/timing_gates/main_screen/presentation/layout/timing_gate_athletes_mobile.dart';
 import 'package:xelex_esp/feature/timing_gates/main_screen/presentation/layout/timing_gate_profile_mobile.dart';
+import 'package:xelex_esp/feature/timing_gates/profile/presentation/cubit/profile_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/athletes/athletes_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/session/timing_session_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/screen/session_detail_screen.dart';
@@ -452,6 +463,125 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
 
+    /// ── Athlete Notification ─────────────────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.athleteNotification,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const AthleteNotificationScreen()),
+    ),
+
+    /// ── Athlete Registration ─────────────────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.athleteRegistration,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const AthleteRegistrationScreen()),
+    ),
+
+    /// ── Athlete Dashboard (ShellRoute with bottom nav) ───────────────────────
+    ShellRoute(
+      builder: (context, state, child) {
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (_) => AthleteShellCubit()),
+            BlocProvider.value(value: sl<HeartBleCubit>()),
+          ],
+          child: BackButtonListener(
+            onBackButtonPressed: () async {
+              // Agar koi screen stack me hai toh pehle wo pop karo
+              if (GoRouter.of(context).canPop()) {
+                GoRouter.of(context).pop();
+                return true;
+              }
+              // Warna exit confirmation dialog dikhao
+              final shouldExit = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  title: const Row(
+                    children: [
+                      Icon(Icons.exit_to_app, color: Color(0xFF1565C0)),
+                      SizedBox(width: 8),
+                      Text(
+                        'Exit App?',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                  content: const Text(
+                    'Kya aap app se bahar jaana chahte hain?',
+                    style: TextStyle(color: Color(0xFF6B7A8D)),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1565C0),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      child: const Text(
+                        'Exit',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+              if (shouldExit == true) SystemNavigator.pop();
+              return true;
+            },
+            child: AthleteMainScreen(child: child),
+          ),
+        );
+      },
+      routes: [
+        GoRoute(
+          path: HeartTrackerPaths.athleteHome,
+          pageBuilder: (context, state) =>
+              adaptivePage(state: state, child: const AthleteHomeMobile()),
+        ),
+        GoRoute(
+          path: HeartTrackerPaths.athleteActivity,
+          pageBuilder: (context, state) =>
+              adaptivePage(state: state, child: const AthleteActivityMobile()),
+        ),
+        GoRoute(
+          path: HeartTrackerPaths.athleteProfile,
+          pageBuilder: (context, state) =>
+              adaptivePage(state: state, child: const AthleteProfileMobile()),
+        ),
+        GoRoute(
+          path: HeartTrackerPaths.athleteHistory,
+          pageBuilder: (context, state) =>
+              adaptivePage(state: state, child: const AthleteHistoryMobile()),
+        ),
+      ],
+    ),
+
+    /// ── Coach Registration ───────────────────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.coachRegistration,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const CoachRegistrationScreen()),
+    ),
+
+    /// ── Coach Dashboard ──────────────────────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.coachHome,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const CoachDashboardScreen()),
+    ),
+
     /// Timing Gate BLE Connection Screen (gate before main screen)
     GoRoute(
       path: TimingGatePaths.timingGateBle,
@@ -460,61 +590,79 @@ final GoRouter appRouter = GoRouter(
     ),
 
     /// Timing Gate Session Detail (full-screen, outside shell)
+    /// ProfileCubit needed for PDF export — conductor name in header
     GoRoute(
       path: TimingGatePaths.timingGateSessionDetail,
       pageBuilder: (context, state) {
         final session = state.extra as TestSessionModel;
         return adaptivePage(
           state: state,
-          child: SessionDetailScreen(session: session),
+          child: BlocProvider.value(
+            value: sl<ProfileCubit>(),
+            child: SessionDetailScreen(session: session),
+          ),
         );
       },
     ),
 
     /// Timing Gate Session Wizard (full-screen, outside shell)
+    /// ProfileCubit needed for PDF export in StepResults
     GoRoute(
       path: TimingGatePaths.timingGateSession,
       pageBuilder: (context, state) => adaptivePage(
         state: state,
-        child: BlocProvider(
-          create: (ctx) => sl<TimingSessionCubit>(),
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (ctx) => sl<TimingSessionCubit>()),
+            BlocProvider.value(value: sl<ProfileCubit>()),
+          ],
           child: const TimingSessionScreen(),
         ),
       ),
     ),
 
-    /// Timing Gate Routes Start from Here
-    ShellRoute(
-      builder: (context, state, child) {
+    /// Timing Gate Routes — StatefulShellRoute.indexedStack
+    StatefulShellRoute.indexedStack(
+      builder: (context, state, navigationShell) {
         return MultiBlocProvider(
           providers: [
-            BlocProvider(create: (_) => ShellCubit()),
             BlocProvider.value(value: sl<TimingGateBleCubit>()),
-            BlocProvider(
-              create: (_) => sl<AthletesCubit>()..initialize(),
-            ),
+            BlocProvider.value(value: sl<AthletesCubit>()),
+            BlocProvider.value(value: sl<ProfileCubit>()),
           ],
           child: BackButtonListener(
             onBackButtonPressed: () async {
-              if (GoRouter.of(context).canPop()) {
-                GoRouter.of(context).pop();
-                return true;
+              // Agar session screen active hai to uska PopScope khud handle karega
+              final currentPath = appRouter.state.uri.path;
+              if (currentPath == TimingGatePaths.timingGateSession ||
+                  currentPath == TimingGatePaths.timingGateSessionDetail) {
+                return false;
               }
+              
+              // Shell ki root tab par hain — exit dialog dikhao
               final shouldExit = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AlertDialog(
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                  title: const Row(children: [
-                    Icon(Icons.exit_to_app, color: Color(0xFF1565C0)),
-                    SizedBox(width: 8),
-                    Text('Exit Sports IQ?',
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  title: const Row(
+                    children: [
+                      Icon(Icons.exit_to_app, color: Color(0xFF1565C0)),
+                      SizedBox(width: 8),
+                      Text(
+                        'Exit Timing Gate?',
                         style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w700)),
-                  ]),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
                   content: const Text(
-                      'Kya aap Sports IQ se bahar jaana chahte hain?',
-                      style: TextStyle(color: Color(0xFF6B7A8D))),
+                    'Kya aap Timing Gate se bahar jaana chahte hain?',
+                    style: TextStyle(color: Color(0xFF6B7A8D)),
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(ctx).pop(false),
@@ -522,12 +670,16 @@ final GoRouter appRouter = GoRouter(
                     ),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1565C0),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8))),
+                        backgroundColor: const Color(0xFF1565C0),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
                       onPressed: () => Navigator.of(ctx).pop(true),
-                      child: const Text('Exit',
-                          style: TextStyle(color: Colors.white)),
+                      child: const Text(
+                        'Exit',
+                        style: TextStyle(color: Colors.white),
+                      ),
                     ),
                   ],
                 ),
@@ -535,34 +687,54 @@ final GoRouter appRouter = GoRouter(
               if (shouldExit == true) SystemNavigator.pop();
               return true;
             },
-            child: const TimingGateMainScreen(),
+            child: TimingGateMainScreen(navigationShell: navigationShell),
           ),
         );
       },
-      routes: [
-        GoRoute(
-          path: TimingGatePaths.timingGateHomeMobile,
-          pageBuilder: (context, state) =>
-              adaptivePage(state: state, child: const TimingGateHomeMobile()),
+      branches: [
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: TimingGatePaths.timingGateHomeMobile,
+              pageBuilder: (context, state) => adaptivePage(
+                state: state,
+                child: const TimingGateHomeMobile(),
+              ),
+            ),
+          ],
         ),
-        GoRoute(
-          path: TimingGatePaths.timingGateResultsMobile,
-          pageBuilder: (context, state) =>
-              adaptivePage(state: state, child: const TimingGateResultsMobile()),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: TimingGatePaths.timingGateResultsMobile,
+              pageBuilder: (context, state) => adaptivePage(
+                state: state,
+                child: const TimingGateResultsMobile(),
+              ),
+            ),
+          ],
         ),
-        GoRoute(
-          path: TimingGatePaths.timingGateAthletesMobile,
-          pageBuilder: (context, state) => adaptivePage(
-            state: state,
-            child: const TimingGateAthletesMobile(),
-          ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: TimingGatePaths.timingGateAthletesMobile,
+              pageBuilder: (context, state) => adaptivePage(
+                state: state,
+                child: const TimingGateAthletesMobile(),
+              ),
+            ),
+          ],
         ),
-        GoRoute(
-          path: TimingGatePaths.timingGateProfileMobile,
-          pageBuilder: (context, state) => adaptivePage(
-            state: state,
-            child: const TimingGateProfileMobile(),
-          ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: TimingGatePaths.timingGateProfileMobile,
+              pageBuilder: (context, state) => adaptivePage(
+                state: state,
+                child: const TimingGateProfileMobile(),
+              ),
+            ),
+          ],
         ),
       ],
     ),

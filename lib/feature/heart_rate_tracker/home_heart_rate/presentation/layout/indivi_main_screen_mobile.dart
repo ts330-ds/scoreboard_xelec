@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/cubit/navigation_cubit/shell_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_activity_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/layout/indivi_history_mobile.dart';
@@ -45,10 +46,10 @@ class IndiviMainScreenMobile extends StatelessWidget {
       List.generate(_navItems.length, (_) => GlobalKey<NavigatorState>());
 
   static const List<Widget> _pages = [
-    IndiviHomeMobile(),       // Tab 0
-    IndiviActivityMobile(),   // Tab 1
-    IndiviProfileMobile(),    // Tab 2
-    IndiviHistoryMobile(),    // Tab 3
+    IndiviHomeMobile(),
+    IndiviActivityMobile(),
+    IndiviProfileMobile(),
+    IndiviHistoryMobile(),
   ];
 
   int _locationToIndex(String location) {
@@ -105,7 +106,7 @@ class IndiviMainScreenMobile extends StatelessWidget {
   Widget _buildBottomNav(BuildContext context, int currentIndex) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withAlpha((0.08 * 255).toInt()),
@@ -137,8 +138,8 @@ class IndiviMainScreenMobile extends StatelessWidget {
                           isSelected ? item.activeIcon : item.icon,
                           key: ValueKey(isSelected),
                           color: isSelected
-                              ? const Color(0xFF1A73E8)
-                              : Colors.grey,
+                              ? AppColors.primary
+                              : AppColors.subtext,
                           size: 24,
                         ),
                       ),
@@ -151,8 +152,8 @@ class IndiviMainScreenMobile extends StatelessWidget {
                               ? FontWeight.w700
                               : FontWeight.w400,
                           color: isSelected
-                              ? const Color(0xFF1A73E8)
-                              : Colors.grey,
+                              ? AppColors.primary
+                              : AppColors.subtext,
                         ),
                         child: Text(item.label),
                       ),
@@ -162,7 +163,7 @@ class IndiviMainScreenMobile extends StatelessWidget {
                         height: 3,
                         width: isSelected ? 20 : 0,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1A73E8),
+                          color: AppColors.primary,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),

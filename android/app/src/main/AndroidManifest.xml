@@ -31,11 +31,18 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <!-- Android 13+ (API 33+): granular media permissions
-         (file_picker uses SAF so these are only needed if reading from path) -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    <!-- Android 13+ (API 33+): granular media permissions -->
     <uses-permission
         android:name="android.permission.READ_MEDIA_IMAGES"
         android:minSdkVersion="33" />
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_VIDEO"
+        android:minSdkVersion="33" />
+    <!-- file_picker uses SAF (system picker) on Android 13+ — no extra
+         permission needed for documents/CSV/Excel via ACTION_OPEN_DOCUMENT -->
 
     <!-- Foreground Service (keep BLE alive in background) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

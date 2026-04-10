@@ -36,7 +36,9 @@ class StepModeSelection extends StatelessWidget {
                   _ModeCard(
                     icon: '🔄',
                     title: 'Shuttle Run',
-                    subtitle: 'Back & forth — up to 3 parallel lanes',
+                    subtitle: state.mode == 'shuttle'
+                        ? '${state.shuttleNumLanes} ${state.shuttleNumLanes == 1 ? "lane" : "lanes"} — back & forth'
+                        : 'Back & forth — up to 3 parallel lanes',
                     selected: state.mode == 'shuttle',
                     onTap: () => context.read<TimingSessionCubit>().selectMode('shuttle'),
                   ),
@@ -50,6 +52,22 @@ class StepModeSelection extends StatelessWidget {
                     selected: state.mode == 'yoyo',
                     onTap: () => context.read<TimingSessionCubit>().selectMode('yoyo'),
                   ),
+
+                  // ── Level 2: Lane count (Shuttle only) ────────────────
+                  if (state.mode == 'shuttle') ...[
+                    const SizedBox(height: 28),
+                    const _SectionLabel(text: 'Number of Lanes'),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Maximum 3 parallel lanes',
+                      style: TextStyle(color: Color(0xFF6B7A8D), fontSize: 12),
+                    ),
+                    const SizedBox(height: 12),
+                    _ShuttleLaneSelector(
+                      selected: state.shuttleNumLanes,
+                      onSelect: (n) => context.read<TimingSessionCubit>().selectShuttleLanes(n),
+                    ),
+                  ],
 
                   // ── Level 2: Lane count (YOYO only) ───────────────────
                   if (state.mode == 'yoyo') ...[
@@ -209,7 +227,7 @@ class _ModeCard extends StatelessWidget {
     required this.subtitle,
     required this.selected,
     required this.onTap,
-    this.disabled = false,
+    this.disabled = false
   });
 
   static const _primary = Color(0xFF1565C0);
@@ -488,6 +506,67 @@ class _YoyoLaneSelector extends StatelessWidget {
       spacing: 10,
       runSpacing: 10,
       children: List.generate(5, (i) {
+        final n = i + 1;
+        final isSelected = selected == n;
+        return GestureDetector(
+          onTap: () => onSelect(n),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 64,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: isSelected ? _primaryLight : Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSelected ? _primary.withValues(alpha: 0.5) : _border,
+                width: isSelected ? 1.5 : 1,
+              ),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  '$n',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: isSelected ? _primary : _text,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  n == 1 ? 'lane' : 'lanes',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: _subtext, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+// ── Shuttle lane selector ──────────────────────────────────────────────────────
+
+class _ShuttleLaneSelector extends StatelessWidget {
+  final int selected;
+  final void Function(int) onSelect;
+
+  const _ShuttleLaneSelector({required this.selected, required this.onSelect});
+
+  static const _primary = Color(0xFF1565C0);
+  static const _primaryLight = Color(0xFFE3F2FD);
+  static const _border = Color(0xFFDDE3EC);
+  static const _text = Color(0xFF1E2A3A);
+  static const _subtext = Color(0xFF6B7A8D);
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: List.generate(3, (i) {
         final n = i + 1;
         final isSelected = selected == n;
         return GestureDetector(

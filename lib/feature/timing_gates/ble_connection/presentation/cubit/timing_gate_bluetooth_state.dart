@@ -35,6 +35,14 @@ class TimingGateBleState extends Equatable {
   final String connectedDeviceName;
   final int connectedRssi;
 
+  /// True while auto-reconnect is actively trying to restore the connection.
+  final bool isReconnecting;
+
+  /// Current auto-reconnect attempt number (1-based). 0 means not reconnecting.
+  final int reconnectAttempt;
+
+  static const int maxReconnectAttempts = 5;
+
   const TimingGateBleState({
     this.status = 'Disconnected',
     this.foundDevices = const [],
@@ -45,6 +53,8 @@ class TimingGateBleState extends Equatable {
     this.isPermissionDenied = false,
     this.connectedDeviceName = '',
     this.connectedRssi = 0,
+    this.isReconnecting = false,
+    this.reconnectAttempt = 0,
   });
 
   int get signalBars {
@@ -65,6 +75,8 @@ class TimingGateBleState extends Equatable {
     bool? isPermissionDenied,
     String? connectedDeviceName,
     int? connectedRssi,
+    bool? isReconnecting,
+    int? reconnectAttempt,
   }) {
     return TimingGateBleState(
       status: status ?? this.status,
@@ -76,6 +88,8 @@ class TimingGateBleState extends Equatable {
       isPermissionDenied: isPermissionDenied ?? this.isPermissionDenied,
       connectedDeviceName: connectedDeviceName ?? this.connectedDeviceName,
       connectedRssi: connectedRssi ?? this.connectedRssi,
+      isReconnecting: isReconnecting ?? this.isReconnecting,
+      reconnectAttempt: reconnectAttempt ?? this.reconnectAttempt,
     );
   }
 
@@ -90,5 +104,7 @@ class TimingGateBleState extends Equatable {
         isPermissionDenied,
         connectedDeviceName,
         connectedRssi,
+        isReconnecting,
+        reconnectAttempt,
       ];
 }

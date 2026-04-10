@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
@@ -19,10 +20,11 @@ class IndiviHomeMobile extends StatelessWidget {
         buildWhen: (p, c) => p.isConnected != c.isConnected,
         builder: (context, state) => Icon(
           state.isConnected ? Icons.bluetooth_connected : Icons.bluetooth,
-          color: state.isConnected ? const Color(0xFF66BB6A) : null,
+          color: state.isConnected ? AppColors.success : null,
         ),
       ),
-      bodyBackground: const Color(0xFF0A0E1A),
+      bodyBackground: AppColors.bg,
+      appBarBackground: AppColors.primary,
       body: BlocBuilder<HeartBleCubit, HeartBleState>(
         builder: (context, state) {
           return SafeArea(
@@ -32,22 +34,19 @@ class IndiviHomeMobile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── 1. Device Connection Status ──
                   _DeviceCard(
                     state: state,
                     onDisconnect: () => context.read<HeartBleCubit>().disconnect(),
                   ),
                   const SizedBox(height: 24),
 
-                  // ── 2. Activity Row (Steps, Cal, Dist) ──
                   _ActivityRow(state: state),
                   const SizedBox(height: 24),
 
-                  // ── 3. Health Vitals Grid (SpO2, BP, Temp, Stress) ──
                   const Text(
                     "Health Vitals",
                     style: TextStyle(
-                      color: Colors.white70,
+                      color: AppColors.text,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -56,12 +55,11 @@ class IndiviHomeMobile extends StatelessWidget {
                   _VitalGrid(state: state),
                   const SizedBox(height: 24),
 
-                  // ── 4. History Sync Summary ──
                   if (state.hasHistoryData) ...[
                     const Text(
                       "Data Sync Status",
                       style: TextStyle(
-                        color: Colors.white70,
+                        color: AppColors.text,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -88,9 +86,9 @@ class _ActivityRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _activityItem(Icons.directions_walk, "${state.steps}", "Steps", Colors.blueAccent),
-        _activityItem(Icons.local_fire_department, "${state.calorie}", "kcal", Colors.orangeAccent),
-        _activityItem(Icons.straighten, (state.distance / 1000).toStringAsFixed(1), "km", Colors.purpleAccent),
+        _activityItem(Icons.directions_walk, "${state.steps}", "Steps", AppColors.actSteps),
+        _activityItem(Icons.local_fire_department, "${state.calorie}", "kcal", AppColors.actCalorie),
+        _activityItem(Icons.straighten, (state.distance / 1000).toStringAsFixed(1), "km", AppColors.actDistance),
       ],
     );
   }
@@ -101,8 +99,8 @@ class _ActivityRow extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 22),
           const SizedBox(height: 6),
-          Text(val, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-          Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+          Text(val, style: const TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 18)),
+          Text(label, style: const TextStyle(color: AppColors.subtext, fontSize: 11)),
         ],
       ),
     );
@@ -128,25 +126,25 @@ class _VitalGrid extends StatelessWidget {
           label: "Oxygen (SpO2)",
           value: state.spo2 > 0 ? "${state.spo2}%" : "--",
           icon: Icons.bloodtype,
-          color: Colors.redAccent,
+          color: AppColors.vitalOxygen,
         ),
         _VitalTile(
           label: "Blood Pressure",
           value: state.systolic > 0 ? "${state.systolic}/${state.diastolic}" : "--",
           icon: Icons.speed,
-          color: Colors.indigoAccent,
+          color: AppColors.vitalBP,
         ),
         _VitalTile(
           label: "Body Temp",
           value: state.bodyTemp1 > 0 ? "${state.bodyTemp1.toStringAsFixed(1)}°C" : "--",
           icon: Icons.thermostat,
-          color: Colors.amberAccent,
+          color: AppColors.vitalTemp,
         ),
         _VitalTile(
           label: "Stress Level",
           value: state.stressLevel > 0 ? "${state.stressLevel}" : "--",
           icon: Icons.psychology,
-          color: Colors.tealAccent,
+          color: AppColors.vitalStress,
         ),
       ],
     );
@@ -165,17 +163,17 @@ class _VitalTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2235),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: color, size: 20),
           const Spacer(),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+          Text(value, style: const TextStyle(color: AppColors.text, fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(label, style: const TextStyle(color: AppColors.subtext, fontSize: 11)),
         ],
       ),
     );
@@ -192,15 +190,16 @@ class _HistorySyncCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2235),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         children: [
           _syncRow("Heart Rate History", state.historyHrData.length),
-          const Divider(color: Colors.white10, height: 20),
+          const Divider(color: AppColors.borderLight, height: 20),
           _syncRow("Sleep Records", state.historySleep.length),
-          const Divider(color: Colors.white10, height: 20),
+          const Divider(color: AppColors.borderLight, height: 20),
           _syncRow("Step History", state.historyStepData.length),
         ],
       ),
@@ -211,14 +210,14 @@ class _HistorySyncCard extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-        Text("$count logs", style: const TextStyle(color: Color(0xFF66BB6A), fontSize: 13, fontWeight: FontWeight.bold)),
+        Text(title, style: const TextStyle(color: AppColors.subtext, fontSize: 13)),
+        Text("$count logs", style: const TextStyle(color: AppColors.success, fontSize: 13, fontWeight: FontWeight.bold)),
       ],
     );
   }
 }
 
-// ── Original Device Card (With Disconnect/HR/Battery/Signal) ────────────────
+// ── Device Card ────────────────────────────────────────────────────────────
 class _DeviceCard extends StatelessWidget {
   final HeartBleState state;
   final VoidCallback onDisconnect;
@@ -228,15 +227,22 @@ class _DeviceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final connected = state.isConnected;
-    final accentColor = connected ? const Color(0xFF66BB6A) : const Color(0xFF4A90E2);
+    final accentColor = connected ? AppColors.success : AppColors.primary;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2235),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: accentColor.withOpacity(0.20)),
+        border: Border.all(color: accentColor.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -250,7 +256,7 @@ class _DeviceCard extends StatelessWidget {
                   children: [
                     Text(connected && state.lastDevice.isNotEmpty ? state.lastDevice : 'No Device',
                         style: TextStyle(color: accentColor, fontSize: 14, fontWeight: FontWeight.bold)),
-                    Text(state.status, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                    Text(state.status, style: const TextStyle(color: AppColors.subtext, fontSize: 11)),
                   ],
                 ),
               ),
@@ -260,11 +266,11 @@ class _DeviceCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEF5350).withOpacity(0.1),
+                      color: AppColors.errorBg,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFEF5350).withOpacity(0.4)),
+                      border: Border.all(color: AppColors.error.withOpacity(0.4)),
                     ),
-                    child: const Text('Disconnect', style: TextStyle(color: Color(0xFFEF5350), fontSize: 11)),
+                    child: const Text('Disconnect', style: TextStyle(color: AppColors.error, fontSize: 11)),
                   ),
                 ),
             ],
@@ -272,10 +278,10 @@ class _DeviceCard extends StatelessWidget {
           const SizedBox(height: 20),
           Row(
             children: [
-              Expanded(child: _Metric(icon: Icons.favorite, iconColor: const Color(0xFFEF5350), 
+              Expanded(child: _Metric(icon: Icons.favorite, iconColor: AppColors.heartRed,
                   value: connected && state.heartRate > 0 ? '${state.heartRate}' : '--', unit: 'BPM', label: 'Heart Rate', active: connected)),
-              Container(width: 1, height: 40, color: Colors.white10),
-              Expanded(child: _Metric(icon: Icons.battery_charging_full, iconColor: const Color(0xFF66BB6A), 
+              Container(width: 1, height: 40, color: AppColors.borderLight),
+              Expanded(child: _Metric(icon: Icons.battery_charging_full, iconColor: AppColors.success,
                   value: connected && state.battery > 0 ? '${state.battery}' : '--', unit: '%', label: 'Battery', active: connected)),
             ],
           ),
@@ -302,16 +308,16 @@ class _Metric extends StatelessWidget {
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon, color: active ? iconColor : iconColor.withOpacity(0.3), size: 14),
           const SizedBox(width: 4),
-          Text(label, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+          Text(label, style: const TextStyle(color: AppColors.subtext, fontSize: 11)),
         ]),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(color: active ? Colors.white : Colors.white24, fontSize: 24, fontWeight: FontWeight.bold)),
+        Text(value, style: TextStyle(color: active ? AppColors.text : AppColors.textHint, fontSize: 24, fontWeight: FontWeight.bold)),
       ],
     );
   }
 }
 
-// ── Signal Metric Helper (Included as per your requirement) ───────────────
+// ── Signal Metric Helper ───────────────────────────────────────────────────
 class _SignalMetric extends StatelessWidget {
   final int bars, rssi;
   final bool active;
@@ -322,13 +328,13 @@ class _SignalMetric extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text("Signal: ", style: TextStyle(color: Colors.white38, fontSize: 11)),
+        const Text("Signal: ", style: TextStyle(color: AppColors.subtext, fontSize: 11)),
         ...List.generate(3, (i) => Container(
           width: 4, height: 8 + (i * 4), margin: const EdgeInsets.symmetric(horizontal: 1),
-          decoration: BoxDecoration(color: active && bars > i ? const Color(0xFF66BB6A) : Colors.white10, borderRadius: BorderRadius.circular(1)),
+          decoration: BoxDecoration(color: active && bars > i ? AppColors.success : AppColors.borderLight, borderRadius: BorderRadius.circular(1)),
         )),
         const SizedBox(width: 8),
-        Text(active && rssi != 0 ? "$rssi dBm" : "--", style: const TextStyle(color: Colors.white38, fontSize: 10)),
+        Text(active && rssi != 0 ? "$rssi dBm" : "--", style: const TextStyle(color: AppColors.subtext, fontSize: 10)),
       ],
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/timing_gates/ble_connection/presentation/cubit/timing_gate_bluetooth_cubit.dart';
@@ -23,7 +24,11 @@ class TimingGateHomeMobile extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<TimingGateBleCubit, TimingGateBleState>(
         builder: (context, bleState) {
-          return Scaffold(
+          return AnnotatedRegion<SystemUiOverlayStyle>(
+            value: SystemUiOverlayStyle.dark.copyWith(
+              statusBarColor: Colors.transparent,
+            ),
+            child: Scaffold(
           backgroundColor: _bg,
           body: SafeArea(
             child: SingleChildScrollView(
@@ -38,7 +43,9 @@ class TimingGateHomeMobile extends StatelessWidget {
                       children: [
                         _startCard(context),
                         const SizedBox(height: 16),
-                        _gateStatusRow(),
+                        _bluetoothCard(context, bleState),
+                        const SizedBox(height: 16),
+                        _resetCard(context, bleState),
                         const SizedBox(height: 16),
                         _infoCard(),
                       ],
@@ -47,6 +54,7 @@ class TimingGateHomeMobile extends StatelessWidget {
                 ],
               ),
             ),
+          ),
           ),
         );
       },
@@ -248,100 +256,263 @@ class TimingGateHomeMobile extends StatelessWidget {
     );
   }
 
-  Widget _gateStatusRow() {
-    return Row(children: [
-      Expanded(
-          child: _gateCard(
-        icon: Icons.sensors,
-        label: 'Master Gate',
-        sublabel: 'Start Line',
-        iconColor: _primary,
-        iconBg: _primaryLight,
-        statusLabel: 'Live',
-        statusColor: _success,
-        statusBg: const Color(0xFFDCFCE7),
-        signal: 0.95,
-        signalColor: _success,
-      )),
-      const SizedBox(width: 12),
-      Expanded(
-          child: _gateCard(
-        icon: Icons.sensors_outlined,
-        label: 'Slave Gate',
-        sublabel: 'Finish Line',
-        iconColor: _warning,
-        iconBg: const Color(0xFFFEF3C7),
-        statusLabel: 'OK',
-        statusColor: _warning,
-        statusBg: const Color(0xFFFEF3C7),
-        signal: 0.72,
-        signalColor: _warning,
-      )),
-    ]);
-  }
 
-  Widget _gateCard({
-    required IconData icon,
-    required String label,
-    required String sublabel,
-    required Color iconColor,
-    required Color iconBg,
-    required String statusLabel,
-    required Color statusColor,
-    required Color statusBg,
-    required double signal,
-    required Color signalColor,
-  }) {
+  // ── Bluetooth Status Card ──────────────────────────────────────────────
+
+  Widget _bluetoothCard(BuildContext context, TimingGateBleState bleState) {
+    // Decide icon, color, title, subtitle based on state
+    final IconData icon;
+    final Color iconColor;
+    final Color iconBgColor;
+    final String title;
+    final String subtitle;
+    final Widget action;
+
+    if (bleState.isReconnecting) {
+      // ── Reconnecting ──
+      icon = Icons.bluetooth_searching;
+      iconColor = _warning;
+      iconBgColor = const Color(0xFFFEF3C7);
+      title = 'Reconnecting...';
+      subtitle =
+          'Attempt ${bleState.reconnectAttempt} of ${TimingGateBleState.maxReconnectAttempts}';
+      action = GestureDetector(
+        onTap: () => context.read<TimingGateBleCubit>().cancelReconnect(),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEE2E2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Text('Cancel',
+              style: TextStyle(
+                  color: _error, fontSize: 12, fontWeight: FontWeight.w600)),
+        ),
+      );
+    } else if (bleState.isConnected) {
+      // ── Connected ──
+      icon = Icons.bluetooth_connected;
+      iconColor = _success;
+      iconBgColor = const Color(0xFFDCFCE7);
+      title = bleState.connectedDeviceName.isNotEmpty
+          ? bleState.connectedDeviceName
+          : 'Connected';
+      final bars = bleState.signalBars;
+      final signalLabel =
+          bars >= 3 ? 'Excellent' : bars == 2 ? 'Good' : bars == 1 ? 'Weak' : 'No signal';
+      subtitle = 'Signal: $signalLabel  •  ${bleState.connectedRssi} dBm';
+      action = GestureDetector(
+        onTap: () => _confirmDisconnect(context),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEE2E2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.bluetooth_disabled, color: _error, size: 14),
+            SizedBox(width: 4),
+            Text('Disconnect',
+                style: TextStyle(
+                    color: _error, fontSize: 12, fontWeight: FontWeight.w600)),
+          ]),
+        ),
+      );
+    } else {
+      // ── Not Connected ──
+      icon = Icons.bluetooth;
+      iconColor = _subtext;
+      iconBgColor = const Color(0xFFF1F5F9);
+      title = 'No Device Connected';
+      subtitle = bleState.status == 'Reconnect failed'
+          ? 'Auto-reconnect failed. Please connect manually.'
+          : 'Tap to scan and connect your timing gate.';
+      action = GestureDetector(
+        onTap: () => context.push(TimingGatePaths.timingGateBle),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: _primaryLight,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.bluetooth_searching, color: _primary, size: 14),
+            SizedBox(width: 4),
+            Text('Connect',
+                style: TextStyle(
+                    color: _primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
+          ]),
+        ),
+      );
+    }
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: iconColor, size: 18),
+          // Icon
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: iconBgColor,
+              borderRadius: BorderRadius.circular(10),
             ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: statusBg,
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Text(statusLabel,
-                  style: TextStyle(
-                      color: statusColor,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700)),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          Text(label,
-              style: const TextStyle(
-                  color: _text, fontSize: 13, fontWeight: FontWeight.w600)),
-          Text(sublabel,
-              style: const TextStyle(color: _subtext, fontSize: 11)),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: LinearProgressIndicator(
-              value: signal,
-              backgroundColor: const Color(0xFFF0F4F8),
-              valueColor: AlwaysStoppedAnimation<Color>(signalColor),
-              minHeight: 5,
+            child: Icon(icon, color: iconColor, size: 22),
+          ),
+          const SizedBox(width: 12),
+
+          // Title + Subtitle
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(title,
+                          style: const TextStyle(
+                              color: _text,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    // Reconnecting indicator
+                    if (bleState.isReconnecting) ...[
+                      const SizedBox(width: 8),
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _warning,
+                        ),
+                      ),
+                    ],
+                    // Connected green dot
+                    if (bleState.isConnected) ...[
+                      const SizedBox(width: 6),
+                      const Icon(Icons.circle, color: _success, size: 8),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(subtitle,
+                    style: const TextStyle(color: _subtext, fontSize: 11)),
+              ],
             ),
           ),
+
+          // Action button
+          const SizedBox(width: 8),
+          action,
         ],
+      ),
+    );
+  }
+
+  // ── Reset Confirm Dialog ────────────────────────────────────────────────
+
+  void _confirmReset(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset Gate?'),
+        content: const Text(
+            'This will send a RESET command to the timing gate. Gate settings will be restored to default.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.read<TimingGateBleCubit>().sendCommand('RESET');
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Reset command sent to gate'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            style: TextButton.styleFrom(foregroundColor: _error),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Reset Card ──────────────────────────────────────────────────────────
+
+  Widget _resetCard(BuildContext context, TimingGateBleState bleState) {
+    final isConnected = bleState.isConnected;
+
+    return GestureDetector(
+      onTap: isConnected
+          ? () => _confirmReset(context)
+          : null,
+      child: Opacity(
+        opacity: isConnected ? 1.0 : 0.4,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.restart_alt, color: _error, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Reset Timing Gate',
+                        style: TextStyle(
+                            color: _text,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text(
+                        isConnected
+                            ? 'Reset gate settings to default.'
+                            : 'Connect to a device first.',
+                        style: const TextStyle(color: _subtext, fontSize: 11)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('Reset',
+                    style: TextStyle(
+                        color: _error,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

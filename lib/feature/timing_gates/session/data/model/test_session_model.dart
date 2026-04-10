@@ -102,7 +102,10 @@ class TestSessionModel {
       totalTrials == 0 ? 0 : completedTrialsCount / totalTrials;
 
   /// Display label e.g. "Linear · Sprint · 20m"
+  bool get isYoyo => mode == 'yoyo';
+
   String get modeLabel {
+    if (mode == 'yoyo') return 'Yo-Yo Test';
     if (mode == 'shuttle') return 'Shuttle Run';
     if (mode == '505') return '505 Agility';
     if (mode == 'ttest') return 'T-Test';

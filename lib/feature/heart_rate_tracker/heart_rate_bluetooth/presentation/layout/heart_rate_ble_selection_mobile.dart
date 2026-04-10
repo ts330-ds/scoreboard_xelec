@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/presentation/widget/heart_ble_connect_button.dart';
@@ -12,17 +13,17 @@ void _showPermissionDeniedSnackbar(BuildContext context) {
   context.read<HeartBleCubit>().clearPermissionDeniedFlag();
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      backgroundColor: const Color(0xFF1A1F2E),
+      backgroundColor: AppColors.surface,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       content: const Row(
         children: [
-          Icon(Icons.lock_outline, color: Color(0xFF4A90E2), size: 20),
+          Icon(Icons.lock_outline, color: AppColors.primary, size: 20),
           SizedBox(width: 12),
           Expanded(
             child: Text(
               'Bluetooth permission denied. Please allow it in App Settings.',
-              style: TextStyle(color: Colors.white, fontSize: 13),
+              style: TextStyle(color: AppColors.text, fontSize: 13),
             ),
           ),
         ],
@@ -33,28 +34,27 @@ void _showPermissionDeniedSnackbar(BuildContext context) {
 }
 
 void _showBluetoothOffDialog(BuildContext context) {
-  // Cubit ko pehle hi pakad lo — dialog builder ke bahar
   final cubit = context.read<HeartBleCubit>();
 
   showDialog(
     context: context,
     barrierDismissible: false,
     builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF1A1F2E),
+      backgroundColor: AppColors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: Row(
-        children: const [
-          Icon(Icons.bluetooth_disabled, color: Color(0xFF4A90E2), size: 28),
+      title: const Row(
+        children: [
+          Icon(Icons.bluetooth_disabled, color: AppColors.primary, size: 28),
           SizedBox(width: 12),
           Text(
             'Bluetooth Off',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
           ),
         ],
       ),
       content: const Text(
         'Bluetooth is turned off. Please turn on Bluetooth to connect to your heart rate monitor.',
-        style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+        style: TextStyle(color: AppColors.subtext, fontSize: 14, height: 1.5),
       ),
       actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       actions: [
@@ -64,8 +64,8 @@ void _showBluetoothOffDialog(BuildContext context) {
             Navigator.of(ctx).pop();
           },
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white54,
-            side: const BorderSide(color: Colors.white24),
+            foregroundColor: AppColors.subtext,
+            side: const BorderSide(color: AppColors.border),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -81,7 +81,7 @@ void _showBluetoothOffDialog(BuildContext context) {
           icon: const Icon(Icons.settings_bluetooth, size: 18),
           label: const Text('Turn On'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF4A90E2),
+            backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -102,17 +102,17 @@ void _showBondingSnackbar(BuildContext context, String bondingStatus) {
     case "required":
       message = 'Pairing required. Please accept on your device.';
       icon = Icons.bluetooth_searching;
-      color = const Color(0xFF4A90E2);
+      color = AppColors.primary;
       break;
     case "bonded":
       message = 'Device paired successfully.';
       icon = Icons.bluetooth_connected;
-      color = Colors.green;
+      color = AppColors.success;
       break;
     case "failed":
       message = 'Pairing failed. Please try again.';
       icon = Icons.bluetooth_disabled;
-      color = Colors.redAccent;
+      color = AppColors.error;
       break;
     default:
       return;
@@ -120,7 +120,7 @@ void _showBondingSnackbar(BuildContext context, String bondingStatus) {
 
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
-      backgroundColor: const Color(0xFF1A1F2E),
+      backgroundColor: AppColors.surface,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       content: Row(
@@ -130,7 +130,7 @@ void _showBondingSnackbar(BuildContext context, String bondingStatus) {
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              style: const TextStyle(color: AppColors.text, fontSize: 13),
             ),
           ),
         ],
@@ -147,17 +147,17 @@ void _showNotificationDeniedDialog(BuildContext context) {
     context: context,
     barrierDismissible: false,
     builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF1A1F2E),
+      backgroundColor: AppColors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: const Row(
         children: [
-          Icon(Icons.notifications_off, color: Color(0xFFEF5350), size: 28),
+          Icon(Icons.notifications_off, color: AppColors.error, size: 28),
           SizedBox(width: 12),
           Expanded(
             child: Text(
               'Notification Permission',
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.text,
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
               ),
@@ -168,7 +168,7 @@ void _showNotificationDeniedDialog(BuildContext context) {
       content: const Text(
         'Notification permission is required to show live heart rate in the notification bar.\n\n'
         'Without this, heart rate will not be visible when the app is minimized.',
-        style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+        style: TextStyle(color: AppColors.subtext, fontSize: 14, height: 1.5),
       ),
       actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       actions: [
@@ -178,8 +178,8 @@ void _showNotificationDeniedDialog(BuildContext context) {
             Navigator.of(ctx).pop();
           },
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white54,
-            side: const BorderSide(color: Colors.white24),
+            foregroundColor: AppColors.subtext,
+            side: const BorderSide(color: AppColors.border),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -195,7 +195,7 @@ void _showNotificationDeniedDialog(BuildContext context) {
           icon: const Icon(Icons.settings, size: 18),
           label: const Text('Open Settings'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF4A90E2),
+            backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -228,7 +228,8 @@ class HeartBleSelectionMobile extends StatelessWidget {
       },
       child: AdaptiveScaffold(
         title: "Connect Device",
-        bodyBackground: const Color(0xFF0A0E1A),
+        bodyBackground: AppColors.bg,
+        appBarBackground: AppColors.primary,
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -239,7 +240,7 @@ class HeartBleSelectionMobile extends StatelessWidget {
                 const Text(
                   'Heart Rate Monitor',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.text,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     height: 1.2,
@@ -248,7 +249,7 @@ class HeartBleSelectionMobile extends StatelessWidget {
 
                 const SizedBox(height: 40),
 
-                // ── Illustration — reacts to connection / scan / heart rate
+                // ── Illustration
                 BlocBuilder<HeartBleCubit, HeartBleState>(
                   buildWhen: (p, c) =>
                       p.isConnected != c.isConnected ||
@@ -263,7 +264,7 @@ class HeartBleSelectionMobile extends StatelessWidget {
 
                 const SizedBox(height: 28),
 
-                // ── Status Chip — live status text from cubit ────────────
+                // ── Status Chip
                 BlocBuilder<HeartBleCubit, HeartBleState>(
                   buildWhen: (p, c) =>
                       p.isConnected != c.isConnected ||
@@ -280,7 +281,7 @@ class HeartBleSelectionMobile extends StatelessWidget {
 
                 const SizedBox(height: 16),
 
-                // ── Device Info + Sport Data (scrollable when connected) ──
+                // ── Device Info + Sport Data (scrollable when connected)
                 Expanded(
                   child: BlocBuilder<HeartBleCubit, HeartBleState>(
                     buildWhen: (p, c) =>
@@ -319,7 +320,7 @@ class HeartBleSelectionMobile extends StatelessWidget {
                   ),
                 ),
 
-                // ── Connect / Disconnect button driven by cubit state ────
+                // ── Connect / Disconnect button
                 BlocBuilder<HeartBleCubit, HeartBleState>(
                   buildWhen: (p, c) =>
                       p.isConnected != c.isConnected ||
@@ -358,13 +359,13 @@ class _InfoRow extends StatelessWidget {
             width: 110,
             child: Text(
               label,
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
+              style: const TextStyle(color: AppColors.subtext, fontSize: 12),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
+              style: const TextStyle(color: AppColors.text, fontSize: 12),
             ),
           ),
         ],
@@ -383,21 +384,21 @@ class _DeviceInfoCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1F2E),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.info_outline, color: Color(0xFF4A90E2), size: 16),
+              Icon(Icons.info_outline, color: AppColors.primary, size: 16),
               SizedBox(width: 8),
               Text(
                 'Device Info',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppColors.text,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -436,21 +437,21 @@ class _SportCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1F2E),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.directions_walk, color: Color(0xFF4A90E2), size: 16),
+              Icon(Icons.directions_walk, color: AppColors.primary, size: 16),
               SizedBox(width: 8),
               Text(
                 'Activity',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: AppColors.text,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -498,19 +499,19 @@ class _SportStat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Icon(icon, color: const Color(0xFF4A90E2), size: 24),
+        Icon(icon, color: AppColors.primary, size: 24),
         const SizedBox(height: 4),
         Text(
           value,
           style: const TextStyle(
-            color: Colors.white,
+            color: AppColors.text,
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
         ),
         Text(
           label,
-          style: const TextStyle(color: Colors.white54, fontSize: 11),
+          style: const TextStyle(color: AppColors.subtext, fontSize: 11),
         ),
       ],
     );

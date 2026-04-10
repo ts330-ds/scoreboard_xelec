@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/presentation/widget/heart_rate_ble_device_tile.dart';
@@ -12,7 +13,7 @@ class HeartBleDeviceListSheet extends StatelessWidget {
     return SafeArea(
       child: Container(
         decoration: const BoxDecoration(
-          color: Color(0xFF0F1626),
+          color: AppColors.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         padding: const EdgeInsets.only(
@@ -27,38 +28,38 @@ class HeartBleDeviceListSheet extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Drag Handle ─────────────────────────────────────────
+                // ── Drag Handle
                 Center(
                   child: Container(
                     width: 40,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.white24,
+                      color: AppColors.border,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
-      
+
                 const SizedBox(height: 20),
-      
-                // ── Sheet Header ────────────────────────────────────────
+
+                // ── Sheet Header
                 _buildHeader(state.isScanning),
-      
+
                 const SizedBox(height: 8),
-      
-                // ── Device count / empty hint ───────────────────────────
+
+                // ── Device count / empty hint
                 Text(
                   state.foundDevices.isEmpty
                       ? state.isScanning
                           ? 'Looking for nearby devices…'
                           : 'No devices found. Tap Scan Again.'
                       : '${state.foundDevices.length} device${state.foundDevices.length == 1 ? '' : 's'} found',
-                  style: const TextStyle(color: Colors.white38, fontSize: 13),
+                  style: const TextStyle(color: AppColors.subtext, fontSize: 13),
                 ),
-      
+
                 const SizedBox(height: 16),
-      
-                // ── Device List ─────────────────────────────────────────
+
+                // ── Device List
                 if (state.foundDevices.isEmpty && state.isScanning)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
@@ -66,7 +67,7 @@ class HeartBleDeviceListSheet extends StatelessWidget {
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          Color(0xFF4A90E2),
+                          AppColors.primary,
                         ),
                       ),
                     ),
@@ -91,10 +92,10 @@ class HeartBleDeviceListSheet extends StatelessWidget {
                       );
                     },
                   ),
-      
+
                 const SizedBox(height: 16),
-      
-                // ── Scan Again Button ───────────────────────────────────
+
+                // ── Scan Again Button
                 _buildScanAgainButton(context, state.isScanning),
               ],
             );
@@ -104,7 +105,6 @@ class HeartBleDeviceListSheet extends StatelessWidget {
     );
   }
 
-  // ── Header ─────────────────────────────────────────────────────────────────
   Widget _buildHeader(bool isScanning) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -112,7 +112,7 @@ class HeartBleDeviceListSheet extends StatelessWidget {
         const Text(
           'Available Devices',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.text,
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -125,14 +125,14 @@ class HeartBleDeviceListSheet extends StatelessWidget {
                 height: 8,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Color(0xFF4A90E2),
+                  color: AppColors.primary,
                 ),
               ),
               const SizedBox(width: 6),
               const Text(
                 'Scanning…',
                 style: TextStyle(
-                  color: Color(0xFF4A90E2),
+                  color: AppColors.primary,
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
@@ -143,7 +143,6 @@ class HeartBleDeviceListSheet extends StatelessWidget {
     );
   }
 
-  // ── Scan Again Button ───────────────────────────────────────────────────────
   Widget _buildScanAgainButton(BuildContext context, bool isScanning) {
     return GestureDetector(
       onTap: isScanning ? null : () => context.read<HeartBleCubit>().startScan(),
@@ -155,19 +154,19 @@ class HeartBleDeviceListSheet extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color(0xFF4A90E2).withOpacity(0.4),
+              color: AppColors.primary.withOpacity(0.4),
             ),
-            color: const Color(0xFF4A90E2).withOpacity(0.08),
+            color: AppColors.primaryLight,
           ),
-          child: Row(
+          child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.refresh, color: Color(0xFF4A90E2), size: 20),
+            children: [
+              Icon(Icons.refresh, color: AppColors.primary, size: 20),
               SizedBox(width: 10),
               Text(
                 'Scan Again',
                 style: TextStyle(
-                  color: Color(0xFF4A90E2),
+                  color: AppColors.primary,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),

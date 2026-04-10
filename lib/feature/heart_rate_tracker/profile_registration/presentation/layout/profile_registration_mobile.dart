@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/profile_registration/presentation/cubit/indivi_profile_registration_cubit/profile_registration_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/profile_registration/presentation/cubit/indivi_profile_registration_cubit/profile_registration_state.dart';
 import 'package:xelex_esp/router/heart_tracker_path.dart';
@@ -11,7 +12,6 @@ class IndiviRegistrationMobile extends StatelessWidget {
 
   final _formKey = GlobalKey<FormState>();
 
-  // ─── Controllers ─────────────────────────────────────────────────────────────
   final _fullNameController = TextEditingController();
   final _athleteIdController = TextEditingController();
   final _emailController = TextEditingController();
@@ -24,7 +24,6 @@ class IndiviRegistrationMobile extends StatelessWidget {
   final _deviceModelController = TextEditingController();
   final _deviceSerialController = TextEditingController();
 
-  // ─── Focus Nodes ─────────────────────────────────────────────────────────────
   final _fullNameFocus = FocusNode();
   final _athleteIdFocus = FocusNode();
   final _emailFocus = FocusNode();
@@ -40,33 +39,9 @@ class IndiviRegistrationMobile extends StatelessWidget {
 
   final List<String> _dominantHandOptions = ['Left', 'Right', 'Ambidextrous'];
   final List<String> _sportTypes = [
-    'Cricket',
-    'Football',
-    'Basketball',
-    'Tennis',
-    'Badminton',
-    'Swimming',
-    'Athletics',
-    'Boxing',
-    'Wrestling',
-    'Cycling',
-    'Other',
+    'Cricket', 'Football', 'Basketball', 'Tennis', 'Badminton',
+    'Swimming', 'Athletics', 'Boxing', 'Wrestling', 'Cycling', 'Other',
   ];
-
-  void _disposeFocusNodes() {
-    _fullNameFocus.dispose();
-    _athleteIdFocus.dispose();
-    _emailFocus.dispose();
-    _mobileFocus.dispose();
-    _aadharFocus.dispose();
-    _dobFocus.dispose();
-    _heightFocus.dispose();
-    _heightFeetFocus.dispose();
-    _heightInchesFocus.dispose();
-    _weightFocus.dispose();
-    _deviceModelFocus.dispose();
-    _deviceSerialFocus.dispose();
-  }
 
   Future<void> _pickDOB(BuildContext context) async {
     _dobFocus.requestFocus();
@@ -113,7 +88,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: success ? Colors.green : Colors.red,
+        backgroundColor: success ? AppColors.success : AppColors.error,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -125,13 +100,13 @@ class IndiviRegistrationMobile extends StatelessWidget {
       create: (_) => IndiviProfileRegistrationCubit(),
       child: Builder(
         builder: (context) => Scaffold(
-          backgroundColor: const Color(0xFFF5F7FA),
+          backgroundColor: AppColors.bg,
           appBar: AppBar(
             title: const Text(
               'Individual Registration',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            backgroundColor: const Color(0xFF1A73E8),
+            backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
             elevation: 0,
           ),
@@ -142,7 +117,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    // ── Section 1: Personal Information ──────────────────────
+                    // ── Section 1: Personal Information
                     _buildSection(
                       title: '1. Personal Information',
                       icon: Icons.person_outline,
@@ -246,7 +221,6 @@ class IndiviRegistrationMobile extends StatelessWidget {
                             return null;
                           },
                         ),
-                        // Date of Birth
                         GestureDetector(
                           onTap: () => _pickDOB(context),
                           child: AbsorbPointer(
@@ -273,29 +247,28 @@ class IndiviRegistrationMobile extends StatelessWidget {
 
                     const SizedBox(height: 16),
 
-                    // ── Section 2: Physical Information ──────────────────────
+                    // ── Section 2: Physical Information
                     _buildSection(
                       title: '2. Physical Information',
                       icon: Icons.fitness_center_outlined,
                       children: [
-                        // Sex
                         const Text(
                           'Sex *',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF333333),
+                            color: AppColors.text,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Container(
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: AppColors.surface,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: state.sex.isEmpty
-                                  ? Colors.grey.shade300
-                                  : const Color(0xFF1A73E8),
+                                  ? AppColors.border
+                                  : AppColors.primary,
                             ),
                           ),
                           child: Row(
@@ -308,7 +281,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
                                   ),
                                   value: sex,
                                   groupValue: state.sex,
-                                  activeColor: const Color(0xFF1A73E8),
+                                  activeColor: AppColors.primary,
                                   contentPadding: EdgeInsets.zero,
                                   onChanged: (val) => context
                                       .read<IndiviProfileRegistrationCubit>()
@@ -321,7 +294,6 @@ class IndiviRegistrationMobile extends StatelessWidget {
 
                         const SizedBox(height: 4),
 
-                        // Dominant Hand
                         DropdownButtonFormField<String>(
                           initialValue: state.dominantHand,
                           decoration: _inputDecoration(
@@ -342,18 +314,17 @@ class IndiviRegistrationMobile extends StatelessWidget {
                               v == null ? 'Please select dominant hand' : null,
                         ),
 
-                        // Unit
                         const Text(
                           'Unit *',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF333333),
+                            color: AppColors.text,
                           ),
                         ),
                         Container(
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: AppColors.surface,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Row(
@@ -366,7 +337,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
                                   ),
                                   value: unit,
                                   groupValue: state.unit,
-                                  activeColor: const Color(0xFF1A73E8),
+                                  activeColor: AppColors.primary,
                                   contentPadding: EdgeInsets.zero,
                                   onChanged: (val) {
                                     _heightController.clear();
@@ -383,7 +354,6 @@ class IndiviRegistrationMobile extends StatelessWidget {
                           ),
                         ),
 
-                        // Height & Weight
                         if (state.unit == 'Metric') ...[
                           Row(
                             children: [
@@ -433,20 +403,18 @@ class IndiviRegistrationMobile extends StatelessWidget {
                             ],
                           ),
                         ] else ...[
-                          // Imperial Height
                           const Text(
                             'Height *',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF333333),
+                              color: AppColors.text,
                             ),
                           ),
                           const SizedBox(height: 8),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Feet
                               Expanded(
                                 child: TextFormField(
                                   controller: _heightFeetController,
@@ -466,7 +434,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
                                         suffixText: 'ft',
                                         suffixStyle: const TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          color: Color(0xFF1A73E8),
+                                          color: AppColors.primary,
                                         ),
                                       ),
                                   onChanged: (val) {
@@ -488,7 +456,6 @@ class IndiviRegistrationMobile extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              // Inches
                               Expanded(
                                 child: TextFormField(
                                   controller: _heightInchesController,
@@ -509,7 +476,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
                                         suffixText: 'in',
                                         suffixStyle: const TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          color: Color(0xFF1A73E8),
+                                          color: AppColors.primary,
                                         ),
                                       ),
                                   onChanged: (val) {
@@ -531,7 +498,6 @@ class IndiviRegistrationMobile extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              // Weight lbs
                               Expanded(
                                 child: _buildTextField(
                                   controller: _weightController,
@@ -555,7 +521,6 @@ class IndiviRegistrationMobile extends StatelessWidget {
                               ),
                             ],
                           ),
-                          // Live preview
                           if (state.heightFeet.isNotEmpty ||
                               state.heightInches.isNotEmpty)
                             Padding(
@@ -564,7 +529,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
                                 children: [
                                   const Icon(
                                     Icons.check_circle,
-                                    color: Colors.green,
+                                    color: AppColors.success,
                                     size: 16,
                                   ),
                                   const SizedBox(width: 6),
@@ -573,7 +538,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
                                     style: const TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.green,
+                                      color: AppColors.success,
                                     ),
                                   ),
                                 ],
@@ -585,7 +550,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
 
                     const SizedBox(height: 16),
 
-                    // ── Section 3: Sports & Activity ─────────────────────────
+                    // ── Section 3: Sports & Activity
                     _buildSection(
                       title: '3. Sports & Activity',
                       icon: Icons.sports_outlined,
@@ -614,7 +579,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
 
                     const SizedBox(height: 16),
 
-                    // ── Section 4: Device Information ────────────────────────
+                    // ── Section 4: Device Information
                     _buildSection(
                       title: '4. Device Information',
                       icon: Icons.devices_outlined,
@@ -653,17 +618,16 @@ class IndiviRegistrationMobile extends StatelessWidget {
 
                     const SizedBox(height: 28),
 
-                    // ── Submit Button ─────────────────────────────────────────
+                    // ── Submit Button
                     SizedBox(
                       width: double.infinity,
                       height: 54,
                       child: ElevatedButton(
-                        // onPressed: () => _submitForm(context),
                         onPressed: () {
                           context.go(HeartTrackerPaths.indiviHomeMobile);
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1A73E8),
+                          backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -691,7 +655,6 @@ class IndiviRegistrationMobile extends StatelessWidget {
     );
   }
 
-  // ─── Section Card ─────────────────────────────────────────────────────────────
   Widget _buildSection({
     required String title,
     required IconData icon,
@@ -699,7 +662,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -716,7 +679,7 @@ class IndiviRegistrationMobile extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: const BoxDecoration(
-              color: Color(0xFF1A73E8),
+              color: AppColors.primary,
               borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: Row(
@@ -750,7 +713,6 @@ class IndiviRegistrationMobile extends StatelessWidget {
     );
   }
 
-  // ─── Reusable TextField ───────────────────────────────────────────────────────
   Widget _buildTextField({
     required TextEditingController controller,
     required FocusNode focusNode,
@@ -784,7 +746,6 @@ class IndiviRegistrationMobile extends StatelessWidget {
     );
   }
 
-  // ─── Input Decoration ─────────────────────────────────────────────────────────
   InputDecoration _inputDecoration({
     required String label,
     required String hint,
@@ -793,31 +754,30 @@ class IndiviRegistrationMobile extends StatelessWidget {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon, color: const Color(0xFF1A73E8)),
+      prefixIcon: Icon(icon, color: AppColors.primary),
       filled: true,
-      fillColor: const Color(0xFFF5F7FA),
+      fillColor: AppColors.surfaceAlt,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF1A73E8), width: 1.5),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.red, width: 1.5),
+        borderSide: const BorderSide(color: AppColors.error, width: 1.5),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.red, width: 1.5),
+        borderSide: const BorderSide(color: AppColors.error, width: 1.5),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 }
 
-// ─── Inches Range Formatter (0–11 only) ──────────────────────────────────────
 class _InchesRangeFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:xelex_esp/feature/timing_gates/session/data/model/athlete_result_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/test_session_model.dart';
 import 'package:xelex_esp/router/timing_gate_path.dart';
 
@@ -16,8 +15,6 @@ class TimingGateResultsMobile extends StatelessWidget {
   static const _subtext = Color(0xFF6B7A8D);
   static const _border = Color(0xFFDDE3EC);
   static const _gold = Color(0xFFD97706);
-  static const _silver = Color(0xFF64748B);
-  static const _bronze = Color(0xFF92400E);
 
   @override
   Widget build(BuildContext context) {
@@ -150,8 +147,17 @@ class TimingGateResultsMobile extends StatelessWidget {
         if (aBest == null && bBest == null) return 0;
         if (aBest == null) return 1;
         if (bBest == null) return -1;
-        return aBest.compareTo(bBest);
+        return session.isYoyo
+            ? bBest.compareTo(aBest) // YOYO: higher level = better
+            : aBest.compareTo(bBest); // Normal: faster = better
       });
+
+    // Winner info
+    final winner = ranked.isNotEmpty ? ranked.first : null;
+    final winnerBest = winner?.bestTime;
+    final athleteCount = session.results.length;
+    final completedTrials = session.results.fold<int>(
+        0, (sum, r) => sum + r.completedTrials.length);
 
     return Container(
       decoration: BoxDecoration(
@@ -162,12 +168,9 @@ class TimingGateResultsMobile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Session header
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: _border)),
-            ),
+          // ── Session header ────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -202,8 +205,7 @@ class TimingGateResultsMobile extends StatelessWidget {
                         color: _subtext, size: 13),
                     const SizedBox(width: 4),
                     Text(
-                      _formatDate(
-                          session.completedAt ?? session.date),
+                      _formatDate(session.completedAt ?? session.date),
                       style: const TextStyle(
                           color: _subtext, fontSize: 12),
                     ),
@@ -227,135 +229,96 @@ class TimingGateResultsMobile extends StatelessWidget {
               ],
             ),
           ),
-          // Athlete result rows
-          ...ranked.asMap().entries.map((entry) {
-            final rank = entry.key + 1;
-            final result = entry.value;
-            return _buildAthleteRow(result, rank, isLast: rank == ranked.length);
-          }),
+
+          // ── Divider ──────────────────────────────────────────────────
+          const Divider(height: 1, color: _border),
+
+          // ── Summary: Winner + Stats ──────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: Row(
+              children: [
+                // Winner info
+                if (winner != null) ...[
+                  // Trophy icon
+                  Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _gold.withAlpha(25),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.emoji_events,
+                        color: _gold, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  // Winner name + best time
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          winner.fullName,
+                          style: const TextStyle(
+                            color: _text,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          winnerBest != null
+                              ? (session.isYoyo
+                                  ? 'Level ${winnerBest.toStringAsFixed(1)}'
+                                  : '${winnerBest.toStringAsFixed(3)}s')
+                              : 'No time',
+                          style: const TextStyle(
+                              color: _gold,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else
+                  const Expanded(
+                    child: Text('No results',
+                        style: TextStyle(color: _subtext, fontSize: 12)),
+                  ),
+
+                // Stats badges
+                _statBadge(Icons.people_outline, '$athleteCount'),
+                const SizedBox(width: 8),
+                _statBadge(Icons.flag_outlined, '$completedTrials'),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildAthleteRow(
-      AthleteResultModel result, int rank, {required bool isLast}) {
-    final best = result.bestTime;
-    final avg = result.avgTime;
-    final completed = result.completedTrials.length;
-
-    Color? rankColor;
-    if (rank == 1) rankColor = _gold;
-    if (rank == 2) rankColor = _silver;
-    if (rank == 3) rankColor = _bronze;
-
+  // ── Small stat badge (icon + number) ──────────────────────────────────────
+  Widget _statBadge(IconData icon, String value) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        border: isLast
-            ? null
-            : const Border(bottom: BorderSide(color: _border)),
+        color: _primaryLight,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Rank badge
-          Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: rankColor != null
-                  ? rankColor.withAlpha(25)
-                  : const Color(0xFFF0F4F8),
-              shape: BoxShape.circle,
-            ),
-            child: Text(
-              '$rank',
-              style: TextStyle(
-                color: rankColor ?? _subtext,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Avatar
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: _primaryLight,
-            child: Text(
-              result.fullName.isNotEmpty
-                  ? result.fullName[0].toUpperCase()
-                  : '?',
+          Icon(icon, color: _primary, size: 14),
+          const SizedBox(width: 4),
+          Text(value,
               style: const TextStyle(
-                color: _primary,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Name + team + trials
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  result.fullName,
-                  style: const TextStyle(
-                    color: _text,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                Row(
-                  children: [
-                    if (result.team.isNotEmpty) ...[
-                      Text(result.team,
-                          style: const TextStyle(
-                              color: _subtext, fontSize: 11)),
-                      const SizedBox(width: 6),
-                      const Text('·',
-                          style: TextStyle(color: _subtext, fontSize: 11)),
-                      const SizedBox(width: 6),
-                    ],
-                    Text('$completed trial${completed == 1 ? '' : 's'}',
-                        style: const TextStyle(
-                            color: _subtext, fontSize: 11)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Times
-          if (best != null)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${best.toStringAsFixed(3)}s',
-                  style: TextStyle(
-                    color: rank == 1 ? _gold : _primary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
-                if (avg != null && completed > 1)
-                  Text(
-                    'avg ${avg.toStringAsFixed(3)}s',
-                    style: const TextStyle(
-                        color: _subtext, fontSize: 10),
-                  )
-                else
-                  const Text(
-                    'Best',
-                    style: TextStyle(color: _subtext, fontSize: 10),
-                  ),
-              ],
-            )
-          else
-            const Text('—',
-                style: TextStyle(color: _subtext, fontSize: 14)),
+                  color: _primary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600)),
         ],
       ),
     );

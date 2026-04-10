@@ -32,18 +32,47 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import 'dart:io';     // File, Directory, Platform
-import 'dart:typed_data'; // Uint8List
 
+import 'package:flutter/foundation.dart'; // debugPrint, Uint8List
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart'; // getExternalStorageDirectory etc.
 import 'package:pdf/pdf.dart';    // PdfColor, PdfPageFormat, PdfColors
 import 'package:pdf/widgets.dart' as pw; // pw.Column, pw.Text, pw.Table etc.
 import 'package:printing/printing.dart'; // Printing.sharePdf()
+import 'package:xelex_esp/feature/timing_gates/profile/data/model/timing_gate_profile_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/athlete_result_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/test_session_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/trial_result_model.dart';
 
+// ── Isolate helper ──────────────────────────────────────────────────────────
+// compute() requires a TOP-LEVEL function (not inside a class).
+// Ye function isolate mein chalega — UI thread free rahega.
+//
+// _PdfInput ek simple data class hai jo session + profile ko bundle karta hai
+// kyunki compute() sirf EK argument accept karta hai.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PdfInput {
+  final TestSessionModel session;
+  final TimingGateProfileModel? profile;
+  const _PdfInput({required this.session, this.profile});
+}
+
+/// Top-level function — compute() isse isolate mein run karega.
+/// NOTE: Iske andar koi Flutter widget, BuildContext, ya platform channel
+/// use NAHI kar sakte — sirf pure Dart code chalega.
+Future<Uint8List> _generateBytesInIsolate(_PdfInput input) {
+  return SessionPdfService._generateBytes(
+    input.session,
+    profile: input.profile,
+  );
+}
+
 class SessionPdfService {
+  // ── Threshold: 30+ athletes → use isolate ──────────────────────────────
+  // 30 se kam athletes pe overhead zyada hoga isolate ka (data copy cost),
+  // isliye sirf heavy cases mein isolate use karo.
+  static const _isolateThreshold = 30;
   // ── App Colors (PDF format mein) ──────────────────────────────────────────
   // Flutter ka `Color(0xFF1565C0)` → PDF ka `PdfColor.fromHex('#1565C0')`
   static final _primaryColor   = PdfColor.fromHex('#1565C0');
@@ -70,52 +99,134 @@ class SessionPdfService {
   //
   // Aise refactor kiya taaki PDF sirf ek jagah banta hai — DRY principle
   // ══════════════════════════════════════════════════════════════════════════
-  static Future<Uint8List> _generateBytes(TestSessionModel session) async {
-    // Blank document
-    final doc = pw.Document();
+  static Future<Uint8List> _generateBytes(
+    TestSessionModel session, {
+    TimingGateProfileModel? profile,
+  }) async {
+    try {
+      final doc = pw.Document();
 
-    // Athletes fastest → slowest sort
-    final ranked = [...session.results]
-      ..sort((a, b) {
-        final ab = a.bestTime, bb = b.bestTime;
-        if (ab == null && bb == null) return 0;
-        if (ab == null) return 1;
-        if (bb == null) return -1;
-        return ab.compareTo(bb);
-      });
+      // ── Empty results check ──────────────────────────────────────────────
+      // Agar koi result nahi hai toh bhi PDF bnega — lekin ek "No results"
+      // banner dikhega taaki user confused na ho.
+      final hasResults = session.results.isNotEmpty;
 
-    doc.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.fromLTRB(32, 32, 32, 40),
-        header: (context) => _buildHeader(session, context),
-        footer: (context) => _buildFooter(context),
-        build: (context) => [
-          _buildSessionInfo(session),
-          pw.SizedBox(height: 20),
-          _buildLeaderboard(ranked),
-          pw.SizedBox(height: 20),
-          _buildDetailedResults(ranked, session),
-        ],
-      ),
-    );
+      if (session.isYoyo) {
+        // ── YOYO: sort by level descending (higher level = better) ────────
+        final ranked = hasResults
+            ? ([...session.results]
+              ..sort((a, b) {
+                final ab = a.bestTime, bb = b.bestTime;
+                if (ab == null && bb == null) return 0;
+                if (ab == null) return 1;
+                if (bb == null) return -1;
+                return bb.compareTo(ab); // descending — higher level = better
+              }))
+            : <AthleteResultModel>[];
 
-    // doc.save() → Uint8List (raw PDF bytes)
-    return Uint8List.fromList(await doc.save());
+        doc.addPage(
+          pw.MultiPage(
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.fromLTRB(32, 32, 32, 40),
+            header: (context) =>
+                _buildHeader(session, context, profile: profile),
+            footer: (context) => _buildFooter(context),
+            build: (context) => [
+              _buildYoyoSessionInfo(session),
+              pw.SizedBox(height: 20),
+              if (hasResults) ...[
+                _buildYoyoLeaderboard(ranked),
+                pw.SizedBox(height: 20),
+                _buildYoyoLaneDetails(ranked),
+              ] else
+                _buildNoResultsBanner(),
+            ],
+          ),
+        );
+      } else {
+        // ── Non-YOYO: sort by time ascending (faster = better) ────────────
+        final ranked = hasResults
+            ? ([...session.results]
+              ..sort((a, b) {
+                final ab = a.bestTime, bb = b.bestTime;
+                if (ab == null && bb == null) return 0;
+                if (ab == null) return 1;
+                if (bb == null) return -1;
+                return ab.compareTo(bb);
+              }))
+            : <AthleteResultModel>[];
+
+        doc.addPage(
+          pw.MultiPage(
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.fromLTRB(32, 32, 32, 40),
+            header: (context) =>
+                _buildHeader(session, context, profile: profile),
+            footer: (context) => _buildFooter(context),
+            build: (context) => [
+              _buildSessionInfo(session),
+              pw.SizedBox(height: 20),
+              if (hasResults) ...[
+                _buildLeaderboard(ranked),
+                pw.SizedBox(height: 20),
+                _buildDetailedResults(ranked, session),
+              ] else
+                _buildNoResultsBanner(),
+            ],
+          ),
+        );
+      }
+
+      return Uint8List.fromList(await doc.save());
+    } catch (e, stack) {
+      debugPrint('[PDF] ❌ Error generating PDF: $e');
+      debugPrint('[PDF] $stack');
+      rethrow; // Caller (_share / _save) ke try-catch mein jayega
+    }
+  }
+
+  // ── Smart PDF generation ──────────────────────────────────────────────────
+  // < 30 athletes  → main thread pe chalao (fast, no isolate overhead)
+  // >= 30 athletes → compute() se isolate mein chalao (UI freeze nahi hoga)
+  //
+  static Future<Uint8List> _smartGenerate({
+    required TestSessionModel session,
+    TimingGateProfileModel? profile,
+  }) async {
+    final athleteCount = session.results.length;
+
+    if (athleteCount >= _isolateThreshold) {
+      debugPrint('[PDF] 🧵 $athleteCount athletes — using isolate');
+      return compute(
+        _generateBytesInIsolate,
+        _PdfInput(session: session, profile: profile),
+      );
+    }
+
+    debugPrint('[PDF] ⚡ $athleteCount athletes — main thread');
+    return _generateBytes(session, profile: profile);
   }
 
   // ── METHOD 1: Share PDF ───────────────────────────────────────────────────
   // Share sheet khulta hai — WhatsApp, Gmail, Files app — jahan bhi bhejo
   //
+  // THROWS: Exception agar PDF generation fail ho — caller handle karega
+  //
   static Future<void> generateAndShare({
     required TestSessionModel session,
+    TimingGateProfileModel? profile,
   }) async {
-    final bytes = await _generateBytes(session);
+    debugPrint('[PDF] 📤 Sharing PDF for session: ${session.sessionName}');
+
+    final bytes = await _smartGenerate(session: session, profile: profile);
+    final filename = _makeFilename(session);
+
+    debugPrint('[PDF] ✅ PDF generated (${bytes.length} bytes), sharing as: $filename');
 
     // Printing.sharePdf = Android/iOS native share sheet
     await Printing.sharePdf(
       bytes: bytes,
-      filename: _makeFilename(session),
+      filename: filename,
     );
   }
 
@@ -131,8 +242,11 @@ class SessionPdfService {
   //
   static Future<String?> saveToDevice({
     required TestSessionModel session,
+    TimingGateProfileModel? profile,
   }) async {
-    final bytes = await _generateBytes(session);
+    debugPrint('[PDF] 💾 Saving PDF for session: ${session.sessionName}');
+
+    final bytes = await _smartGenerate(session: session, profile: profile);
 
     // path_provider se storage directory lo
     // Platform.isAndroid check karo — har platform ka folder alag hota hai
@@ -146,7 +260,10 @@ class SessionPdfService {
       baseDir = await getApplicationDocumentsDirectory();
     }
 
-    if (baseDir == null) return null;
+    if (baseDir == null) {
+      debugPrint('[PDF] ❌ Storage directory not found — cannot save');
+      return null;
+    }
 
     // 'SportsIQ' subfolder banao andar
     // Directory.create(recursive: true) = folders chain bana deta hai agar na ho
@@ -156,8 +273,11 @@ class SessionPdfService {
     }
 
     // File object banao aur bytes likh do
-    final file = File('${folder.path}/${_makeFilename(session)}');
+    final filename = _makeFilename(session);
+    final file = File('${folder.path}/$filename');
     await file.writeAsBytes(bytes);
+
+    debugPrint('[PDF] ✅ PDF saved at: ${file.path}');
 
     // Full path return karo — screen pe snackbar mein dikhayenge
     return file.path;
@@ -165,10 +285,20 @@ class SessionPdfService {
 
   // ── FILENAME ──────────────────────────────────────────────────────────────
   // e.g. "SportsIQ_SummerSprint_20260315.pdf"
+  //
+  // Edge cases handled:
+  //   - Empty session name → fallback to "Session"
+  //   - Only special chars (e.g. "!!!") → fallback to "Session"
+  //   - Leading/trailing underscores cleaned up
   static String _makeFilename(TestSessionModel s) {
-    final name = s.sessionName
+    var name = s.sessionName
         .replaceAll(RegExp(r'\s+'), '_')
-        .replaceAll(RegExp(r'[^\w_]'), '');
+        .replaceAll(RegExp(r'[^\w_]'), '')
+        .replaceAll(RegExp(r'_+'), '_')       // collapse multiple underscores
+        .replaceAll(RegExp(r'^_+|_+$'), '');   // trim leading/trailing _
+
+    // Fallback agar session name empty ho ya sirf special chars the
+    if (name.isEmpty) name = 'Session';
     final date = DateFormat('yyyyMMdd').format(s.date);
     return 'SportsIQ_${name}_$date.pdf';
   }
@@ -178,16 +308,21 @@ class SessionPdfService {
   // ══════════════════════════════════════════════════════════════════════════
   static pw.Widget _buildHeader(
     TestSessionModel session,
-    pw.Context context,
-  ) {
+    pw.Context context, {
+    TimingGateProfileModel? profile,
+  }) {
+    // "Conducted by" line — only shown when profile is set
+    final conductorLine = profile != null
+        ? _buildConductorLine(profile)
+        : null;
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        // App name + "Session Report" ek hi row mein
+        // App name + Generated date
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
-            // App name — bold blue
             pw.Text(
               'Sports IQ',
               style: pw.TextStyle(
@@ -196,7 +331,6 @@ class SessionPdfService {
                 color: _primaryColor,
               ),
             ),
-            // Generated date — right side
             pw.Text(
               'Generated: ${_dateFmt.format(DateTime.now())}',
               style: pw.TextStyle(fontSize: 9, color: _subtextColor),
@@ -204,18 +338,53 @@ class SessionPdfService {
           ],
         ),
         pw.SizedBox(height: 4),
-        // Session name (subtitle)
+        // Session name
         pw.Text(
           'Session Report — ${session.sessionName}',
-          style: pw.TextStyle(
-            fontSize: 11,
-            color: _subtextColor,
-          ),
+          style: pw.TextStyle(fontSize: 11, color: _subtextColor),
         ),
+        // "Conducted by" — only if profile exists
+        if (conductorLine != null) ...[
+          pw.SizedBox(height: 3),
+          conductorLine,
+        ],
         pw.SizedBox(height: 8),
-        // Divider line
         pw.Divider(color: _primaryColor, thickness: 1.5),
         pw.SizedBox(height: 4),
+      ],
+    );
+  }
+
+  /// Small "Conducted by" row shown in header when profile is set
+  static pw.Widget _buildConductorLine(TimingGateProfileModel profile) {
+    final parts = <String>[profile.conductorTag];
+    final org = profile.organization;
+    final sport = profile.sport;
+    if (org != null && org.isNotEmpty) parts.add(org);
+    if (sport != null && sport.isNotEmpty) parts.add(sport);
+
+    return pw.Row(
+      children: [
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: pw.BoxDecoration(
+            color: _primaryLight,
+            borderRadius: pw.BorderRadius.circular(4),
+          ),
+          child: pw.Text(
+            'Conducted by',
+            style: pw.TextStyle(
+              fontSize: 8,
+              color: _primaryColor,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+        ),
+        pw.SizedBox(width: 6),
+        pw.Text(
+          parts.join('  ·  '),
+          style: pw.TextStyle(fontSize: 9, color: _textColor),
+        ),
       ],
     );
   }
@@ -717,7 +886,380 @@ class SessionPdfService {
         ],
       );
 
+  // ── No Results Banner ─────────────────────────────────────────────────────
+  // Jab session mein koi result nahi hai (draft/empty) toh ye dikhega PDF mein
+  static pw.Widget _buildNoResultsBanner() {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(20),
+      decoration: pw.BoxDecoration(
+        color: PdfColor.fromHex('#FEF3C7'),
+        borderRadius: pw.BorderRadius.circular(8),
+        border: pw.Border.all(color: PdfColor.fromHex('#F59E0B')),
+      ),
+      child: pw.Column(
+        children: [
+          pw.Text(
+            'No Results Available',
+            style: pw.TextStyle(
+              fontSize: 12,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColor.fromHex('#92400E'),
+            ),
+          ),
+          pw.SizedBox(height: 6),
+          pw.Text(
+            'This session has no completed trials yet. Results will appear here once trials are recorded.',
+            textAlign: pw.TextAlign.center,
+            style: pw.TextStyle(
+              fontSize: 10,
+              color: PdfColor.fromHex('#92400E'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Capitalize first letter ───────────────────────────────────────────────
   static String _capitalize(String s) =>
       s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // YOYO SESSION INFO
+  // ══════════════════════════════════════════════════════════════════════════
+  static pw.Widget _buildYoyoSessionInfo(TestSessionModel s) {
+    pw.Widget infoRow(String label, String value) => pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 3),
+          child: pw.Row(
+            children: [
+              pw.SizedBox(
+                width: 110,
+                child: pw.Text(
+                  label,
+                  style: pw.TextStyle(fontSize: 10, color: _subtextColor),
+                ),
+              ),
+              pw.Expanded(
+                child: pw.Text(
+                  value,
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _textColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+    final lanes = s.results.length;
+    final survived = s.results.where((r) =>
+        r.trials.isNotEmpty && r.trials.first.status == 'completed').length;
+    final eliminated = lanes - survived;
+
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(14),
+      decoration: pw.BoxDecoration(
+        color: _bgColor,
+        borderRadius: pw.BorderRadius.circular(8),
+        border: pw.Border.all(color: _borderColor),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'SESSION DETAILS',
+            style: pw.TextStyle(
+              fontSize: 9,
+              fontWeight: pw.FontWeight.bold,
+              color: _primaryColor,
+              letterSpacing: 1.2,
+            ),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: pw.Column(
+                  children: [
+                    infoRow('Date', _dateFmt.format(s.date)),
+                    infoRow('Mode', 'Yo-Yo Intermittent Recovery'),
+                    infoRow('Lanes', '$lanes'),
+                    infoRow('Survived', '$survived / $lanes'),
+                  ],
+                ),
+              ),
+              pw.SizedBox(width: 16),
+              pw.Expanded(
+                child: pw.Column(
+                  children: [
+                    infoRow('Location', s.location.isEmpty ? '—' : s.location),
+                    infoRow('Eliminated', '$eliminated / $lanes'),
+                    infoRow('Status', _capitalize(s.status)),
+                    infoRow('Protocol', '2 × 20m shuttle, 10s recovery'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (s.notes.isNotEmpty) ...[
+            pw.SizedBox(height: 8),
+            pw.Divider(color: _borderColor),
+            pw.SizedBox(height: 4),
+            infoRow('Notes', s.notes),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // YOYO LEADERBOARD — ranked by level (highest first)
+  // ══════════════════════════════════════════════════════════════════════════
+  static pw.Widget _buildYoyoLeaderboard(List<AthleteResultModel> ranked) {
+    PdfColor rankColor(int rank) {
+      if (rank == 1) return _goldColor;
+      if (rank == 2) return _silverColor;
+      if (rank == 3) return _bronzeColor;
+      return _textColor;
+    }
+
+    pw.Widget cell(
+      String text, {
+      bool bold = false,
+      PdfColor? color,
+      pw.Alignment align = pw.Alignment.centerLeft,
+      double fontSize = 9.5,
+    }) =>
+        pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: pw.Align(
+            alignment: align,
+            child: pw.Text(
+              text,
+              style: pw.TextStyle(
+                fontSize: fontSize,
+                fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+                color: color ?? _textColor,
+              ),
+            ),
+          ),
+        );
+
+    pw.TableRow headerRow() => pw.TableRow(
+          decoration: pw.BoxDecoration(color: _primaryColor),
+          children: [
+            cell('#', bold: true, color: PdfColors.white, align: pw.Alignment.center),
+            cell('Athlete / Lane', bold: true, color: PdfColors.white),
+            cell('Team', bold: true, color: PdfColors.white),
+            cell('Level', bold: true, color: PdfColors.white, align: pw.Alignment.center),
+            cell('Status', bold: true, color: PdfColors.white, align: pw.Alignment.center),
+          ],
+        );
+
+    List<pw.TableRow> dataRows() => ranked.asMap().entries.map((e) {
+          final rank = e.key + 1;
+          final r = e.value;
+          final isEven = rank % 2 == 0;
+
+          final isEliminated = r.trials.isNotEmpty &&
+              r.trials.first.status == 'eliminated';
+          final level = r.bestTime;
+          final levelStr = level != null ? level.toStringAsFixed(1) : '—';
+
+          return pw.TableRow(
+            decoration: pw.BoxDecoration(
+              color: isEven ? _rowEvenColor : PdfColors.white,
+            ),
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: pw.Align(
+                  alignment: pw.Alignment.center,
+                  child: pw.Container(
+                    width: 20,
+                    height: 20,
+                    decoration: pw.BoxDecoration(
+                      shape: pw.BoxShape.circle,
+                      color: rank <= 3
+                          ? rankColor(rank).shade(0.15)
+                          : _bgColor,
+                    ),
+                    alignment: pw.Alignment.center,
+                    child: pw.Text(
+                      '$rank',
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontWeight: pw.FontWeight.bold,
+                        color: rankColor(rank),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              cell(r.fullName, bold: rank <= 3, color: rankColor(rank)),
+              cell(r.team.isEmpty ? '—' : r.team),
+              cell(
+                'Lv $levelStr',
+                bold: true,
+                color: isEliminated ? PdfColors.red700 : _successColor,
+                align: pw.Alignment.center,
+              ),
+              cell(
+                isEliminated ? 'Eliminated' : 'Survived',
+                bold: true,
+                color: isEliminated ? PdfColors.red700 : _successColor,
+                align: pw.Alignment.center,
+              ),
+            ],
+          );
+        }).toList();
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('YO-YO TEST RESULTS'),
+        pw.SizedBox(height: 8),
+        pw.Table(
+          border: pw.TableBorder.all(color: _borderColor, width: 0.5),
+          columnWidths: const {
+            0: pw.FixedColumnWidth(32),   // Rank
+            1: pw.FlexColumnWidth(3),     // Name
+            2: pw.FlexColumnWidth(2),     // Team
+            3: pw.FixedColumnWidth(62),   // Level
+            4: pw.FixedColumnWidth(72),   // Status
+          },
+          children: [headerRow(), ...dataRows()],
+        ),
+      ],
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // YOYO LANE DETAILS — per-lane summary cards
+  // ══════════════════════════════════════════════════════════════════════════
+  static pw.Widget _buildYoyoLaneDetails(List<AthleteResultModel> ranked) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('LANE DETAILS'),
+        pw.SizedBox(height: 8),
+        ...ranked.map((r) => _buildYoyoLaneCard(r)),
+      ],
+    );
+  }
+
+  static pw.Widget _buildYoyoLaneCard(AthleteResultModel r) {
+    final isEliminated = r.trials.isNotEmpty &&
+        r.trials.first.status == 'eliminated';
+    final level = r.bestTime;
+    final levelStr = level != null ? level.toStringAsFixed(1) : '—';
+    final laneNum = r.shuttleLane ?? 0;
+    final statusColor = isEliminated ? PdfColors.red700 : _successColor;
+    final statusBg = isEliminated
+        ? PdfColor.fromHex('#FEF2F2')
+        : PdfColor.fromHex('#F0FDF4');
+
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 10),
+      child: pw.Container(
+        decoration: pw.BoxDecoration(
+          border: pw.Border.all(color: _borderColor),
+          borderRadius: pw.BorderRadius.circular(6),
+        ),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            // ── Header bar ────────────────────────────────────────────────
+            pw.Container(
+              padding: const pw.EdgeInsets.fromLTRB(10, 8, 10, 8),
+              decoration: pw.BoxDecoration(
+                color: statusBg,
+                borderRadius: const pw.BorderRadius.only(
+                  topLeft: pw.Radius.circular(6),
+                  topRight: pw.Radius.circular(6),
+                ),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Row(
+                    children: [
+                      if (laneNum > 0) ...[
+                        pw.Container(
+                          width: 22,
+                          height: 22,
+                          decoration: pw.BoxDecoration(
+                            shape: pw.BoxShape.circle,
+                            color: statusColor,
+                          ),
+                          alignment: pw.Alignment.center,
+                          child: pw.Text(
+                            'L$laneNum',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColors.white,
+                            ),
+                          ),
+                        ),
+                        pw.SizedBox(width: 8),
+                      ],
+                      pw.Text(
+                        r.fullName,
+                        style: pw.TextStyle(
+                          fontSize: 10,
+                          fontWeight: pw.FontWeight.bold,
+                          color: _primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  pw.Row(
+                    children: [
+                      if (r.team.isNotEmpty) ...[
+                        pw.Text(
+                          r.team,
+                          style: pw.TextStyle(fontSize: 9, color: _subtextColor),
+                        ),
+                        pw.SizedBox(width: 12),
+                      ],
+                      _statBadge(
+                        isEliminated ? 'Eliminated' : 'Survived',
+                        'Lv $levelStr',
+                        statusColor,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Stats row ─────────────────────────────────────────────────
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(10),
+              child: pw.Row(
+                children: [
+                  _statBadge('Final Level', levelStr, _primaryColor),
+                  pw.SizedBox(width: 10),
+                  _statBadge(
+                    'Status',
+                    isEliminated ? 'Eliminated (2 strikes)' : 'Active',
+                    statusColor,
+                  ),
+                  if (r.bib.isNotEmpty) ...[
+                    pw.SizedBox(width: 10),
+                    _statBadge('BIB', r.bib, _subtextColor),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

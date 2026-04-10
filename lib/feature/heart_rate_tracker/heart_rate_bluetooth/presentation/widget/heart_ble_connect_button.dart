@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'heart_ble_device_list_sheet.dart';
 
@@ -17,12 +18,10 @@ class HeartBleConnectButton extends StatelessWidget {
     final cubit = context.read<HeartBleCubit>();
 
     if (isConnected) {
-      // Already connected — disconnect
       await cubit.disconnect();
       return;
     }
 
-    // Start scan — agar false return ho (BT off, permission denied) toh sheet mat kholo
     final scanStarted = await cubit.startScan();
     if (!context.mounted) return;
     if (!scanStarted) return;
@@ -40,7 +39,6 @@ class HeartBleConnectButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // While scanning show a subtle loading state on the button
     final label = isConnected
         ? 'Disconnect'
         : isScanning
@@ -49,17 +47,9 @@ class HeartBleConnectButton extends StatelessWidget {
 
     final icon = isConnected
         ? Icons.bluetooth_disabled
-        : isScanning
-            ? Icons.bluetooth_searching
-            : Icons.bluetooth_searching;
+        : Icons.bluetooth_searching;
 
-    final gradient = isConnected
-        ? const LinearGradient(
-            colors: [Color(0xFF455A64), Color(0xFF263238)],
-          )
-        : const LinearGradient(
-            colors: [Color(0xFF4A90E2), Color(0xFF1565C0)],
-          );
+    final bgColor = isConnected ? AppColors.subtext : AppColors.primary;
 
     return GestureDetector(
       onTap: isScanning ? null : () => _onTap(context),
@@ -68,13 +58,10 @@ class HeartBleConnectButton extends StatelessWidget {
         height: 60,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          gradient: gradient,
+          color: bgColor,
           boxShadow: [
             BoxShadow(
-              color: (isConnected
-                      ? const Color(0xFF455A64)
-                      : const Color(0xFF4A90E2))
-                  .withOpacity(0.4),
+              color: bgColor.withOpacity(0.3),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),

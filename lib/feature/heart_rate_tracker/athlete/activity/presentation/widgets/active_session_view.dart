@@ -1,0 +1,289 @@
+import 'dart:math' as math;
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/core/theme/app_colors.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_state.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
+import 'activity_constants.dart';
+
+class ActiveSessionView extends StatelessWidget {
+  final AthleteActivityState state;
+  const ActiveSessionView({super.key, required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final type = typeFor(state.activeSession!.activityType);
+    final target = state.activeSession!.targetDurationMinutes * 60;
+    final remaining = (target - state.elapsedSeconds).clamp(0, target);
+    final bleState = context.watch<HeartBleCubit>().state;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          // ── Activity Type Badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            decoration: BoxDecoration(
+              color: type.color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: type.color.withOpacity(0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(type.icon, color: type.color, size: 18),
+                const SizedBox(width: 8),
+                Text(type.name,
+                    style: TextStyle(
+                        color: type.color,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // ── Circular Timer
+          SizedBox(
+            width: 220,
+            height: 220,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CustomPaint(
+                  size: const Size(220, 220),
+                  painter: ActivityRingPainter(
+                    progress: state.progressRatio,
+                    color: type.color,
+                  ),
+                ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      AthleteActivityCubit.formatSeconds(state.elapsedSeconds),
+                      style: const TextStyle(
+                          color: AppColors.text,
+                          fontSize: 40,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Remaining  ${AthleteActivityCubit.formatSeconds(remaining)}',
+                      style: const TextStyle(
+                          color: AppColors.subtext, fontSize: 12),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${state.activeSession!.targetDurationMinutes} min target',
+                      style: TextStyle(
+                          color: type.color,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // ── Live Stats
+          Row(
+            children: [
+              LiveStatCard(
+                icon: Icons.favorite,
+                label: 'Heart Rate',
+                value: bleState.isConnected && bleState.heartRate > 0
+                    ? '${bleState.heartRate}'
+                    : '--',
+                unit: 'bpm',
+                color: AppColors.heartRed,
+              ),
+              const SizedBox(width: 14),
+              LiveStatCard(
+                icon: Icons.show_chart,
+                label: 'Avg HR',
+                value: state.activeSession!.avgHeartRate > 0
+                    ? '${state.activeSession!.avgHeartRate}'
+                    : '--',
+                unit: 'bpm',
+                color: AppColors.vitalBP,
+              ),
+              const SizedBox(width: 14),
+              LiveStatCard(
+                icon: Icons.trending_up,
+                label: 'Max HR',
+                value: state.activeSession!.maxHeartRate > 0
+                    ? '${state.activeSession!.maxHeartRate}'
+                    : '--',
+                unit: 'bpm',
+                color: AppColors.warning,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Location
+          if (state.activeSession!.location.isNotEmpty)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.location_on_outlined,
+                      size: 16, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      state.activeSession!.location,
+                      style: const TextStyle(
+                          color: AppColors.subtext, fontSize: 12),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 32),
+
+          // ── HR Samples count
+          if (state.activeSession!.heartRateSamples.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                '${state.activeSession!.heartRateSamples.length} heart rate readings recorded',
+                style:
+                    const TextStyle(color: AppColors.subtext, fontSize: 12),
+              ),
+            ),
+
+          // ── Stop Button
+          SizedBox(
+            width: double.infinity,
+            height: 54,
+            child: ElevatedButton.icon(
+              onPressed: () =>
+                  context.read<AthleteActivityCubit>().stopSession(),
+              icon: const Icon(Icons.stop_circle_outlined),
+              label: const Text('Stop Session',
+                  style:
+                      TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                elevation: 2,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Live Stat Card ────────────────────────────────────────────────────────────
+class LiveStatCard extends StatelessWidget {
+  final IconData icon;
+  final String label, value, unit;
+  final Color color;
+
+  const LiveStatCard({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.unit,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(height: 8),
+            Text(value,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold)),
+            Text(unit,
+                style: const TextStyle(
+                    color: AppColors.subtext, fontSize: 10)),
+            const SizedBox(height: 2),
+            Text(label,
+                style: const TextStyle(
+                    color: AppColors.subtext, fontSize: 10)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Ring Painter ──────────────────────────────────────────────────────────────
+class ActivityRingPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+  const ActivityRingPainter({required this.progress, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    const strokeWidth = 12.0;
+    final radius = (size.width / 2) - strokeWidth / 2;
+
+    // Background ring
+    canvas.drawCircle(
+      Offset(cx, cy),
+      radius,
+      Paint()
+        ..color = color.withOpacity(0.12)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth,
+    );
+
+    // Progress arc
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(cx, cy), radius: radius),
+      -math.pi / 2,
+      2 * math.pi * progress,
+      false,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(ActivityRingPainter old) =>
+      old.progress != progress || old.color != color;
+}

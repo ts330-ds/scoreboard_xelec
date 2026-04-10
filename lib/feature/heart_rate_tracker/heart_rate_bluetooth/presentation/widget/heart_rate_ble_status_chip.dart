@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:xelex_esp/core/theme/app_colors.dart';
 
 class HeartBleStatusChip extends StatelessWidget {
   final bool isConnected;
-  final String status;        // live text from cubit (e.g. "Scanning...", "Connected")
+  final String status;
   final String? deviceName;
 
   const HeartBleStatusChip({
@@ -13,12 +14,12 @@ class HeartBleStatusChip extends StatelessWidget {
   });
 
   Color get _dotColor {
-    if (isConnected) return const Color(0xFF66BB6A);
+    if (isConnected) return AppColors.success;
     if (status.toLowerCase().contains('scan') ||
         status.toLowerCase().contains('connect')) {
-      return const Color(0xFFFFA726); // amber while in-progress
+      return AppColors.warning;
     }
-    return const Color(0xFFFF5252);
+    return AppColors.error;
   }
 
   @override
@@ -30,18 +31,17 @@ class HeartBleStatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2235),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isConnected
-              ? const Color(0xFF66BB6A).withOpacity(0.3)
-              : const Color(0xFF4A90E2).withOpacity(0.2),
+              ? AppColors.success.withOpacity(0.3)
+              : AppColors.border,
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Animated Status Dot ──────────────────────────────────────
           Container(
             width: 7,
             height: 7,
@@ -60,22 +60,20 @@ class HeartBleStatusChip extends StatelessWidget {
 
           const SizedBox(width: 8),
 
-          // ── Status Text ──────────────────────────────────────────────
           Text(
             label,
             style: TextStyle(
-              color: isConnected ? const Color(0xFF66BB6A) : Colors.white60,
+              color: isConnected ? AppColors.success : AppColors.subtext,
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
           ),
 
-          // ── Connected Icon ───────────────────────────────────────────
           if (isConnected) ...[
             const SizedBox(width: 8),
             const Icon(
               Icons.bluetooth_connected,
-              color: Color(0xFF66BB6A),
+              color: AppColors.success,
               size: 14,
             ),
           ],

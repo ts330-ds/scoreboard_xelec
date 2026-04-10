@@ -113,6 +113,9 @@ class TimingSessionState extends Equatable {
   // ── YOYO config ───────────────────────────────────────────────────────────
   final int yoyoNumLanes;
 
+  // ── Shuttle config ────────────────────────────────────────────────────────
+  final int shuttleNumLanes;
+
   // ── Step 1: Test info ──────────────────────────────────────────────────────
   final String testName;
   final String location;
@@ -159,6 +162,7 @@ class TimingSessionState extends Equatable {
     this.protocol = '',
     this.customDistance,
     this.yoyoNumLanes = 1,
+    this.shuttleNumLanes = 3,
     this.testName = '',
     this.location = '',
     this.notes = '',
@@ -207,7 +211,7 @@ class TimingSessionState extends Equatable {
     if (mode != 'shuttle') return const [];
     final batch = <TrialQueueItem>[];
     final seenLanes = <int>{};
-    for (int i = queueIndex; i < trialQueue.length && batch.length < 3; i++) {
+    for (int i = queueIndex; i < trialQueue.length && batch.length < shuttleNumLanes; i++) {
       final lane = trialQueue[i].shuttleLane ?? 1;
       if (seenLanes.contains(lane)) break;
       seenLanes.add(lane);
@@ -263,7 +267,7 @@ class TimingSessionState extends Equatable {
 
   String get modeLabel {
     if (mode == 'yoyo') return 'Yo-Yo Test · $yoyoNumLanes ${yoyoNumLanes == 1 ? "lane" : "lanes"}';
-    if (mode == 'shuttle') return 'Shuttle Run';
+    if (mode == 'shuttle') return 'Shuttle Run · $shuttleNumLanes ${shuttleNumLanes == 1 ? "lane" : "lanes"}';
     if (mode == '505') return '505 Agility';
     if (mode == 'ttest') return 'T-Test';
     if (mode == 'linear') {
@@ -281,7 +285,7 @@ class TimingSessionState extends Equatable {
 
   String get firmwareModeCommand {
     if (mode == 'yoyo') return 'MODE_YOYO_$yoyoNumLanes';
-    if (mode == 'shuttle') return 'MODE_SHUTTLE';
+    if (mode == 'shuttle') return 'MODE_SHUTTLE_$shuttleNumLanes';
     if (mode == '505' || subMode == '505') return 'MODE_505';
     if (mode == 'ttest' || subMode == 'ttest') return 'MODE_TTEST';
     return 'MODE_LINEAR';
@@ -291,7 +295,7 @@ class TimingSessionState extends Equatable {
   /// Sent as part of SETUP:N so firmware knows when registration is complete.
   int get expectedGatesCount {
     if (mode == 'yoyo') return yoyoNumLanes * 2;
-    if (mode == 'shuttle') return 6; // 3 lanes × 2 gates
+    if (mode == 'shuttle') return shuttleNumLanes * 2;
     if (mode == '505' || subMode == '505') return 1;
     if (mode == 'ttest' || subMode == 'ttest') return 1;
     if (mode == 'linear' && subMode == 'sprint') {
@@ -327,6 +331,7 @@ class TimingSessionState extends Equatable {
     double? customDistance,
     bool clearCustomDistance = false,
     int? yoyoNumLanes,
+    int? shuttleNumLanes,
     String? testName,
     String? location,
     String? notes,
@@ -363,6 +368,7 @@ class TimingSessionState extends Equatable {
       protocol: protocol ?? this.protocol,
       customDistance: clearCustomDistance ? null : (customDistance ?? this.customDistance),
       yoyoNumLanes: yoyoNumLanes ?? this.yoyoNumLanes,
+      shuttleNumLanes: shuttleNumLanes ?? this.shuttleNumLanes,
       testName: testName ?? this.testName,
       location: location ?? this.location,
       notes: notes ?? this.notes,
@@ -393,7 +399,7 @@ class TimingSessionState extends Equatable {
 
   @override
   List<Object?> get props => [
-    currentStep, mode, subMode, protocol, customDistance, yoyoNumLanes,
+    currentStep, mode, subMode, protocol, customDistance, yoyoNumLanes, shuttleNumLanes,
     testName, location, notes, testDate,
     athletes, trialMode, trialsCount, searchQuery, teamFilter,
     registeredGatesCount, allGatesReady, gateSetupLog, yoyoLaneStatuses,

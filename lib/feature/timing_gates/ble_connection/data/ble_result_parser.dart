@@ -257,7 +257,7 @@ class BleResultParser {
   // ── Standard event parser ────────────────────────────────────────────────────
 
   BleEvent? _parseEvent(String line) {
-    final gateMatch = RegExp(r'\[SETUP\]:GATE_(\d+)_OK').firstMatch(line);
+    final gateMatch = RegExp(r'\[SETUP\]:(?:\w+:)?GATE_(\d+)_OK').firstMatch(line);
     if (gateMatch != null) {
       return BleEvent(type: BleEventType.gateRegistered, gateId: int.parse(gateMatch.group(1)!), raw: line);
     }

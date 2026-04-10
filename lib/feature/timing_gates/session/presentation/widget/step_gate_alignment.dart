@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/session/timing_session_cubit.dart';
@@ -7,7 +6,6 @@ import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/sessio
 class StepGateAlignment extends StatelessWidget {
   const StepGateAlignment({super.key});
 
-  static const _bg = Color(0xFFF4F6F9);
   static const _surface = Color(0xFFFFFFFF);
   static const _primary = Color(0xFF1565C0);
   static const _primaryLight = Color(0xFFE3F2FD);
@@ -51,7 +49,7 @@ class StepGateAlignment extends StatelessWidget {
   // ── Status card ─────────────────────────────────────────────────────────────
 
   Widget _buildStatusCard(TimingSessionState state) {
-    final ready = state.allGatesReady;
+    final ready = state.registeredGatesCount > 0;
 
     final String title;
     final String subtitle;
@@ -66,13 +64,12 @@ class StepGateAlignment extends StatelessWidget {
           : '$completedLanes / ${state.yoyoNumLanes} lanes fully configured';
     } else {
       final reg = state.registeredGatesCount;
-      final exp = state.expectedGatesCount;
-      title = ready
-          ? 'All Gates Ready'
-          : '$reg / $exp gate${exp == 1 ? '' : 's'} registered';
-      subtitle = ready
-          ? 'Tap Start Test to begin'
-          : 'Walk through each gate in order to register it';
+      title = reg > 0
+          ? '$reg gate${reg == 1 ? '' : 's'} registered'
+          : 'No gates registered';
+      subtitle = reg > 0
+          ? 'You can start the test or walk through more gates'
+          : 'Walk through each gate to register it';
     }
 
     return Container(
@@ -306,25 +303,64 @@ class StepGateAlignment extends StatelessWidget {
     TimingSessionCubit cubit,
   ) {
     final setupStarted = state.gateSetupLog.isNotEmpty;
-    return ElevatedButton.icon(
-      icon: setupStarted
-          ? const SizedBox(
+
+    if (!setupStarted) {
+      // ── Not started yet → show "Setup Gates" button ──
+      return ElevatedButton.icon(
+        icon: const Icon(Icons.sensors, size: 18),
+        label: const Text('Setup Gates'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _primary,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        onPressed: () => cubit.beginGateSetup(),
+      );
+    }
+
+    // ── Setup in progress → show spinner + "Retry" button ──
+    return Column(
+      children: [
+        // Status row: spinner + text
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(
               width: 16,
               height: 16,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white54),
+                color: _primary,
               ),
-            )
-          : const Icon(Icons.sensors, size: 18),
-      label: Text(setupStarted ? 'Setting Up…' : 'Setup Gates'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: setupStarted ? _primary.withValues(alpha: 0.5) : _primary,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-      onPressed: setupStarted ? null : () => cubit.beginGateSetup(),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Setting up… (${state.registeredGatesCount} / ${state.expectedGatesCount} gates)',
+              style: const TextStyle(color: _subtext, fontSize: 13),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        // Retry button — user can tap to re-send setup command
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Retry Setup'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _primary,
+              side: const BorderSide(color: _primary),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () {
+              cubit.resetGates();
+              cubit.beginGateSetup();
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -341,53 +377,6 @@ class StepGateAlignment extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // DEV: simulate gates — only for linear / 505 / ttest modes
-          if (kDebugMode &&
-              state.mode != 'yoyo' &&
-              state.mode != 'shuttle') ...[
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.bolt, size: 16),
-                label: Text('Simulate ${state.expectedGatesCount} Gate${state.expectedGatesCount == 1 ? '' : 's'} (Dev)'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF9333EA),
-                  side: const BorderSide(color: Color(0xFF9333EA)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                ),
-                onPressed: () => cubit.simulateGatesForTesting(
-                  gateCount: state.expectedGatesCount,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-
-          // "Setup Complete" button — non-shuttle, non-YOYO only (YOYO auto-confirms)
-          if (!state.allGatesReady &&
-              state.registeredGatesCount > 0 &&
-              state.mode != 'shuttle' &&
-              state.mode != 'yoyo') ...[
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.check_circle_outline, size: 18),
-                label: Text(
-                    'Setup Complete (${state.registeredGatesCount} gate${state.registeredGatesCount == 1 ? '' : 's'})'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _success,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                onPressed: () => cubit.markGatesReady(),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-
           Row(
             children: [
               Expanded(
@@ -407,10 +396,12 @@ class StepGateAlignment extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 flex: 2,
-                child: state.allGatesReady
+                // 1+ gate registered → "Start Test" enabled
+                // 0 gates → "Setup Gates" or "Setting up..."
+                child: state.registeredGatesCount > 0
                     ? ElevatedButton.icon(
                         icon: const Icon(Icons.play_arrow, size: 18),
-                        label: const Text('Start Test'),
+                        label: Text('Start Test (${state.registeredGatesCount} gate${state.registeredGatesCount == 1 ? '' : 's'})'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _success,
                           foregroundColor: Colors.white,
