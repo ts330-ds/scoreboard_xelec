@@ -190,11 +190,20 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
         ? List.generate(state.yoyoNumLanes, (i) => YoYoLaneStatus(laneNumber: i + 1))
         : state.yoyoLaneStatuses;
 
+    // Sprint mode: start with Master = 0.0 (fixed start point).
+    // Each gate that registers appends one more entry.
+    // Final layout: [Master=0, G1, G2, ..., Gn=totalDist]
+    List<double> initialDistances = const [];
+    if (state.mode == 'linear' && state.subMode == 'sprint') {
+      initialDistances = [0.0]; // Master position (always 0, locked)
+    }
+
     emit(state.copyWith(
       registeredGatesCount: 0,
       allGatesReady: false,
       gateSetupLog: const [],
       yoyoLaneStatuses: laneStatuses,
+      gateDistances: initialDistances,
     ));
     final expectedGates = state.expectedGatesCount;
     bleService.send('RESET');
@@ -206,6 +215,23 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
     } else {
       _addSetupLog('Sent: SETUP — Walk through $expectedGates gate(s) in order.');
     }
+  }
+
+  /// Sprint: update distance for one gate (coach manual input).
+  /// index 0 = Master (locked), index last = finish (locked by startTest).
+  /// index 1 = G1 (editable, can be 0 if athlete starts at G1).
+  void setGateDistance(int index, double distance) {
+    if (index <= 0 || index >= state.gateDistances.length) return;
+    final updated = List<double>.from(state.gateDistances);
+    updated[index] = distance;
+    emit(state.copyWith(gateDistances: updated));
+  }
+
+  double _sprintTotalDistance() {
+    if (state.protocol == 'custom') return state.customDistance ?? 0.0;
+    final data = TimingSessionState.protocolData[state.protocol];
+    if (data != null) return (data['distance'] as int).toDouble();
+    return 0.0;
   }
 
   void _addSetupLog(String msg) {
@@ -231,20 +257,22 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
 
     final rng = Random();
     final gateCount = state.registeredGatesCount.clamp(2, 6);
-    final splitCount = gateCount - 1;
-    final splits = List.generate(splitCount, (_) {
-      final base = 1.0 + rng.nextDouble() * 1.2;
-      return double.parse(base.toStringAsFixed(3));
-    });
-    final totalTime = double.parse(splits.fold(0.0, (a, b) => a + b).toStringAsFixed(3));
 
-    final trial = TrialResultModel(
+    // Firmware sends interval time per gate crossing (gate-to-gate segment time).
+    // splits[i] = time taken for segment i (NOT cumulative from start).
+    final splits = List.generate(gateCount, (_) {
+      final seg = 1.0 + rng.nextDouble() * 1.2;
+      return double.parse(seg.toStringAsFixed(3));
+    });
+    final totalTime = splits.fold(0.0, (a, b) => a + b); // sum of all segments
+
+    final trial = _enrichWithSpeedAccel(TrialResultModel(
       trialNumber: item.trialNumber,
       totalTime: totalTime,
       splits: splits,
       status: 'completed',
       timestamp: DateTime.now(),
-    );
+    ));
     await _saveTrialAndAdvance(item, trial);
   }
 
@@ -254,6 +282,49 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
     if (state.registeredGatesCount == 0) {
       errorCubit.showWarning('No gates registered yet. Walk through at least one gate.');
       return;
+    }
+
+    // Sprint: auto-set gate distances before starting.
+    // gateDistances stores RELATIVE (segment) distances:
+    //   [0, M→G1, G1→G2, ..., G(n-1)→Gn]
+    if (state.mode == 'linear' && state.subMode == 'sprint' &&
+        state.gateDistances.length >= 2) {
+      final totalDist = _sprintTotalDistance();
+      final locked = List<double>.from(state.gateDistances);
+      final numSegments = locked.length - 1; // excludes Master (index 0)
+
+      // M→G1 segment (locked[1]): respect the user's explicit entry.
+      // 0 means the athlete starts at G1 — do NOT overwrite with auto-fill.
+      final mToG1 = locked.length > 1 ? locked[1] : 0.0;
+      final mToG1IsZero = mToG1 <= 0; // athlete starts at G1
+      // First index that needs auto-filling (skip M→G1 when it's 0).
+      final autoFillStart = mToG1IsZero ? 2 : 1;
+
+      // If user skipped distance entry for all fillable segments (all are 0),
+      // distribute the remaining distance equally starting from autoFillStart.
+      final fillableMiddle = locked.length > autoFillStart
+          ? locked.sublist(autoFillStart, locked.length - 1)
+          : <double>[];
+      final allEmpty = fillableMiddle.every((d) => d <= 0);
+      if (allEmpty && totalDist > 0 && locked.length > autoFillStart) {
+        final remainingDist = totalDist - mToG1;
+        final numSegsToFill = locked.length - autoFillStart; // includes last seg
+        final equalDist = double.parse(
+          (remainingDist / numSegsToFill).toStringAsFixed(2),
+        );
+        for (int i = autoFillStart; i < locked.length; i++) {
+          locked[i] = equalDist;
+        }
+      } else {
+        // Partial entry: auto-fill only the last segment = remaining distance.
+        double entered = 0;
+        for (int i = 1; i < locked.length - 1; i++) {
+          entered += locked[i];
+        }
+        locked[locked.length - 1] = (totalDist - entered).clamp(0, double.infinity);
+      }
+
+      emit(state.copyWith(gateDistances: locked));
     }
     if (state.mode != 'yoyo' && state.athletes.isEmpty) {
       errorCubit.showWarning('No athletes in session.');
@@ -289,6 +360,7 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
         results: results,
         location: state.location,
         notes: state.notes,
+        gateDistances: state.gateDistances,
       );
       try {
         await sessionRepository.save(session);
@@ -325,6 +397,7 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
       results: results,
       location: state.location,
       notes: state.notes,
+      gateDistances: state.gateDistances,
     );
     try {
       await sessionRepository.save(session);
@@ -370,8 +443,59 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
     }
     final item = state.currentQueueItem;
     if (item == null) return;
-    final trial = parsed.toTrialResult(item.trialNumber);
+    final trial = _enrichWithSpeedAccel(parsed.toTrialResult(item.trialNumber));
     await _saveTrialAndAdvance(item, trial);
+  }
+
+  /// Calculate speed & acceleration for sprint trials using gate distances.
+  ///
+  /// gateDistances stores RELATIVE (segment) distances:
+  ///   [0 (Master), M→G1, G1→G2, G2→G3, ..., G(n-1)→Gn]
+  ///
+  /// rawSplits = INTERVAL times from firmware (gate-to-gate, NOT cumulative):
+  ///   [t_MG1, t_G1G2, t_G2G3, ..., t_G(n-1)Gn]
+  ///
+  /// segDist = gateDistances[i+1]  (segment distance)
+  /// segTime = rawSplits[i]        (interval time for this segment, used directly)
+  ///
+  /// accels[i] maps directly to speeds[i]:
+  ///   accels[0] = speeds[0] / segTime[0]             (v_initial = 0, from rest)
+  ///   accels[i] = (speeds[i] - speeds[i-1]) / segTime[i]  for i > 0
+  ///
+  /// Skip segment if segDist == 0 (e.g. M→G1 when athlete starts at G1).
+  TrialResultModel _enrichWithSpeedAccel(TrialResultModel trial) {
+    if (state.mode != 'linear' || state.subMode != 'sprint') return trial;
+    final segDists  = state.gateDistances; // relative distances
+    final rawSplits = trial.splits;        // interval gate times (gate-to-gate)
+    if (segDists.length < 2 || rawSplits.isEmpty) return trial;
+
+    final speeds   = <double>[];
+    final segTimes = <double>[];
+    final int segs = segDists.length - 1; // number of segments
+
+    for (int i = 0; i < segs && i < rawSplits.length; i++) {
+      final segDist = segDists[i + 1]; // relative: G[i] → G[i+1]
+      final segTime = rawSplits[i];    // interval time for this segment
+
+      if (segDist == 0) continue; // skip zero-distance segment (M==G1)
+      if (segTime <= 0) continue;
+
+      speeds.add(segDist / segTime);
+      segTimes.add(segTime);
+    }
+
+    // Accelerations: one per segment (accels[i] maps directly to speeds[i]).
+    // First segment: athlete starts from rest → v_initial = 0.
+    //   a[0] = (speed[0] - 0) / segTime[0]
+    // Subsequent segments: rate of change between consecutive speeds.
+    //   a[i] = (speed[i] - speed[i-1]) / segTime[i]
+    final accels = <double>[];
+    for (int i = 0; i < speeds.length; i++) {
+      final vPrev = i == 0 ? 0.0 : speeds[i - 1];
+      accels.add((speeds[i] - vPrev) / segTimes[i]);
+    }
+
+    return trial.copyWith(speeds: speeds, accelerations: accels);
   }
 
   Future<void> _onShuttleLaneResult(ParsedResult parsed) async {
@@ -429,7 +553,17 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
       // ── Standard events ────────────────────────────────────────────────────
       case BleEventType.gateRegistered:
         final newCount = state.registeredGatesCount + 1;
-        emit(state.copyWith(registeredGatesCount: newCount));
+        // Sprint: dynamically grow gateDistances as each gate registers
+        // First gate = 0.0 (start, auto), rest = 0.0 (coach fills middle)
+        List<double>? updatedDistances;
+        if (state.mode == 'linear' && state.subMode == 'sprint') {
+          updatedDistances = [...state.gateDistances, 0.0];
+          // gateDistances.length always == registeredGatesCount
+        }
+        emit(state.copyWith(
+          registeredGatesCount: newCount,
+          gateDistances: updatedDistances,
+        ));
         _addSetupLog('✓ Gate $newCount registered');
         break;
 
@@ -458,10 +592,12 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
         break;
 
       case BleEventType.systemReset:
+        // Do NOT clear gateSetupLog here — beginGateSetup() already cleared it
+        // before sending RESET. Clearing it again on RESET_SUCCESS causes the
+        // "Setup Gates" button to re-enable briefly (flicker bug).
         emit(state.copyWith(
           registeredGatesCount: 0,
           allGatesReady: false,
-          gateSetupLog: const [],
         ));
         break;
 
@@ -582,17 +718,33 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
     if (laneIdx < 0 || laneIdx >= state.yoyoLaneStatuses.length) return;
     final updated = List<YoYoLaneStatus>.from(state.yoyoLaneStatuses);
     final status = updated[laneIdx];
+    final currentLevel = event.level ?? state.yoyoCurrentLevel;
     switch (event.yoyoResult) {
       case 'eliminated':
+        // 2nd strike = elimination level
         updated[laneIdx] = status.copyWith(
           eliminated: true,
           strikes: 2,
-          eliminatedAtLevel: event.level ?? state.yoyoCurrentLevel,
+          eliminatedAtLevel: currentLevel,
           eliminatedAtRep: event.rep ?? state.yoyoCurrentRep,
+          secondStrikeLevel: currentLevel,
+          // If first strike was never recorded yet, fill it too (edge case)
+          firstStrikeLevel: status.firstStrikeLevel ?? currentLevel,
         );
         break;
       case 'miss':
-        updated[laneIdx] = status.copyWith(strikes: event.strikes ?? status.strikes);
+        final newStrikes = event.strikes ?? (status.strikes + 1);
+        updated[laneIdx] = status.copyWith(
+          strikes: newStrikes,
+          // 1st miss → record firstStrikeLevel
+          firstStrikeLevel: (newStrikes == 1 && status.firstStrikeLevel == null)
+              ? currentLevel
+              : status.firstStrikeLevel,
+          // 2nd miss → record secondStrikeLevel (in case firmware sends miss instead of eliminated)
+          secondStrikeLevel: (newStrikes >= 2 && status.secondStrikeLevel == null)
+              ? currentLevel
+              : status.secondStrikeLevel,
+        );
         break;
       case 'pass':
         updated[laneIdx] = status.copyWith(strikes: event.strikes ?? status.strikes);
@@ -893,6 +1045,8 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
         splits: [],
         status: laneStatus?.eliminated == true ? 'eliminated' : 'completed',
         timestamp: DateTime.now(),
+        firstStrikeLevel: laneStatus?.firstStrikeLevel,
+        secondStrikeLevel: laneStatus?.secondStrikeLevel,
       );
       return r.copyWith(trials: [trial]);
     }).toList();
@@ -926,18 +1080,61 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
     final emptyLanes = state.mode == 'yoyo'
         ? List.generate(state.yoyoNumLanes, (i) => YoYoLaneStatus(laneNumber: i + 1))
         : state.yoyoLaneStatuses;
+    // Sprint: reset back to just Master = 0.0
+    final resetDistances = (state.mode == 'linear' && state.subMode == 'sprint')
+        ? [0.0]
+        : state.gateDistances;
     emit(state.copyWith(
       registeredGatesCount: 0,
       allGatesReady: false,
       gateSetupLog: const [],
       yoyoLaneStatuses: emptyLanes,
+      gateDistances: resetDistances,
     ));
   }
 
+  /// Soft reset — starts a new session without disturbing gate registration.
+  /// Preserves: mode, subMode, protocol, athletes, gate distances & counts.
+  /// Clears:    results, session ID, trial queue, phase, test info fields.
+  /// Returns to Step 1 (test info) so coach can name the new session.
   void resetSession() {
-    bleService.send('RESET');
     _parser.reset();
-    emit(const TimingSessionState());
+
+    // Reset yoyo lane statuses to clean state (keep lane count)
+    final freshLanes = state.mode == 'yoyo'
+        ? List.generate(state.yoyoNumLanes, (i) => YoYoLaneStatus(laneNumber: i + 1))
+        : state.yoyoLaneStatuses;
+
+    emit(state.copyWith(
+      // ── Go back to test-info step ─────────────────────────────────────
+      currentStep: 1,
+
+      // ── Clear session-specific data ───────────────────────────────────
+      testName: '',
+      location: '',
+      notes: '',
+      clearDate: true,
+      results: const [],
+      trialQueue: const [],
+      queueIndex: 0,
+      clearLastTrialResult: true,
+      shuttleBatchResults: const {},
+      phase: RunTestPhase.ready,
+
+      // ── Clear YOYO run state ──────────────────────────────────────────
+      yoyoPhase: YoYoPhase.idle,
+      yoyoCurrentLevel: '',
+      yoyoCurrentRep: 0,
+      yoyoWindowSecs: 0,
+      clearYoyoTestOverReason: true,
+      yoyoLaneStatuses: freshLanes,
+
+      // ── Clear session ID ──────────────────────────────────────────────
+      clearSessionId: true,
+
+      // mode / subMode / protocol / athletes / gateDistances /
+      // registeredGatesCount / allGatesReady → all preserved automatically
+    ));
   }
 
   @override

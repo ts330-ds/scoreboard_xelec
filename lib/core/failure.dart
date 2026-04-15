@@ -10,3 +10,7 @@ class AuthFailure extends Failure {
 class CancelledByUserFailure extends Failure {
   const CancelledByUserFailure() : super('Sign-in cancelled by user');
 }
+
+class SportFailure extends Failure {
+  const SportFailure(super.message);
+}

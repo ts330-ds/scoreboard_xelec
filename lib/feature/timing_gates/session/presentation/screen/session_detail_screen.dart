@@ -32,6 +32,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
   TestSessionModel get s => widget.session;
 
   List<AthleteResultModel> get _ranked {
+    if (s.isYoyo) {
+      // YoYo: sort by highest level (best = highest totalTime)
+      return [...s.results]..sort((a, b) {
+          final al = yoyoLevel(a), bl = yoyoLevel(b);
+          if (al == null && bl == null) return 0;
+          if (al == null) return 1;
+          if (bl == null) return -1;
+          return bl.compareTo(al); // descending — highest level first
+        });
+    }
     return [...s.results]..sort((a, b) {
         final ab = a.bestTime, bb = b.bestTime;
         if (ab == null && bb == null) return 0;
@@ -71,8 +81,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
                 controller: _tabs,
                 children: [
                   OverviewTab(session: s, ranked: _ranked),
-                  LeaderboardTab(ranked: _ranked),
-                  ChartsTab(ranked: _ranked),
+                  LeaderboardTab(ranked: _ranked, gateDistances: s.gateDistances, isYoyo: s.isYoyo),
+                  ChartsTab(ranked: _ranked, gateDistances: s.gateDistances, isYoyo: s.isYoyo),
                 ],
               ),
             ),

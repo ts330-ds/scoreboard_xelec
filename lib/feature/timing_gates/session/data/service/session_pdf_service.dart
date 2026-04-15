@@ -659,14 +659,29 @@ class SessionPdfService {
       children: [
         _sectionTitle('DETAILED TRIAL RESULTS'),
         pw.SizedBox(height: 8),
-        ...ranked.map((r) => _buildAthleteCard(r, session.trialsCount)),
+        ...ranked.map((r) => _buildAthleteCard(r, session.trialsCount, session.gateDistances)),
       ],
     );
+  }
+
+  /// Builds ordered segment labels from [gateDistances], skipping zero-distance
+  /// segments (e.g. M→G1=0 when athlete starts at G1).
+  static List<String> _segmentLabels(List<double> gateDistances, int segCount) {
+    if (gateDistances.length >= 2) {
+      final labels = <String>[];
+      for (int i = 0; i < gateDistances.length - 1; i++) {
+        if (gateDistances[i + 1] <= 0) continue;
+        labels.add(i == 0 ? 'M→G1' : 'G$i→G${i + 1}');
+      }
+      if (labels.length == segCount) return labels;
+    }
+    return List.generate(segCount, (i) => i == 0 ? 'M→G1' : 'G$i→G${i + 1}');
   }
 
   static pw.Widget _buildAthleteCard(
     AthleteResultModel r,
     int trialsCount,
+    List<double> gateDistances,
   ) {
     // ── Trial status label ──────────────────────────────────────────────────
     String statusLabel(TrialResultModel t) {
@@ -781,9 +796,81 @@ class SessionPdfService {
                             if (t == null || t.splits.isEmpty) {
                               return _tCell('—', center: true, color: _subtextColor);
                             }
-                            final splitsStr =
-                                t.splits.map((s) => s.toStringAsFixed(2)).join(' | ');
+                            final labels = _segmentLabels(gateDistances, t.splits.length);
+                            final splitsStr = t.splits.asMap().entries.map((e) {
+                              final lbl = e.key < labels.length ? labels[e.key] : 'G${e.key}→G${e.key + 1}';
+                              return '$lbl: ${e.value.toStringAsFixed(2)}s';
+                            }).join('\n');
                             return _tCell(splitsStr, center: true, color: _subtextColor);
+                          }(),
+                        ],
+                      ],
+                    ),
+                  // Speed row (sprint only — when speeds are available)
+                  if (r.trials.any((t) => t.speeds.isNotEmpty))
+                    pw.TableRow(
+                      children: [
+                        _tCell('Speed (m/s)', isHeader: true),
+                        for (int i = 1; i <= trialsCount; i++) ...[
+                          () {
+                            final t = r.trials
+                                .where((t) => t.trialNumber == i)
+                                .firstOrNull;
+                            if (t == null || t.speeds.isEmpty) {
+                              return _tCell('—', center: true, color: _subtextColor);
+                            }
+                            final labels = _segmentLabels(gateDistances, t.speeds.length);
+                            final str = t.speeds.asMap().entries.map((e) {
+                              final lbl = e.key < labels.length ? labels[e.key] : 'G${e.key}→G${e.key + 1}';
+                              return '$lbl: ${e.value.toStringAsFixed(2)}';
+                            }).join('\n');
+                            return _tCell(str, center: true, color: _subtextColor);
+                          }(),
+                        ],
+                      ],
+                    ),
+                  // Acceleration row (sprint only)
+                  if (r.trials.any((t) => t.accelerations.isNotEmpty))
+                    pw.TableRow(
+                      decoration: pw.BoxDecoration(color: _rowEvenColor),
+                      children: [
+                        _tCell('Accel (m/s²)', isHeader: true),
+                        for (int i = 1; i <= trialsCount; i++) ...[
+                          () {
+                            final t = r.trials
+                                .where((t) => t.trialNumber == i)
+                                .firstOrNull;
+                            if (t == null || t.accelerations.isEmpty) {
+                              return _tCell('—', center: true, color: _subtextColor);
+                            }
+                            final labels = _segmentLabels(gateDistances, t.accelerations.length);
+                            final str = t.accelerations.asMap().entries.map((e) {
+                              final lbl = e.key < labels.length ? labels[e.key] : 'G${e.key}→G${e.key + 1}';
+                              final sign = e.value >= 0 ? '+' : '';
+                              return '$lbl: $sign${e.value.toStringAsFixed(2)}';
+                            }).join('\n');
+                            return _tCell(str, center: true, color: _subtextColor);
+                          }(),
+                        ],
+                      ],
+                    ),
+                  // Peak speed/accel summary row
+                  if (r.trials.any((t) => t.speeds.isNotEmpty))
+                    pw.TableRow(
+                      children: [
+                        _tCell('Peak Speed', isHeader: true),
+                        for (int i = 1; i <= trialsCount; i++) ...[
+                          () {
+                            final t = r.trials
+                                .where((t) => t.trialNumber == i)
+                                .firstOrNull;
+                            final peak = t?.peakSpeed;
+                            if (peak == null) return _tCell('—', center: true, color: _subtextColor);
+                            return _tCell(
+                              '${peak.toStringAsFixed(2)} m/s\n${(peak * 3.6).toStringAsFixed(1)} km/h',
+                              center: true,
+                              color: _primaryColor,
+                            );
                           }(),
                         ],
                       ],

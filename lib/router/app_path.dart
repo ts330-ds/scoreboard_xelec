@@ -2,6 +2,9 @@ abstract class AppPaths {
   /// Root / Initial
   static const String root = '/';
 
+  /// Splash Screen
+  static const String splash = '/';
+
   /// Device connection
   static const String login = '/login';
 

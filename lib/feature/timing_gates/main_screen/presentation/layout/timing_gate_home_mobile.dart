@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/ble_connection/presentation/cubit/timing_gate_bluetooth_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/ble_connection/presentation/cubit/timing_gate_bluetooth_state.dart';
 import 'package:xelex_esp/router/timing_gate_path.dart';
+import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 
 class TimingGateHomeMobile extends StatelessWidget {
   const TimingGateHomeMobile({super.key});
@@ -23,42 +25,42 @@ class TimingGateHomeMobile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<TimingGateBleCubit, TimingGateBleState>(
-        builder: (context, bleState) {
-          return AnnotatedRegion<SystemUiOverlayStyle>(
-            value: SystemUiOverlayStyle.dark.copyWith(
-              statusBarColor: Colors.transparent,
-            ),
-            child: Scaffold(
-          backgroundColor: _bg,
-          body: SafeArea(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _header(context, bleState),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _startCard(context),
-                        const SizedBox(height: 16),
-                        _bluetoothCard(context, bleState),
-                        const SizedBox(height: 16),
-                        _resetCard(context, bleState),
-                        const SizedBox(height: 16),
-                        _infoCard(),
-                      ],
+      builder: (context, bleState) {
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: SystemUiOverlayStyle.dark.copyWith(
+            statusBarColor: Colors.transparent,
+          ),
+          child: Scaffold(
+            backgroundColor: _bg,
+            body: SafeArea(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _header(context, bleState),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _startCard(context, bleState),
+                          const SizedBox(height: 16),
+                          _bluetoothCard(context, bleState),
+                          const SizedBox(height: 16),
+                          _resetCard(context, bleState),
+                          const SizedBox(height: 16),
+                          _infoCard(),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
-          ),
         );
       },
-    );   // BlocBuilder
+    ); // BlocBuilder
   }
 
   Widget _header(BuildContext context, TimingGateBleState bleState) {
@@ -68,114 +70,152 @@ class TimingGateHomeMobile extends StatelessWidget {
         color: _surface,
         border: Border(bottom: BorderSide(color: _border)),
       ),
-      child: Row(children: [
-        // Icon
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: _primaryLight,
-            borderRadius: BorderRadius.circular(10),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: _primaryLight,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.timer_outlined, color: _primary, size: 22),
           ),
-          child: const Icon(Icons.timer_outlined, color: _primary, size: 22),
-        ),
-        const SizedBox(width: 12),
+          const SizedBox(width: 12),
 
-        // Title
-        const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Timing Gates',
-              style: TextStyle(
-                  color: _text, fontSize: 18, fontWeight: FontWeight.w700)),
-          Text('Sports IQ',
-              style: TextStyle(color: _subtext, fontSize: 11)),
-        ]),
-
-        const Spacer(),
-
-        // Connected: status + disconnect button ek column mein
-        if (bleState.isConnected)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
+          // Title
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Device name + green dot
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.circle, color: _success, size: 8),
-                const SizedBox(width: 5),
-                Text(
-                  bleState.connectedDeviceName.isNotEmpty
-                      ? bleState.connectedDeviceName
-                      : 'Connected',
-                  style: const TextStyle(
-                      color: _success,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600),
+              Text(
+                'Timing Gates',
+                style: TextStyle(
+                  color: _text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
                 ),
-              ]),
-              const SizedBox(height: 4),
-              // Disconnect button
-              GestureDetector(
-                onTap: () => _confirmDisconnect(context),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEE2E2),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.bluetooth_disabled, color: _error, size: 12),
-                    SizedBox(width: 4),
-                    Text('Disconnect',
-                        style: TextStyle(
+              ),
+              Text(
+                'Sports IQ',
+                style: TextStyle(color: _subtext, fontSize: 11),
+              ),
+            ],
+          ),
+
+          const Spacer(),
+
+          // Connected: status + disconnect button ek column mein
+          if (bleState.isConnected)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Device name + green dot
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.circle, color: _success, size: 8),
+                    const SizedBox(width: 5),
+                    Text(
+                      bleState.connectedDeviceName.isNotEmpty
+                          ? bleState.connectedDeviceName
+                          : 'Connected',
+                      style: const TextStyle(
+                        color: _success,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                // Disconnect button
+                GestureDetector(
+                  onTap: () => _confirmDisconnect(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEE2E2),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bluetooth_disabled, color: _error, size: 12),
+                        SizedBox(width: 4),
+                        Text(
+                          'Disconnect',
+                          style: TextStyle(
                             color: _error,
                             fontSize: 10,
-                            fontWeight: FontWeight.w600)),
-                  ]),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          )
-        else
-          // Not connected: badge + Connect button
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Status
-              const Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.circle, color: _subtext, size: 8),
-                SizedBox(width: 5),
-                Text('Not Connected',
-                    style: TextStyle(
+              ],
+            )
+          else
+            // Not connected: badge + Connect button
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Status
+                const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.circle, color: _subtext, size: 8),
+                    SizedBox(width: 5),
+                    Text(
+                      'Not Connected',
+                      style: TextStyle(
                         color: _subtext,
                         fontSize: 11,
-                        fontWeight: FontWeight.w600)),
-              ]),
-              const SizedBox(height: 4),
-              // Connect button — BLE screen pe le jayega
-              GestureDetector(
-                onTap: () => context.push(TimingGatePaths.timingGateBle),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: _primaryLight,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.bluetooth, color: _primary, size: 12),
-                    SizedBox(width: 4),
-                    Text('Connect',
-                        style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                // Connect button — BLE screen pe le jayega
+                GestureDetector(
+                  onTap: () => context.push(TimingGatePaths.timingGateBle),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _primaryLight,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bluetooth, color: _primary, size: 12),
+                        SizedBox(width: 4),
+                        Text(
+                          'Connect',
+                          style: TextStyle(
                             color: _primary,
                             fontSize: 10,
-                            fontWeight: FontWeight.w600)),
-                  ]),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
-          ),
-      ]),
+              ],
+            ),
+        ],
+      ),
     );
   }
 
@@ -185,7 +225,9 @@ class TimingGateHomeMobile extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Disconnect?'),
-        content: const Text('Are you sure you want to disconnect from the timing gate?'),
+        content: const Text(
+          'Are you sure you want to disconnect from the timing gate?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -204,9 +246,15 @@ class TimingGateHomeMobile extends StatelessWidget {
     );
   }
 
-  Widget _startCard(BuildContext context) {
+  Widget _startCard(BuildContext context, TimingGateBleState bleState) {
     return GestureDetector(
-      onTap: () => context.push(TimingGatePaths.timingGateSession),
+      onTap: () {
+        if (bleState.isConnected) {
+          context.push(TimingGatePaths.timingGateSession);
+        } else {
+          sl<GlobalErrorCubit>().showError('Please connect to a device first.');
+        }
+      },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(20),
@@ -214,48 +262,58 @@ class TimingGateHomeMobile extends StatelessWidget {
           color: _primary,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Row(children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Start New Test',
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Start New Test',
                     style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800)),
-                const SizedBox(height: 6),
-                Text(
-                  'Set up athletes, align gates, and run timing tests in 6 easy steps.',
-                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Set up athletes, align gates, and run timing tests in 6 easy steps.',
+                    style: TextStyle(
                       color: Colors.white.withAlpha(200),
                       fontSize: 12,
-                      height: 1.5),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
+                      height: 1.5,
+                    ),
                   ),
-                  child: const Text('Begin Session',
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Begin Session',
                       style: TextStyle(
-                          color: _primary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13)),
-                ),
-              ],
+                        color: _primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
-          const Icon(Icons.play_circle_fill, color: Colors.white, size: 64),
-        ]),
+            const SizedBox(width: 16),
+            const Icon(Icons.play_circle_fill, color: Colors.white, size: 64),
+          ],
+        ),
       ),
     );
   }
-
 
   // ── Bluetooth Status Card ──────────────────────────────────────────────
 
@@ -284,9 +342,14 @@ class TimingGateHomeMobile extends StatelessWidget {
             color: const Color(0xFFFEE2E2),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Text('Cancel',
-              style: TextStyle(
-                  color: _error, fontSize: 12, fontWeight: FontWeight.w600)),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(
+              color: _error,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       );
     } else if (bleState.isConnected) {
@@ -298,8 +361,13 @@ class TimingGateHomeMobile extends StatelessWidget {
           ? bleState.connectedDeviceName
           : 'Connected';
       final bars = bleState.signalBars;
-      final signalLabel =
-          bars >= 3 ? 'Excellent' : bars == 2 ? 'Good' : bars == 1 ? 'Weak' : 'No signal';
+      final signalLabel = bars >= 3
+          ? 'Excellent'
+          : bars == 2
+          ? 'Good'
+          : bars == 1
+          ? 'Weak'
+          : 'No signal';
       subtitle = 'Signal: $signalLabel  •  ${bleState.connectedRssi} dBm';
       action = GestureDetector(
         onTap: () => _confirmDisconnect(context),
@@ -309,13 +377,21 @@ class TimingGateHomeMobile extends StatelessWidget {
             color: const Color(0xFFFEE2E2),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.bluetooth_disabled, color: _error, size: 14),
-            SizedBox(width: 4),
-            Text('Disconnect',
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.bluetooth_disabled, color: _error, size: 14),
+              SizedBox(width: 4),
+              Text(
+                'Disconnect',
                 style: TextStyle(
-                    color: _error, fontSize: 12, fontWeight: FontWeight.w600)),
-          ]),
+                  color: _error,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     } else {
@@ -335,15 +411,21 @@ class TimingGateHomeMobile extends StatelessWidget {
             color: _primaryLight,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.bluetooth_searching, color: _primary, size: 14),
-            SizedBox(width: 4),
-            Text('Connect',
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.bluetooth_searching, color: _primary, size: 14),
+              SizedBox(width: 4),
+              Text(
+                'Connect',
                 style: TextStyle(
-                    color: _primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
-          ]),
+                  color: _primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -376,12 +458,15 @@ class TimingGateHomeMobile extends StatelessWidget {
                 Row(
                   children: [
                     Flexible(
-                      child: Text(title,
-                          style: const TextStyle(
-                              color: _text,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600),
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: _text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     // Reconnecting indicator
                     if (bleState.isReconnecting) ...[
@@ -403,8 +488,10 @@ class TimingGateHomeMobile extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(subtitle,
-                    style: const TextStyle(color: _subtext, fontSize: 11)),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: _subtext, fontSize: 11),
+                ),
               ],
             ),
           ),
@@ -425,7 +512,8 @@ class TimingGateHomeMobile extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Reset Gate?'),
         content: const Text(
-            'This will send a RESET command to the timing gate. Gate settings will be restored to default.'),
+          'This will send a RESET command to the timing gate. Gate settings will be restored to default.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -456,9 +544,7 @@ class TimingGateHomeMobile extends StatelessWidget {
     final isConnected = bleState.isConnected;
 
     return GestureDetector(
-      onTap: isConnected
-          ? () => _confirmReset(context)
-          : null,
+      onTap: isConnected ? () => _confirmReset(context) : null,
       child: Opacity(
         opacity: isConnected ? 1.0 : 0.4,
         child: Container(
@@ -484,31 +570,41 @@ class TimingGateHomeMobile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Reset Timing Gate',
-                        style: TextStyle(
-                            color: _text,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600)),
+                    const Text(
+                      'Reset Timing Gate',
+                      style: TextStyle(
+                        color: _text,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
-                        isConnected
-                            ? 'Reset gate settings to default.'
-                            : 'Connect to a device first.',
-                        style: const TextStyle(color: _subtext, fontSize: 11)),
+                      isConnected
+                          ? 'Reset gate settings to default.'
+                          : 'Connect to a device first.',
+                      style: const TextStyle(color: _subtext, fontSize: 11),
+                    ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFEE2E2),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text('Reset',
-                    style: TextStyle(
-                        color: _error,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600)),
+                child: const Text(
+                  'Reset',
+                  style: TextStyle(
+                    color: _error,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
@@ -528,12 +624,23 @@ class TimingGateHomeMobile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Quick Guide',
-              style: TextStyle(
-                  color: _text, fontSize: 13, fontWeight: FontWeight.w700)),
+          const Text(
+            'Quick Guide',
+            style: TextStyle(
+              color: _text,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 12),
-          _infoRow(Icons.looks_one_outlined, '1. Go to Tests tab and tap New Session'),
-          _infoRow(Icons.looks_two_outlined, '2. Fill in test details and add athletes'),
+          _infoRow(
+            Icons.looks_one_outlined,
+            '1. Go to Tests tab and tap New Session',
+          ),
+          _infoRow(
+            Icons.looks_two_outlined,
+            '2. Fill in test details and add athletes',
+          ),
           _infoRow(Icons.looks_3_outlined, '3. Align gates and select layout'),
           _infoRow(Icons.looks_4_outlined, '4. Run trials and view results'),
         ],
@@ -544,14 +651,22 @@ class TimingGateHomeMobile extends StatelessWidget {
   Widget _infoRow(IconData icon, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Row(children: [
-        Icon(icon, color: _primary, size: 18),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(text,
-              style: const TextStyle(color: _subtext, fontSize: 12, height: 1.4)),
-        ),
-      ]),
+      child: Row(
+        children: [
+          Icon(icon, color: _primary, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: _subtext,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

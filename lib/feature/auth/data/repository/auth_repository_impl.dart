@@ -14,5 +14,17 @@ class AuthRepositoryImpl implements AuthRepository {
       _dataSource.signInWithGoogle();
 
   @override
+  TaskEither<Failure, AuthUser> signInWithLinkedIn() =>
+      _dataSource.signInWithLinkedIn();
+
+  @override
+  TaskEither<Failure, AuthUser> signInWithMicrosoft() =>
+      _dataSource.signInWithMicrosoft();
+
+  @override
+  TaskEither<Failure, AuthUser> signInWithApple() =>
+      _dataSource.signInWithApple();
+
+  @override
   TaskEither<Failure, Unit> signOut() => _dataSource.signOut();
 }

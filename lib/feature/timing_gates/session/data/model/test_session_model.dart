@@ -69,6 +69,13 @@ class TestSessionModel {
   @HiveField(15)
   final DateTime? completedAt;
 
+  /// Segment distances used during this session (sprint mode only).
+  /// [0] = 0.0 (Master), [1] = M→G1 (0 if athlete starts at G1),
+  /// [2..n] = subsequent gate-to-gate segment distances (metres).
+  /// Empty for non-sprint modes.
+  @HiveField(16)
+  final List<double> gateDistances;
+
   const TestSessionModel({
     required this.id,
     required this.sessionName,
@@ -86,6 +93,7 @@ class TestSessionModel {
     this.location = '',
     this.notes = '',
     this.completedAt,
+    this.gateDistances = const [],
   });
 
   // ── Computed ──────────────────────────────────────────────────────────────
@@ -137,6 +145,7 @@ class TestSessionModel {
     String? location,
     String? notes,
     DateTime? completedAt,
+    List<double>? gateDistances,
   }) {
     return TestSessionModel(
       id: id ?? this.id,
@@ -155,6 +164,7 @@ class TestSessionModel {
       location: location ?? this.location,
       notes: notes ?? this.notes,
       completedAt: completedAt ?? this.completedAt,
+      gateDistances: gateDistances ?? this.gateDistances,
     );
   }
 }

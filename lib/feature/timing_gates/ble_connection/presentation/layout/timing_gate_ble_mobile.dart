@@ -317,27 +317,27 @@ class _TimingGateBleMobileState extends State<TimingGateBleMobile> {
                       '${device.rssi} dBm',
                       style: const TextStyle(color: _subtext, fontSize: 12),
                     ),
-                    if (device.isCompatible) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _primaryLight,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'APEX Gate',
-                          style: TextStyle(
-                            color: _primary,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
+                    // if (device.isCompatible) ...[
+                    //   const SizedBox(width: 8),
+                    //   Container(
+                    //     padding: const EdgeInsets.symmetric(
+                    //       horizontal: 6,
+                    //       vertical: 2,
+                    //     ),
+                    //     decoration: BoxDecoration(
+                    //       color: _primaryLight,
+                    //       borderRadius: BorderRadius.circular(4),
+                    //     ),
+                    //     child: const Text(
+                    //       'Timing Gates',
+                    //       style: TextStyle(
+                    //         color: _primary,
+                    //         fontSize: 10,
+                    //         fontWeight: FontWeight.w600,
+                    //       ),
+                    //     ),
+                    //   ),
+                    // ],
                   ],
                 ),
               ],

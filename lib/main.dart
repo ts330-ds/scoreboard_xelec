@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/error/screen/global_error_screen.dart';
 import 'package:xelex_esp/feature/timing_gates/main_screen/data/cubit/bluetooth_cubit.dart';
@@ -34,7 +35,8 @@ void main() async {
   await Hive.openBox<TestSessionModel>('sessions');
   await Hive.openBox<TimingGateProfileModel>('timing_gate_profile');
 
-  setupDI();
+  final sharedPreferences = await SharedPreferences.getInstance();
+  setupDI(sharedPreferences: sharedPreferences);
   FlutterBluePlus.setLogLevel(LogLevel.warning, color: false);
   final bluetoothPermission = BluetoothPermissionService();
   // SocketService().connect("ws://scoreboard.local:81");

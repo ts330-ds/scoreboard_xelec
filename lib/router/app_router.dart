@@ -73,6 +73,7 @@ import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/sessio
 import 'package:xelex_esp/feature/timing_gates/session/presentation/screen/session_detail_screen.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/screen/timing_session_screen.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/test_session_model.dart';
+import 'package:xelex_esp/feature/splash/presentation/screen/splash_screen.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/router/heart_tracker_path.dart';
 import 'package:xelex_esp/router/timing_gate_path.dart';
@@ -85,7 +86,7 @@ import '../feature/scoreboard/table_tennis/presentation/screen/table_tennis_scre
 import '../responsive/adaptive_page.dart';
 
 final GoRouter appRouter = GoRouter(
-  initialLocation: AppPaths.login,
+  initialLocation: AppPaths.splash,
   // redirect: (context, routerState) {
   //   final loc = routerState.matchedLocation;
   //   final isTimingGateRoute = loc.startsWith('/timing-gate');
@@ -105,6 +106,13 @@ final GoRouter appRouter = GoRouter(
   //   return null;
   // },
   routes: [
+    /// Splash Screen
+    GoRoute(
+      path: AppPaths.splash,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const SplashScreen()),
+    ),
+
     /// 🏀 Basketball Screen
     GoRoute(
       path: AppPaths.basketball,

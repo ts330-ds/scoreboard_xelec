@@ -1,11 +1,28 @@
+import 'dart:math';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:uuid/uuid.dart';
+import 'package:xelex_esp/feature/timing_gates/session/data/model/athlete_model.dart';
+import 'package:xelex_esp/feature/timing_gates/session/data/model/athlete_result_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/test_session_model.dart';
+import 'package:xelex_esp/feature/timing_gates/session/data/model/trial_result_model.dart';
+import 'package:xelex_esp/feature/timing_gates/session/data/repository/session_repository.dart';
 import 'package:xelex_esp/router/timing_gate_path.dart';
 
-class TimingGateResultsMobile extends StatelessWidget {
+class TimingGateResultsMobile extends StatefulWidget {
   const TimingGateResultsMobile({super.key});
+
+  @override
+  State<TimingGateResultsMobile> createState() =>
+      _TimingGateResultsMobileState();
+}
+
+class _TimingGateResultsMobileState extends State<TimingGateResultsMobile> {
+  bool _seeding = false;
 
   static const _bg = Color(0xFFF4F6F9);
   static const _surface = Color(0xFFFFFFFF);
@@ -15,6 +32,165 @@ class TimingGateResultsMobile extends StatelessWidget {
   static const _subtext = Color(0xFF6B7A8D);
   static const _border = Color(0xFFDDE3EC);
   static const _gold = Color(0xFFD97706);
+
+  // ── Dev: seed a large test session ────────────────────────────────────────
+  Future<void> _seedLargeSession() async {
+    if (_seeding) return;
+    setState(() => _seeding = true);
+    try {
+      const uuid = Uuid();
+      final rng = Random();
+
+      const gateCount = 20; // Master + 19 timing gates
+      const segCount = gateCount - 1; // 19 segments
+      const segDist = 5.0; // 5 m per segment → 95 m total
+
+      // gateDistances: [Master=0, seg1=5, seg2=5, ..., seg19=5]
+      final gateDists = [0.0, ...List.filled(segCount, segDist)];
+
+      // ── Helper: simulate one trial ────────────────────────────────────
+      TrialResultModel makeTrialForAthlete(int trialNum, double athleteBonus) {
+        // First segment (from rest): slow; subsequent segments faster then plateau
+        final splits = <double>[];
+        final speeds = <double>[];
+        final segTimes = <double>[];
+
+        for (int i = 0; i < segCount; i++) {
+          double base;
+          if (i == 0) {
+            base = 1.35 + rng.nextDouble() * 0.25; // 1.35–1.60s
+          } else if (i < 5) {
+            base = 0.78 - i * 0.03 + rng.nextDouble() * 0.06; // accelerating
+          } else if (i < 12) {
+            base = 0.63 + rng.nextDouble() * 0.05; // peak speed
+          } else {
+            base = 0.65 + (i - 12) * 0.01 + rng.nextDouble() * 0.04; // mild decel
+          }
+          final t = double.parse(
+              ((base - athleteBonus).clamp(0.45, 2.0)).toStringAsFixed(3));
+          splits.add(t);
+          segTimes.add(t);
+          speeds.add(segDist / t);
+        }
+
+        final accels = <double>[];
+        for (int i = 0; i < speeds.length; i++) {
+          final vPrev = i == 0 ? 0.0 : speeds[i - 1];
+          accels.add(double.parse(
+              ((speeds[i] - vPrev) / segTimes[i]).toStringAsFixed(3)));
+        }
+
+        final totalTime = double.parse(
+            splits.fold(0.0, (a, b) => a + b).toStringAsFixed(3));
+
+        return TrialResultModel(
+          trialNumber: trialNum,
+          totalTime: totalTime,
+          splits: splits,
+          status: 'completed',
+          timestamp: DateTime.now(),
+          speeds: speeds,
+          accelerations: accels,
+        );
+      }
+
+      // ── 50 athletes ───────────────────────────────────────────────────
+      const firstNames = [
+        'Aarav', 'Vihaan', 'Arjun', 'Rohan', 'Karan', 'Dev', 'Ayaan', 'Kabir',
+        'Ishaan', 'Reyansh', 'Aditya', 'Siddharth', 'Vivaan', 'Neel', 'Dhruv',
+        'Shaurya', 'Arnav', 'Yash', 'Pranav', 'Ansh', 'Samar', 'Kunal', 'Nikhil',
+        'Mihir', 'Param', 'Ritvik', 'Laksh', 'Vedant', 'Ahan', 'Rudra',
+        'Priya', 'Ananya', 'Diya', 'Kavya', 'Ishita', 'Aisha', 'Riya', 'Sneha',
+        'Pooja', 'Meera', 'Shruti', 'Tara', 'Anya', 'Nisha', 'Aditi',
+        'Carlos', 'James', 'Luca', 'Omar', 'Yuki',
+      ];
+      const lastNames = [
+        'Sharma', 'Patel', 'Singh', 'Kumar', 'Verma', 'Gupta', 'Joshi',
+        'Nair', 'Rao', 'Reddy', 'Mehta', 'Shah', 'Kapoor', 'Malhotra',
+        'Bose', 'Das', 'Iyer', 'Pillai', 'Menon', 'Saxena',
+      ];
+
+      final athletes = <AthleteModel>[];
+      final results = <AthleteResultModel>[];
+
+      for (int i = 0; i < 50; i++) {
+        final id = uuid.v4();
+        final name =
+            '${firstNames[i % firstNames.length]} ${lastNames[i % lastNames.length]}';
+        // Bonus makes each athlete slightly different in speed
+        final bonus = (i / 50) * 0.12; // 0 → 0.12s per segment spread
+
+        athletes.add(AthleteModel(
+          id: id,
+          fullName: name,
+          athleteId: 'ATH${(i + 1).toString().padLeft(3, '0')}',
+          bib: '${i + 1}',
+          dob: '',
+          age: 18 + (i % 12),
+          sex: i < 30 ? 'Male' : 'Female',
+          discipline: 'Sprint',
+          team: i < 25 ? 'Team Alpha' : 'Team Beta',
+          trials: 3,
+          completedTrials: 3,
+        ));
+
+        results.add(AthleteResultModel(
+          athleteId: id,
+          fullName: name,
+          bib: '${i + 1}',
+          team: i < 25 ? 'Team Alpha' : 'Team Beta',
+          discipline: 'Sprint',
+          trials: [
+            makeTrialForAthlete(1, bonus),
+            makeTrialForAthlete(2, bonus + 0.01),
+            makeTrialForAthlete(3, bonus - 0.005),
+          ],
+        ));
+      }
+
+      final sessionId = uuid.v4();
+      final session = TestSessionModel(
+        id: sessionId,
+        sessionName: '🧪 Stress Test — 50 Athletes / 20 Gates',
+        date: DateTime.now(),
+        mode: 'linear',
+        subMode: 'sprint',
+        protocol: 'custom',
+        customDistance: segDist * segCount,
+        trialMode: 'round_robin',
+        trialsCount: 3,
+        status: 'completed',
+        athletes: athletes,
+        results: results,
+        location: 'Dev Sandbox',
+        notes: 'Auto-generated stress-test session',
+        completedAt: DateTime.now(),
+        gateDistances: gateDists,
+      );
+
+      await GetIt.instance<SessionRepository>().save(session);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Stress-test session saved — 50 athletes, 20 gates'),
+            backgroundColor: Color(0xFF16A34A),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Seed failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _seeding = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +223,7 @@ class TimingGateResultsMobile extends StatelessWidget {
           ],
         ),
       ),
-    );  // Scaffold
+    );
   }
 
   Widget _buildHeader() {
@@ -73,6 +249,26 @@ class TimingGateResultsMobile extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
+          // const Spacer(),
+          // // ── DEV ONLY: seed stress-test session ───────────────────────
+          // if (kDebugMode)
+          //   _seeding
+          //       ? const SizedBox(
+          //           width: 20,
+          //           height: 20,
+          //           child: CircularProgressIndicator(strokeWidth: 2),
+          //         )
+          //       : Tooltip(
+          //           message: 'Seed 50 athletes / 20 gates (Dev)',
+          //           child: IconButton(
+          //             onPressed: _seedLargeSession,
+          //             icon: const Icon(Icons.science_outlined,
+          //                 color: Color(0xFF7C3AED)),
+          //             iconSize: 22,
+          //             padding: EdgeInsets.zero,
+          //             constraints: const BoxConstraints(),
+          //           ),
+          //         ),
         ],
       ),
     );
@@ -140,7 +336,6 @@ class TimingGateResultsMobile extends StatelessWidget {
   }
 
   Widget _buildSessionBlock(TestSessionModel session) {
-    // Sort athletes by best time (nulls at the end)
     final ranked = [...session.results]..sort((a, b) {
         final aBest = a.bestTime;
         final bBest = b.bestTime;
@@ -148,16 +343,15 @@ class TimingGateResultsMobile extends StatelessWidget {
         if (aBest == null) return 1;
         if (bBest == null) return -1;
         return session.isYoyo
-            ? bBest.compareTo(aBest) // YOYO: higher level = better
-            : aBest.compareTo(bBest); // Normal: faster = better
+            ? bBest.compareTo(aBest)
+            : aBest.compareTo(bBest);
       });
 
-    // Winner info
     final winner = ranked.isNotEmpty ? ranked.first : null;
     final winnerBest = winner?.bestTime;
     final athleteCount = session.results.length;
-    final completedTrials = session.results.fold<int>(
-        0, (sum, r) => sum + r.completedTrials.length);
+    final completedTrials = session.results
+        .fold<int>(0, (sum, r) => sum + r.completedTrials.length);
 
     return Container(
       decoration: BoxDecoration(
@@ -168,7 +362,7 @@ class TimingGateResultsMobile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Session header ────────────────────────────────────────────
+          // ── Session header ──────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
             child: Column(
@@ -187,27 +381,23 @@ class TimingGateResultsMobile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Icon(Icons.chevron_right,
-                        color: _subtext, size: 18),
+                    const Icon(Icons.chevron_right, color: _subtext, size: 18),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.timer_outlined,
-                        color: _subtext, size: 13),
+                    const Icon(Icons.timer_outlined, color: _subtext, size: 13),
                     const SizedBox(width: 4),
                     Text(session.modeLabel,
-                        style: const TextStyle(
-                            color: _subtext, fontSize: 12)),
+                        style: const TextStyle(color: _subtext, fontSize: 12)),
                     const SizedBox(width: 12),
                     const Icon(Icons.calendar_today_outlined,
                         color: _subtext, size: 13),
                     const SizedBox(width: 4),
                     Text(
                       _formatDate(session.completedAt ?? session.date),
-                      style: const TextStyle(
-                          color: _subtext, fontSize: 12),
+                      style: const TextStyle(color: _subtext, fontSize: 12),
                     ),
                     if (session.location.isNotEmpty) ...[
                       const SizedBox(width: 12),
@@ -217,8 +407,8 @@ class TimingGateResultsMobile extends StatelessWidget {
                       Expanded(
                         child: Text(
                           session.location,
-                          style: const TextStyle(
-                              color: _subtext, fontSize: 12),
+                          style:
+                              const TextStyle(color: _subtext, fontSize: 12),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -230,17 +420,14 @@ class TimingGateResultsMobile extends StatelessWidget {
             ),
           ),
 
-          // ── Divider ──────────────────────────────────────────────────
           const Divider(height: 1, color: _border),
 
-          // ── Summary: Winner + Stats ──────────────────────────────────
+          // ── Summary: Winner + Stats ─────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
             child: Row(
               children: [
-                // Winner info
                 if (winner != null) ...[
-                  // Trophy icon
                   Container(
                     width: 36,
                     height: 36,
@@ -253,7 +440,6 @@ class TimingGateResultsMobile extends StatelessWidget {
                         color: _gold, size: 18),
                   ),
                   const SizedBox(width: 10),
-                  // Winner name + best time
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,7 +475,6 @@ class TimingGateResultsMobile extends StatelessWidget {
                         style: TextStyle(color: _subtext, fontSize: 12)),
                   ),
 
-                // Stats badges
                 _statBadge(Icons.people_outline, '$athleteCount'),
                 const SizedBox(width: 8),
                 _statBadge(Icons.flag_outlined, '$completedTrials'),
@@ -301,7 +486,6 @@ class TimingGateResultsMobile extends StatelessWidget {
     );
   }
 
-  // ── Small stat badge (icon + number) ──────────────────────────────────────
   Widget _statBadge(IconData icon, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

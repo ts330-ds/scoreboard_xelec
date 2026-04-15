@@ -23,13 +23,17 @@ class TrialResultModelAdapter extends TypeAdapter<TrialResultModel> {
       lane: fields[3] as int?,
       status: fields[4] as String,
       timestamp: fields[5] as DateTime?,
+      speeds: fields[6] == null ? const [] : (fields[6] as List).cast<double>(),
+      accelerations: fields[7] == null ? const [] : (fields[7] as List).cast<double>(),
+      firstStrikeLevel: fields[8] as String?,
+      secondStrikeLevel: fields[9] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, TrialResultModel obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.trialNumber)
       ..writeByte(1)
@@ -41,7 +45,15 @@ class TrialResultModelAdapter extends TypeAdapter<TrialResultModel> {
       ..writeByte(4)
       ..write(obj.status)
       ..writeByte(5)
-      ..write(obj.timestamp);
+      ..write(obj.timestamp)
+      ..writeByte(6)
+      ..write(obj.speeds)
+      ..writeByte(7)
+      ..write(obj.accelerations)
+      ..writeByte(8)
+      ..write(obj.firstStrikeLevel)
+      ..writeByte(9)
+      ..write(obj.secondStrikeLevel);
   }
 
   @override

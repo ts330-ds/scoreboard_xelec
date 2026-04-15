@@ -29,6 +29,12 @@ class YoYoLaneStatus extends Equatable {
   final String? eliminatedAtLevel;
   final int? eliminatedAtRep;
 
+  /// Level at which 1st strike was received (e.g. "11.0")
+  final String? firstStrikeLevel;
+
+  /// Level at which 2nd strike was received / athlete was eliminated (e.g. "12.3")
+  final String? secondStrikeLevel;
+
   const YoYoLaneStatus({
     required this.laneNumber,
     this.finishGateOk = false,
@@ -40,6 +46,8 @@ class YoYoLaneStatus extends Equatable {
     this.lastFinishTime,
     this.eliminatedAtLevel,
     this.eliminatedAtRep,
+    this.firstStrikeLevel,
+    this.secondStrikeLevel,
   });
 
   bool get setupComplete => finishGateOk && turnGateOk;
@@ -56,6 +64,8 @@ class YoYoLaneStatus extends Equatable {
     bool clearLastFinishTime = false,
     String? eliminatedAtLevel,
     int? eliminatedAtRep,
+    String? firstStrikeLevel,
+    String? secondStrikeLevel,
   }) {
     return YoYoLaneStatus(
       laneNumber: laneNumber,
@@ -68,13 +78,15 @@ class YoYoLaneStatus extends Equatable {
       lastFinishTime: clearLastFinishTime ? null : (lastFinishTime ?? this.lastFinishTime),
       eliminatedAtLevel: eliminatedAtLevel ?? this.eliminatedAtLevel,
       eliminatedAtRep: eliminatedAtRep ?? this.eliminatedAtRep,
+      firstStrikeLevel: firstStrikeLevel ?? this.firstStrikeLevel,
+      secondStrikeLevel: secondStrikeLevel ?? this.secondStrikeLevel,
     );
   }
 
   @override
   List<Object?> get props => [
     laneNumber, finishGateOk, turnGateOk, eliminated, strikes, turnHit, finishHit,
-    lastFinishTime, eliminatedAtLevel, eliminatedAtRep,
+    lastFinishTime, eliminatedAtLevel, eliminatedAtRep, firstStrikeLevel, secondStrikeLevel,
   ];
 }
 
@@ -115,6 +127,12 @@ class TimingSessionState extends Equatable {
 
   // ── Shuttle config ────────────────────────────────────────────────────────
   final int shuttleNumLanes;
+
+  // ── Sprint gate distances (linear/sprint only) ────────────────────────────
+  /// Distance from start for each gate (metres).
+  /// gateDistances[0] = 0.0 (start), gateDistances[last] = total distance.
+  /// Middle gates are entered manually by coach during gate setup.
+  final List<double> gateDistances;
 
   // ── Step 1: Test info ──────────────────────────────────────────────────────
   final String testName;
@@ -163,6 +181,7 @@ class TimingSessionState extends Equatable {
     this.customDistance,
     this.yoyoNumLanes = 1,
     this.shuttleNumLanes = 3,
+    this.gateDistances = const [],
     this.testName = '',
     this.location = '',
     this.notes = '',
@@ -292,24 +311,14 @@ class TimingSessionState extends Equatable {
   }
 
   /// Expected number of gates for the current mode + protocol.
-  /// Sent as part of SETUP:N so firmware knows when registration is complete.
+  /// Sprint is flexible — coach places any number of gates.
   int get expectedGatesCount {
     if (mode == 'yoyo') return yoyoNumLanes * 2;
     if (mode == 'shuttle') return shuttleNumLanes * 2;
     if (mode == '505' || subMode == '505') return 1;
     if (mode == 'ttest' || subMode == 'ttest') return 1;
-    if (mode == 'linear' && subMode == 'sprint') {
-      switch (protocol) {
-        case '10m':      return 2; // start + finish
-        case '20m':      return 3; // start + 10m split + 20m finish
-        case '30m':      return 4; // start + 10m + 20m + 30m
-        case '40m':      return 5; // start + 10m + 20m + 30m + 40m
-        case 'flying10': return 2; // run-up gate + flying-finish gate
-        case 'flying20': return 2;
-        case 'custom':   return 2; // minimum — coach adds more physically
-        default:         return 2;
-      }
-    }
+    // Sprint: flexible gate count — no fixed expectation
+    if (mode == 'linear' && subMode == 'sprint') return registeredGatesCount;
     return 2; // safe fallback
   }
 
@@ -332,6 +341,7 @@ class TimingSessionState extends Equatable {
     bool clearCustomDistance = false,
     int? yoyoNumLanes,
     int? shuttleNumLanes,
+    List<double>? gateDistances,
     String? testName,
     String? location,
     String? notes,
@@ -360,6 +370,7 @@ class TimingSessionState extends Equatable {
     String? yoyoTestOverReason,
     bool clearYoyoTestOverReason = false,
     String? sessionId,
+    bool clearSessionId = false,
   }) {
     return TimingSessionState(
       currentStep: currentStep ?? this.currentStep,
@@ -369,6 +380,7 @@ class TimingSessionState extends Equatable {
       customDistance: clearCustomDistance ? null : (customDistance ?? this.customDistance),
       yoyoNumLanes: yoyoNumLanes ?? this.yoyoNumLanes,
       shuttleNumLanes: shuttleNumLanes ?? this.shuttleNumLanes,
+      gateDistances: gateDistances ?? this.gateDistances,
       testName: testName ?? this.testName,
       location: location ?? this.location,
       notes: notes ?? this.notes,
@@ -393,13 +405,13 @@ class TimingSessionState extends Equatable {
       yoyoCurrentRep: yoyoCurrentRep ?? this.yoyoCurrentRep,
       yoyoWindowSecs: yoyoWindowSecs ?? this.yoyoWindowSecs,
       yoyoTestOverReason: clearYoyoTestOverReason ? null : (yoyoTestOverReason ?? this.yoyoTestOverReason),
-      sessionId: sessionId ?? this.sessionId,
+      sessionId: clearSessionId ? null : (sessionId ?? this.sessionId),
     );
   }
 
   @override
   List<Object?> get props => [
-    currentStep, mode, subMode, protocol, customDistance, yoyoNumLanes, shuttleNumLanes,
+    currentStep, mode, subMode, protocol, customDistance, yoyoNumLanes, shuttleNumLanes, gateDistances,
     testName, location, notes, testDate,
     athletes, trialMode, trialsCount, searchQuery, teamFilter,
     registeredGatesCount, allGatesReady, gateSetupLog, yoyoLaneStatuses,

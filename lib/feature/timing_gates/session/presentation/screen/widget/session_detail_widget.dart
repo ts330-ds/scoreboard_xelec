@@ -22,6 +22,45 @@ const Color sdGold         = Color(0xFFD97706);
 const Color sdSilver       = Color(0xFF64748B);
 const Color sdBronze       = Color(0xFF92400E);
 
+// ── Segment label helper ──────────────────────────────────────────────────────
+/// Builds ordered segment labels from [gateDistances], skipping any segment
+/// whose distance is 0 (e.g. M→G1=0 when athlete starts at G1).
+/// Falls back to positional labels when [gateDistances] is empty.
+List<String> _buildSegmentLabels(List<double> gateDistances, int segCount) {
+  if (gateDistances.length >= 2) {
+    final labels = <String>[];
+    for (int i = 0; i < gateDistances.length - 1; i++) {
+      if (gateDistances[i + 1] <= 0) continue;
+      labels.add(i == 0 ? 'M→G1' : 'G$i→G${i + 1}');
+    }
+    if (labels.length == segCount) return labels;
+  }
+  // Fallback: positional
+  return List.generate(
+    segCount,
+    (i) => i == 0 ? 'M→G1' : 'G$i→G${i + 1}',
+  );
+}
+
+// ── YoYo helpers ─────────────────────────────────────────────────────────────
+
+/// Best (highest) YoYo level for [r] — reads ALL trials whose status is
+/// 'completed' OR 'eliminated' because eliminated athletes fail [isCompleted].
+double? yoyoLevel(AthleteResultModel r) {
+  final levels = r.trials
+      .where((t) =>
+          t.totalTime != null &&
+          (t.status == 'completed' || t.status == 'eliminated'))
+      .map((t) => t.totalTime!)
+      .toList();
+  if (levels.isEmpty) return null;
+  return levels.reduce((a, b) => a > b ? a : b);
+}
+
+/// True if any of [r]'s trials was marked 'eliminated' (YoYo-specific).
+bool isYoyoEliminated(AthleteResultModel r) =>
+    r.trials.any((t) => t.status == 'eliminated');
+
 // ── Header ────────────────────────────────────────────────────────────────────
 
 class SessionDetailHeader extends StatelessWidget {
@@ -117,13 +156,15 @@ class OverviewTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final allBest = ranked
-        .map((r) => r.bestTime)
-        .where((t) => t != null)
-        .cast<double>()
-        .toList();
-    final overallBest =
-        allBest.isEmpty ? null : allBest.reduce((a, b) => a < b ? a : b);
+    final isYoyo = session.isYoyo;
+    final allBest = isYoyo
+        ? ranked.map((r) => yoyoLevel(r)).where((v) => v != null).cast<double>().toList()
+        : ranked.map((r) => r.bestTime).where((t) => t != null).cast<double>().toList();
+    final overallBest = allBest.isEmpty
+        ? null
+        : isYoyo
+            ? allBest.reduce((a, b) => a > b ? a : b) // highest level = best
+            : allBest.reduce((a, b) => a < b ? a : b); // lowest time = best
     final winner = ranked.isNotEmpty ? ranked.first : null;
 
     return ListView(
@@ -142,9 +183,11 @@ class OverviewTab extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: SdStatCard(
-                label: 'Best Time',
+                label: isYoyo ? 'Best Level' : 'Best Time',
                 value: overallBest != null
-                    ? '${overallBest.toStringAsFixed(3)}s'
+                    ? isYoyo
+                        ? 'Lv ${overallBest.toStringAsFixed(1)}'
+                        : '${overallBest.toStringAsFixed(3)}s'
                     : '—',
                 icon: Icons.emoji_events_outlined,
                 color: sdGold,
@@ -184,7 +227,7 @@ class OverviewTab extends StatelessWidget {
         const SizedBox(height: 16),
 
         if (ranked.isNotEmpty)
-          SdCard(child: PodiumSection(ranked: ranked)),
+          SdCard(child: PodiumSection(ranked: ranked, isYoyo: isYoyo)),
       ],
     );
   }
@@ -194,8 +237,9 @@ class OverviewTab extends StatelessWidget {
 
 class PodiumSection extends StatelessWidget {
   final List<AthleteResultModel> ranked;
+  final bool isYoyo;
 
-  const PodiumSection({super.key, required this.ranked});
+  const PodiumSection({super.key, required this.ranked, this.isYoyo = false});
 
   @override
   Widget build(BuildContext context) {
@@ -245,9 +289,13 @@ class PodiumSection extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    athlete.bestTime != null
-                        ? '${athlete.bestTime!.toStringAsFixed(3)}s'
-                        : '—',
+                    isYoyo
+                        ? (yoyoLevel(athlete) != null
+                            ? 'Lv ${yoyoLevel(athlete)!.toStringAsFixed(1)}'
+                            : '—')
+                        : (athlete.bestTime != null
+                            ? '${athlete.bestTime!.toStringAsFixed(3)}s'
+                            : '—'),
                     style: TextStyle(
                         color: colors[displayIdx],
                         fontSize: 11,
@@ -286,8 +334,15 @@ class PodiumSection extends StatelessWidget {
 
 class LeaderboardTab extends StatelessWidget {
   final List<AthleteResultModel> ranked;
+  final List<double> gateDistances;
+  final bool isYoyo;
 
-  const LeaderboardTab({super.key, required this.ranked});
+  const LeaderboardTab({
+    super.key,
+    required this.ranked,
+    this.gateDistances = const [],
+    this.isYoyo = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -296,7 +351,12 @@ class LeaderboardTab extends StatelessWidget {
       itemCount: ranked.length,
       itemBuilder: (_, i) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
-        child: AthleteDetailCard(result: ranked[i], rank: i + 1),
+        child: AthleteDetailCard(
+          result: ranked[i],
+          rank: i + 1,
+          gateDistances: gateDistances,
+          isYoyo: isYoyo,
+        ),
       ),
     );
   }
@@ -307,9 +367,16 @@ class LeaderboardTab extends StatelessWidget {
 class AthleteDetailCard extends StatelessWidget {
   final AthleteResultModel result;
   final int rank;
+  final List<double> gateDistances;
+  final bool isYoyo;
 
-  const AthleteDetailCard(
-      {super.key, required this.result, required this.rank});
+  const AthleteDetailCard({
+    super.key,
+    required this.result,
+    required this.rank,
+    this.gateDistances = const [],
+    this.isYoyo = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -321,16 +388,44 @@ class AthleteDetailCard extends StatelessWidget {
                 ? sdBronze
                 : sdSubtext;
 
-    final completedTrials = result.completedTrials;
-    final allTrials = result.trials
-        .where((t) => t.isCompleted || t.isSkipped || t.isFalseStart)
-        .toList()
-      ..sort((a, b) => a.trialNumber.compareTo(b.trialNumber));
+    // ── YoYo-specific computed values ─────────────────────────────────────────
+    final lvl = isYoyo ? yoyoLevel(result) : null;
+    final elim = isYoyo && isYoyoEliminated(result);
+
+    // YoYo: include completed + eliminated trials; Sprint: completed + skipped + false-start
+    final allTrials = isYoyo
+        ? (result.trials
+            .where((t) => t.status == 'completed' || t.status == 'eliminated')
+            .toList()
+          ..sort((a, b) => a.trialNumber.compareTo(b.trialNumber)))
+        : (result.trials
+            .where((t) => t.isCompleted || t.isSkipped || t.isFalseStart)
+            .toList()
+          ..sort((a, b) => a.trialNumber.compareTo(b.trialNumber)));
+
+    final completedTrials = result.completedTrials; // sprint only
+
+    // Sprint speed stats
+    final bestPeakSpeed = isYoyo
+        ? null
+        : completedTrials
+            .where((t) => t.peakSpeed != null)
+            .map((t) => t.peakSpeed!)
+            .fold<double?>(null, (best, v) => best == null || v > best ? v : best);
+    final totalDist = gateDistances.fold(0.0, (s, d) => s + d);
+    final double? avgSpeed = (!isYoyo && totalDist > 0 && result.bestTime != null && result.bestTime! > 0)
+        ? totalDist / result.bestTime!
+        : null;
+    final hasSpeedStats = bestPeakSpeed != null || avgSpeed != null;
+
+    // Whether there is any displayable data at all
+    final hasData = isYoyo ? allTrials.isNotEmpty : completedTrials.isNotEmpty;
 
     return SdCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Athlete header ──────────────────────────────────────────────────
           Row(
             children: [
               Container(
@@ -350,13 +445,15 @@ class AthleteDetailCard extends StatelessWidget {
               const SizedBox(width: 10),
               CircleAvatar(
                 radius: 18,
-                backgroundColor: sdPrimaryLight,
+                backgroundColor: elim
+                    ? const Color(0xFFFCA5A5)
+                    : sdPrimaryLight,
                 child: Text(
                   result.fullName.isNotEmpty
                       ? result.fullName[0].toUpperCase()
                       : '?',
-                  style: const TextStyle(
-                      color: sdPrimary,
+                  style: TextStyle(
+                      color: elim ? const Color(0xFFDC2626) : sdPrimary,
                       fontWeight: FontWeight.w700,
                       fontSize: 13),
                 ),
@@ -373,12 +470,36 @@ class AthleteDetailCard extends StatelessWidget {
                             fontSize: 14)),
                     if (result.team.isNotEmpty)
                       Text(result.team,
-                          style:
-                              const TextStyle(color: sdSubtext, fontSize: 11)),
+                          style: const TextStyle(color: sdSubtext, fontSize: 11)),
                   ],
                 ),
               ),
-              if (result.bestTime != null)
+              // ── Right-side score ────────────────────────────────────────────
+              if (isYoyo)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      lvl != null ? 'Lv ${lvl.toStringAsFixed(1)}' : '—',
+                      style: TextStyle(
+                          color: rank == 1
+                              ? sdGold
+                              : elim
+                                  ? const Color(0xFFDC2626)
+                                  : sdPrimary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 17),
+                    ),
+                    Text(
+                      elim ? 'Eliminated' : 'Survived',
+                      style: TextStyle(
+                          color: elim ? const Color(0xFFDC2626) : sdSuccess,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                )
+              else if (result.bestTime != null)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -395,39 +516,138 @@ class AthleteDetailCard extends StatelessWidget {
                 ),
             ],
           ),
-          if (completedTrials.isNotEmpty) ...[
+
+          if (hasData) ...[
             const SizedBox(height: 14),
             const Divider(color: sdBorder, height: 1),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                SdMiniStat(
-                    label: 'Trials', value: '${completedTrials.length}'),
-                const SdVDivider(),
-                SdMiniStat(
-                    label: 'Best',
-                    value: '${result.bestTime!.toStringAsFixed(3)}s'),
-                const SdVDivider(),
-                if (result.avgTime != null) ...[
+
+            if (isYoyo) ...[
+              // ── YoYo stats row ──────────────────────────────────────────────
+              Row(
+                children: [
                   SdMiniStat(
-                      label: 'Avg',
-                      value: '${result.avgTime!.toStringAsFixed(3)}s'),
+                    label: 'Status',
+                    value: elim ? 'Eliminated' : 'Survived',
+                    color: elim ? const Color(0xFFDC2626) : sdSuccess,
+                  ),
                   const SdVDivider(),
+                  SdMiniStat(
+                    label: 'Best Level',
+                    value: lvl != null ? 'Lv ${lvl.toStringAsFixed(1)}' : '—',
+                    color: sdPrimary,
+                  ),
+                  const SdVDivider(),
+                  SdMiniStat(
+                    label: 'Runs',
+                    value: '${allTrials.length}',
+                  ),
                 ],
-                SdMiniStat(
-                  label: 'Worst',
-                  value: () {
-                    final times =
-                        completedTrials.map((t) => t.totalTime!).toList();
-                    final worst =
-                        times.reduce((a, b) => a > b ? a : b);
-                    return '${worst.toStringAsFixed(3)}s';
-                  }(),
+              ),
+              // ── Strike summary ──────────────────────────────────────────────
+              () {
+                // Pull strike levels from the first trial that has them
+                final strikeSource = allTrials.cast<TrialResultModel?>().firstWhere(
+                      (t) => t!.firstStrikeLevel != null || t.secondStrikeLevel != null,
+                      orElse: () => null,
+                    );
+                if (strikeSource == null) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFFDE68A)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded,
+                            color: Color(0xFFD97706), size: 14),
+                        const SizedBox(width: 6),
+                        const Text('Strikes:',
+                            style: TextStyle(
+                                color: sdSubtext,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 8),
+                        _StrikeChip(number: 1, level: strikeSource.firstStrikeLevel),
+                        if (strikeSource.secondStrikeLevel != null) ...[
+                          const SizedBox(width: 8),
+                          const Icon(Icons.arrow_forward_rounded,
+                              color: sdSubtext, size: 12),
+                          const SizedBox(width: 8),
+                          _StrikeChip(
+                              number: 2,
+                              level: strikeSource.secondStrikeLevel,
+                              isFinal: true),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+              }(),
+            ] else ...[
+              // ── Sprint time stats row ───────────────────────────────────────
+              Row(
+                children: [
+                  SdMiniStat(label: 'Trials', value: '${completedTrials.length}'),
+                  const SdVDivider(),
+                  SdMiniStat(
+                      label: 'Best',
+                      value: '${result.bestTime!.toStringAsFixed(3)}s'),
+                  const SdVDivider(),
+                  if (result.avgTime != null) ...[
+                    SdMiniStat(
+                        label: 'Avg',
+                        value: '${result.avgTime!.toStringAsFixed(3)}s'),
+                    const SdVDivider(),
+                  ],
+                  SdMiniStat(
+                    label: 'Worst',
+                    value: () {
+                      final times = completedTrials.map((t) => t.totalTime!).toList();
+                      return '${times.reduce((a, b) => a > b ? a : b).toStringAsFixed(3)}s';
+                    }(),
+                  ),
+                ],
+              ),
+
+              // ── Sprint speed stats row ──────────────────────────────────────
+              if (hasSpeedStats) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (bestPeakSpeed != null) ...[
+                      SdMiniStat(
+                        label: 'Peak Speed',
+                        value: '${bestPeakSpeed.toStringAsFixed(2)} m/s',
+                        sub: '${(bestPeakSpeed * 3.6).toStringAsFixed(1)} km/h',
+                        color: sdPrimary,
+                      ),
+                    ],
+                    if (bestPeakSpeed != null && avgSpeed != null)
+                      const SdVDivider(),
+                    if (avgSpeed != null)
+                      SdMiniStat(
+                        label: 'Avg Speed',
+                        value: '${avgSpeed.toStringAsFixed(2)} m/s',
+                        sub: '${(avgSpeed * 3.6).toStringAsFixed(1)} km/h',
+                        color: const Color(0xFF7C3AED),
+                      ),
+                  ],
                 ),
               ],
-            ),
+            ],
+
             const SizedBox(height: 12),
-            ...allTrials.map((t) => TrialRow(trial: t, result: result)),
+            ...allTrials.map((t) => TrialRow(
+                  trial: t,
+                  result: result,
+                  gateDistances: gateDistances,
+                  isYoyo: isYoyo,
+                )),
           ],
         ],
       ),
@@ -437,81 +657,501 @@ class AthleteDetailCard extends StatelessWidget {
 
 // ── Trial Row ─────────────────────────────────────────────────────────────────
 
-class TrialRow extends StatelessWidget {
+class TrialRow extends StatefulWidget {
   final TrialResultModel trial;
   final AthleteResultModel result;
+  final List<double> gateDistances;
+  final bool isYoyo;
 
-  const TrialRow({super.key, required this.trial, required this.result});
+  const TrialRow({
+    super.key,
+    required this.trial,
+    required this.result,
+    this.gateDistances = const [],
+    this.isYoyo = false,
+  });
+
+  @override
+  State<TrialRow> createState() => _TrialRowState();
+}
+
+class _TrialRowState extends State<TrialRow> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
-    final t = trial;
+    final t = widget.trial;
+    final result = widget.result;
+    final gateDistances = widget.gateDistances;
+    final isYoyo = widget.isYoyo;
+
+    // ── YoYo row ──────────────────────────────────────────────────────────────
+    if (isYoyo) {
+      final eliminated = t.status == 'eliminated';
+      final hasLevel = t.totalTime != null;
+      final level = t.totalTime;
+
+      // Highlight the best (highest) level trial
+      final allLevels = result.trials
+          .where((x) => x.totalTime != null && (x.status == 'completed' || x.status == 'eliminated'))
+          .map((x) => x.totalTime!)
+          .toList();
+      final bestLevel = allLevels.isEmpty ? null : allLevels.reduce((a, b) => a > b ? a : b);
+      final isBestYoyo = hasLevel && bestLevel != null && level == bestLevel;
+
+      final accent = isBestYoyo ? sdGold : (eliminated ? const Color(0xFFDC2626) : sdPrimary);
+      final accentLight = isBestYoyo
+          ? sdGold.withAlpha(20)
+          : eliminated
+              ? const Color(0xFFFCA5A5)
+              : sdPrimaryLight;
+      final accentBorder = isBestYoyo
+          ? sdGold.withAlpha(80)
+          : eliminated
+              ? const Color(0xFFFCA5A5)
+              : sdBorder;
+
+      final hasStrikes = t.firstStrikeLevel != null || t.secondStrikeLevel != null;
+
+      return Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: isBestYoyo ? sdGold.withAlpha(10) : (eliminated ? const Color(0xFFFEF2F2) : sdSurface),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: accentBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Main row ─────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  // Run badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: accentLight,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text('Run ${t.trialNumber}',
+                        style: TextStyle(color: accent, fontSize: 11, fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(width: 8),
+                  // Best badge
+                  if (isBestYoyo)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: sdGold.withAlpha(20),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.star_rounded, color: sdGold, size: 11),
+                          SizedBox(width: 3),
+                          Text('Best', style: TextStyle(color: sdGold, fontSize: 10, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
+                  const Spacer(),
+                  // Status chip
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: eliminated ? const Color(0xFFFCA5A5) : const Color(0xFFBBF7D0),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text(
+                      eliminated ? 'Eliminated' : 'Survived',
+                      style: TextStyle(
+                          color: eliminated ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // Level value
+                  if (hasLevel) ...[
+                    Text('Lv ', style: const TextStyle(color: sdSubtext, fontSize: 10)),
+                    Text(
+                      level!.toStringAsFixed(1),
+                      style: TextStyle(color: accent, fontWeight: FontWeight.w800, fontSize: 16),
+                    ),
+                  ] else
+                    const Text('—', style: TextStyle(color: sdSubtext, fontSize: 14)),
+                ],
+              ),
+            ),
+
+            // ── Strike timeline ───────────────────────────────────────────────
+            if (hasStrikes) ...[
+              const Divider(height: 1, color: Color(0xFFFFE4E4)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded,
+                        color: Color(0xFFDC2626), size: 13),
+                    const SizedBox(width: 5),
+                    const Text('Strikes:',
+                        style: TextStyle(
+                            color: sdSubtext, fontSize: 11, fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 10),
+                    // Strike 1
+                    _StrikeChip(
+                      number: 1,
+                      level: t.firstStrikeLevel,
+                    ),
+                    if (t.secondStrikeLevel != null) ...[
+                      const SizedBox(width: 8),
+                      const Icon(Icons.arrow_forward_rounded,
+                          color: sdSubtext, size: 12),
+                      const SizedBox(width: 8),
+                      // Strike 2
+                      _StrikeChip(
+                        number: 2,
+                        level: t.secondStrikeLevel,
+                        isFinal: true,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    // ── Sprint row (original logic) ───────────────────────────────────────────
     final isBest = t.isCompleted &&
         t.totalTime != null &&
         result.bestTime != null &&
         t.totalTime == result.bestTime;
 
+    final hasSpeedData = t.isCompleted && t.speeds.isNotEmpty;
+    final segCount = t.speeds.isNotEmpty ? t.speeds.length : t.splits.length;
+    final segLabels = _buildSegmentLabels(gateDistances, segCount);
+
+    // Average speed = total distance / total time
+    double? avgSpeed;
+    if (t.isCompleted && t.totalTime != null && t.totalTime! > 0) {
+      final totalDist = gateDistances.fold(0.0, (s, d) => s + d);
+      if (totalDist > 0) {
+        avgSpeed = totalDist / t.totalTime!;
+      } else if (t.speeds.isNotEmpty) {
+        avgSpeed = t.speeds.fold(0.0, (s, v) => s + v) / t.speeds.length;
+      }
+    }
+
+    final accent = isBest ? sdGold : sdPrimary;
+    final accentLight = isBest ? sdGold.withAlpha(20) : sdPrimaryLight;
+    final accentBorder = isBest ? sdGold.withAlpha(80) : sdBorder;
+    final hasSegments = t.splits.isNotEmpty || hasSpeedData;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: isBest ? sdGold.withAlpha(15) : const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: isBest ? sdGold.withAlpha(80) : sdBorder),
+        color: isBest ? sdGold.withAlpha(10) : sdSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accentBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Tappable header ─────────────────────────────────────────────────
+          InkWell(
+            onTap: hasSegments ? () => setState(() => _expanded = !_expanded) : null,
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              child: Row(
+                children: [
+                  // Trial badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: accentLight,
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text('T${t.trialNumber}',
+                        style: TextStyle(
+                            color: accent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(width: 8),
+                  // Best badge
+                  if (isBest)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: sdGold.withAlpha(20),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.star_rounded, color: sdGold, size: 11),
+                          SizedBox(width: 3),
+                          Text('Best', style: TextStyle(color: sdGold, fontSize: 10, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                    ),
+                  const Spacer(),
+                  // Non-completed label
+                  if (!t.isCompleted)
+                    Text(
+                      t.isSkipped ? 'Skipped' : 'False Start',
+                      style: TextStyle(
+                          color: t.isSkipped ? sdSubtext : const Color(0xFFDC2626),
+                          fontSize: 11,
+                          fontStyle: FontStyle.italic),
+                    ),
+                  // Total time
+                  if (t.isCompleted && t.totalTime != null) ...[
+                    Text('Total', style: const TextStyle(color: sdSubtext, fontSize: 10)),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${t.totalTime!.toStringAsFixed(3)}s',
+                      style: TextStyle(
+                          color: accent, fontWeight: FontWeight.w800, fontSize: 15),
+                    ),
+                  ],
+                  // Expand/collapse chevron
+                  if (hasSegments) ...[
+                    const SizedBox(width: 8),
+                    AnimatedRotation(
+                      turns: _expanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: Icon(Icons.keyboard_arrow_down_rounded,
+                          color: sdSubtext, size: 18),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          if (t.isCompleted) ...[
+            // ── Peak chips — always visible ────────────────────────────────
+            if (hasSpeedData) ...[
+              const Divider(height: 1, color: sdBorder),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                child: Row(
+                  children: [
+                    _PeakChip(
+                      icon: Icons.speed_rounded,
+                      label: 'Peak Speed',
+                      value: t.peakSpeed != null
+                          ? '${t.peakSpeed!.toStringAsFixed(2)} m/s'
+                          : '--',
+                      sub: t.peakSpeed != null
+                          ? '${(t.peakSpeed! * 3.6).toStringAsFixed(1)} km/h'
+                          : '',
+                      color: sdPrimary,
+                    ),
+                    const SizedBox(width: 6),
+                    _PeakChip(
+                      icon: Icons.directions_run_rounded,
+                      label: 'Avg Speed',
+                      value: avgSpeed != null
+                          ? '${avgSpeed.toStringAsFixed(2)} m/s'
+                          : '--',
+                      sub: avgSpeed != null
+                          ? '${(avgSpeed * 3.6).toStringAsFixed(1)} km/h'
+                          : '',
+                      color: const Color(0xFF7C3AED),
+                    ),
+                    const SizedBox(width: 6),
+                    _PeakChip(
+                      icon: Icons.trending_up_rounded,
+                      label: 'Peak Accel',
+                      value: t.peakAcceleration != null
+                          ? '${t.peakAcceleration! >= 0 ? '+' : ''}${t.peakAcceleration!.toStringAsFixed(2)} m/s²'
+                          : '--',
+                      sub: t.peakAcceleration != null
+                          ? (t.peakAcceleration! >= 0 ? 'Accelerating' : 'Decelerating')
+                          : '',
+                      color: t.peakAcceleration != null && t.peakAcceleration! >= 0
+                          ? const Color(0xFF16A34A)
+                          : const Color(0xFFDC2626),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // ── Segment table — collapsed by default ───────────────────────
+            if (hasSegments && _expanded) ...[
+              const Divider(height: 1, color: sdBorder),
+              // Table header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
+                child: Row(children: const [
+                  Expanded(flex: 25, child: Text('Segment', style: TextStyle(color: sdSubtext, fontSize: 10, fontWeight: FontWeight.w600))),
+                  Expanded(flex: 25, child: Text('Split', style: TextStyle(color: sdSubtext, fontSize: 10, fontWeight: FontWeight.w600))),
+                  Expanded(flex: 25, child: Text('Speed', style: TextStyle(color: sdSubtext, fontSize: 10, fontWeight: FontWeight.w600))),
+                  Expanded(flex: 25, child: Text('Accel', style: TextStyle(color: sdSubtext, fontSize: 10, fontWeight: FontWeight.w600))),
+                ]),
+              ),
+              // Table rows
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: Column(
+                  children: _buildSegmentRows(t, segLabels),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildSegmentRows(TrialResultModel t, List<String> segLabels) {
+    final count = t.speeds.isNotEmpty ? t.speeds.length : t.splits.length;
+    final peakSpeed = t.peakSpeed;
+
+    return List.generate(count, (i) {
+      final label = i < segLabels.length ? segLabels[i] : 'G$i→G${i + 1}';
+      final splitVal = i < t.splits.length ? t.splits[i] : null;
+      final speedVal = i < t.speeds.length ? t.speeds[i] : null;
+      final accelVal = i < t.accelerations.length ? t.accelerations[i] : null;
+      final isPeak = speedVal != null && speedVal == peakSpeed;
+
+      return Container(
+        margin: const EdgeInsets.only(top: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: isPeak ? sdPrimary.withAlpha(15) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: isPeak ? sdPrimary.withAlpha(60) : sdBorder),
+        ),
+        child: Row(children: [
+          Expanded(flex: 25, child: Text(label,
+              style: TextStyle(color: isPeak ? sdPrimary : sdText, fontSize: 11,
+                  fontWeight: isPeak ? FontWeight.w700 : FontWeight.w500))),
+          Expanded(flex: 25, child: Text(
+              splitVal != null ? '${splitVal.toStringAsFixed(3)}s' : '--',
+              style: const TextStyle(color: sdText, fontSize: 11))),
+          Expanded(flex: 25, child: Text(
+              speedVal != null ? '${speedVal.toStringAsFixed(2)} m/s' : '--',
+              style: TextStyle(color: isPeak ? sdPrimary : sdText, fontSize: 11,
+                  fontWeight: isPeak ? FontWeight.w700 : FontWeight.normal))),
+          Expanded(flex: 25, child: accelVal != null
+              ? Text('${accelVal >= 0 ? '+' : ''}${accelVal.toStringAsFixed(2)}',
+                  style: TextStyle(
+                      color: accelVal >= 0 ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                      fontSize: 11, fontWeight: FontWeight.w600))
+              : const Text('--', style: TextStyle(color: sdSubtext, fontSize: 11))),
+        ]),
+      );
+    });
+  }
+}
+
+// ── Peak chip helper ──────────────────────────────────────────────────────────
+
+class _PeakChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String sub;
+  final Color color;
+
+  const _PeakChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.sub,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withAlpha(15),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withAlpha(50)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 16),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          color: color, fontSize: 9, fontWeight: FontWeight.w600)),
+                  Text(value,
+                      style: TextStyle(
+                          color: color, fontSize: 13, fontWeight: FontWeight.w800)),
+                  if (sub.isNotEmpty)
+                    Text(sub,
+                        style: const TextStyle(color: sdSubtext, fontSize: 9)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Strike Chip ───────────────────────────────────────────────────────────────
+
+class _StrikeChip extends StatelessWidget {
+  final int number;
+  final String? level;
+  final bool isFinal;
+
+  const _StrikeChip({
+    required this.number,
+    required this.level,
+    this.isFinal = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isFinal ? const Color(0xFFDC2626) : const Color(0xFFD97706);
+    final bg = isFinal ? const Color(0xFFFEE2E2) : const Color(0xFFFEF3C7);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withAlpha(80)),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: isBest ? sdGold.withAlpha(30) : sdPrimaryLight,
-              borderRadius: BorderRadius.circular(4),
+          // Strike number circles: ● ●
+          ...List.generate(number, (i) => Padding(
+            padding: EdgeInsets.only(right: i < number - 1 ? 3 : 0),
+            child: Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
-            child: Text('T${t.trialNumber}',
-                style: TextStyle(
-                    color: isBest ? sdGold : sdPrimary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700)),
+          )),
+          const SizedBox(width: 5),
+          Text(
+            level != null ? 'Lv $level' : '—',
+            style: TextStyle(
+                color: color, fontSize: 11, fontWeight: FontWeight.w700),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: t.isCompleted
-                ? Column(
-                    spacing: 6,
-                    children: [
-                      if (t.splits.isNotEmpty)
-                        ...t.splits.asMap().entries.map((e) => Text(
-                              'G${e.key + 1}→G${e.key + 2}: ${e.value.toStringAsFixed(3)}s',
-                              style: const TextStyle(
-                                  color: sdSubtext, fontSize: 11, fontWeight: FontWeight.bold),
-                            )),
-                    ],
-                  )
-                : Text(
-                    t.isSkipped ? 'Skipped' : 'False Start',
-                    style: const TextStyle(
-                        color: sdSubtext,
-                        fontSize: 11,
-                        fontStyle: FontStyle.italic),
-                  ),
-          ),
-          if (t.isCompleted && t.totalTime != null)
-            Row(
-              children: [
-                Text(
-                  '${t.totalTime!.toStringAsFixed(3)}s',
-                  style: TextStyle(
-                    color: isBest ? sdGold : sdText,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-                if (isBest) ...[
-                  const SizedBox(width: 4),
-                  const Icon(Icons.star_rounded, color: sdGold, size: 14),
-                ],
-              ],
-            ),
         ],
       ),
     );
@@ -522,11 +1162,37 @@ class TrialRow extends StatelessWidget {
 
 class ChartsTab extends StatelessWidget {
   final List<AthleteResultModel> ranked;
+  final List<double> gateDistances;
+  final bool isYoyo;
 
-  const ChartsTab({super.key, required this.ranked});
+  const ChartsTab({
+    super.key,
+    required this.ranked,
+    this.gateDistances = const [],
+    this.isYoyo = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // ── YoYo charts ──────────────────────────────────────────────────────────
+    if (isYoyo) {
+      final athletesWithData = ranked
+          .where((r) => yoyoLevel(r) != null)
+          .toList();
+      if (athletesWithData.isEmpty) {
+        return const Center(
+          child: Text('No YoYo data to chart.', style: TextStyle(color: sdSubtext)),
+        );
+      }
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          SdCard(child: YoyoLevelBarChart(athletes: athletesWithData)),
+        ],
+      );
+    }
+
+    // ── Sprint charts (original) ─────────────────────────────────────────────
     final athletesWithData =
         ranked.where((r) => r.completedTrials.isNotEmpty).toList();
 
@@ -537,6 +1203,10 @@ class ChartsTab extends StatelessWidget {
       );
     }
 
+    final hasSpeedData = athletesWithData.any(
+      (r) => r.completedTrials.any((t) => t.speeds.isNotEmpty),
+    );
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -544,6 +1214,12 @@ class ChartsTab extends StatelessWidget {
         const SizedBox(height: 16),
         if (athletesWithData.any((r) => r.completedTrials.length > 1))
           SdCard(child: TrialProgressionChart(athletes: athletesWithData)),
+        if (hasSpeedData) ...[
+          const SizedBox(height: 16),
+          SdCard(child: SpeedProfileChart(athletes: athletesWithData, gateDistances: gateDistances)),
+          const SizedBox(height: 16),
+          SdCard(child: AccelerationChart(athletes: athletesWithData, gateDistances: gateDistances)),
+        ],
       ],
     );
   }
@@ -661,6 +1337,163 @@ class BestTimeBarChart extends StatelessWidget {
                 const SizedBox(width: 12),
                 Text(
                   '${time.toStringAsFixed(3)}s',
+                  style: TextStyle(
+                    color: isTop3 ? rankColor : sdText,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}
+
+// ── YoYo Level Bar Chart ──────────────────────────────────────────────────────
+
+class YoyoLevelBarChart extends StatelessWidget {
+  final List<AthleteResultModel> athletes;
+
+  const YoyoLevelBarChart({super.key, required this.athletes});
+
+  @override
+  Widget build(BuildContext context) {
+    // Sort by highest level first (should already be ranked, but be safe)
+    final sorted = [...athletes]..sort((a, b) {
+        final al = yoyoLevel(a) ?? 0;
+        final bl = yoyoLevel(b) ?? 0;
+        return bl.compareTo(al);
+      });
+
+    if (sorted.isEmpty) {
+      return const Center(
+        child: Text('No data available', style: TextStyle(color: sdSubtext)),
+      );
+    }
+
+    final best = yoyoLevel(sorted.first) ?? 0;
+    final worst = yoyoLevel(sorted.last) ?? 0;
+    final range = (best - worst).clamp(0.001, double.infinity);
+
+    const rankColors = [sdGold, sdSilver, sdBronze];
+    const eliminatedColor = Color(0xFFDC2626);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SdSectionTitle('YoYo Level Leaderboard'),
+        const SizedBox(height: 4),
+        const Text(
+          'Sorted highest → lowest level',
+          style: TextStyle(color: sdSubtext, fontSize: 11),
+        ),
+        const SizedBox(height: 16),
+        ...sorted.asMap().entries.map((e) {
+          final rank = e.key + 1;
+          final r = e.value;
+          final lvl = yoyoLevel(r);
+          final elim = isYoyoEliminated(r);
+          final fill = lvl != null && range > 0
+              ? (1.0 - ((best - lvl) / range) * 0.8).clamp(0.2, 1.0)
+              : 0.2;
+          final isTop3 = rank <= 3;
+          final rankColor = isTop3 ? rankColors[rank - 1] : sdPrimary.withValues(alpha: 0.7);
+          final barColor = elim ? eliminatedColor : rankColor;
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: isTop3
+                        ? rankColor.withValues(alpha: 0.15)
+                        : const Color(0xFFF0F4FA),
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$rank',
+                    style: TextStyle(
+                      color: isTop3 ? rankColor : sdSubtext,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              r.fullName,
+                              style: const TextStyle(
+                                color: sdText,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (elim) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFCA5A5),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text(
+                                'Eliminated',
+                                style: TextStyle(
+                                    color: Color(0xFFDC2626),
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 5),
+                      LayoutBuilder(builder: (ctx, cons) {
+                        return Stack(
+                          children: [
+                            Container(
+                              height: 6,
+                              width: cons.maxWidth,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE8EDF5),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            Container(
+                              height: 6,
+                              width: cons.maxWidth * fill,
+                              decoration: BoxDecoration(
+                                color: barColor,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  lvl != null ? 'Lv ${lvl.toStringAsFixed(1)}' : '—',
                   style: TextStyle(
                     color: isTop3 ? rankColor : sdText,
                     fontSize: 13,
@@ -1212,18 +2045,33 @@ class SdStatCard extends StatelessWidget {
 class SdMiniStat extends StatelessWidget {
   final String label;
   final String value;
-  const SdMiniStat({super.key, required this.label, required this.value});
+  /// Optional sub-line (e.g. "26.7 km/h")
+  final String? sub;
+  /// Optional value colour — defaults to sdText
+  final Color? color;
+
+  const SdMiniStat({
+    super.key,
+    required this.label,
+    required this.value,
+    this.sub,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final valueColor = color ?? sdText;
     return Expanded(
       child: Column(
         children: [
           Text(value,
-              style: const TextStyle(
-                  color: sdText, fontWeight: FontWeight.w700, fontSize: 13)),
+              style: TextStyle(
+                  color: valueColor, fontWeight: FontWeight.w700, fontSize: 13)),
           Text(label,
               style: const TextStyle(color: sdSubtext, fontSize: 10)),
+          if (sub != null && sub!.isNotEmpty)
+            Text(sub!,
+                style: TextStyle(color: valueColor.withAlpha(180), fontSize: 9)),
         ],
       ),
     );
@@ -1247,4 +2095,352 @@ String sdFormatDate(DateTime dt) {
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
   ];
   return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+}
+
+// ── Speed Profile Chart ───────────────────────────────────────────────────────
+
+class SpeedProfileChart extends StatelessWidget {
+  final List<AthleteResultModel> athletes;
+  final List<double> gateDistances;
+  const SpeedProfileChart({
+    super.key,
+    required this.athletes,
+    this.gateDistances = const [],
+  });
+
+  static const _barColors = [
+    sdPrimary, sdGold, sdBronze, Color(0xFF7C3AED), Color(0xFF059669), sdSilver,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    // Use best trial (lowest totalTime) that has speed data
+    final entries = athletes
+        .map((a) {
+          final trial = a.completedTrials
+              .where((t) => t.speeds.isNotEmpty)
+              .fold<TrialResultModel?>(null, (best, t) {
+            if (best == null) return t;
+            return (t.totalTime ?? double.infinity) < (best.totalTime ?? double.infinity)
+                ? t
+                : best;
+          });
+          return trial != null ? MapEntry(a, trial) : null;
+        })
+        .whereType<MapEntry<AthleteResultModel, TrialResultModel>>()
+        .toList();
+
+    if (entries.isEmpty) return const SizedBox();
+
+    // Cap at 6 athletes (one per colour) — more than 6 is unreadable on a line chart
+    final capped = entries.take(6).toList();
+    final maxSegments = capped.map((e) => e.value.speeds.length).reduce((a, b) => a > b ? a : b);
+    final segLabels = _buildSegmentLabels(gateDistances, maxSegments);
+    // Each segment gets 42 px minimum so labels never crowd
+    const segPx = 42.0;
+    const leftReserved = 44.0;
+    final chartWidth = maxSegments * segPx;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SdSectionTitle('Speed Profile (Best Trial)'),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            const Text('Segment speed in m/s', style: TextStyle(color: sdSubtext, fontSize: 11)),
+            if (entries.length > 6) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: sdGold.withAlpha(30),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('Top 6 of ${entries.length}',
+                    style: const TextStyle(color: sdGold, fontSize: 10, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Legend
+        Wrap(
+          spacing: 10,
+          runSpacing: 4,
+          children: capped.asMap().entries.map((e) {
+            final color = _barColors[e.key];
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                const SizedBox(width: 4),
+                Text(e.value.key.fullName.split(' ').first, style: const TextStyle(color: sdText, fontSize: 11)),
+              ],
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 220,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: chartWidth + leftReserved,
+              child: LineChart(
+                LineChartData(
+                  minX: 0,
+                  maxX: (maxSegments - 1).toDouble(),
+                  minY: 0,
+                  clipData: const FlClipData.all(),
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      fitInsideHorizontally: true,
+                      fitInsideVertically: true,
+                      getTooltipItems: (spots) => spots.map((s) {
+                        final name = capped[s.barIndex].key.fullName.split(' ').first;
+                        return LineTooltipItem(
+                          '$name: ${s.y.toStringAsFixed(2)} m/s',
+                          TextStyle(color: _barColors[s.barIndex], fontSize: 11, fontWeight: FontWeight.w600),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        interval: 1,
+                        reservedSize: 22,
+                        getTitlesWidget: (v, meta) {
+                          final idx = v.toInt();
+                          final fullLabel = idx < segLabels.length
+                              ? segLabels[idx]
+                              : (idx == 0 ? 'M→G1' : 'G$idx→G${idx + 1}');
+                          // Use short label (destination gate) e.g. "G3"
+                          final display = fullLabel.split('→').last;
+                          return SideTitleWidget(
+                            meta: meta,
+                            space: 4,
+                            child: Text(display,
+                                style: const TextStyle(color: sdSubtext, fontSize: 9)),
+                          );
+                        },
+                      ),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: leftReserved,
+                        getTitlesWidget: (v, meta) {
+                          if (v == meta.min || v == meta.max) return const SizedBox.shrink();
+                          return Text(v.toStringAsFixed(1), style: const TextStyle(color: sdSubtext, fontSize: 9));
+                        },
+                      ),
+                    ),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  gridData: FlGridData(
+                    drawVerticalLine: false,
+                    horizontalInterval: 1,
+                    getDrawingHorizontalLine: (_) => const FlLine(color: sdBorder, strokeWidth: 0.5),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  lineBarsData: capped.asMap().entries.map((e) {
+                    final color = _barColors[e.key];
+                    final speeds = e.value.value.speeds;
+                    return LineChartBarData(
+                      spots: speeds.asMap().entries.map((s) => FlSpot(s.key.toDouble(), s.value)).toList(),
+                      isCurved: true,
+                      color: color,
+                      barWidth: 2.5,
+                      dotData: FlDotData(
+                        getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(radius: 3, color: color),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Acceleration Chart ────────────────────────────────────────────────────────
+
+class AccelerationChart extends StatelessWidget {
+  final List<AthleteResultModel> athletes;
+  final List<double> gateDistances;
+  const AccelerationChart({
+    super.key,
+    required this.athletes,
+    this.gateDistances = const [],
+  });
+
+  static const _barColors = [
+    sdPrimary, sdGold, sdBronze, Color(0xFF7C3AED), Color(0xFF059669), sdSilver,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = athletes
+        .map((a) {
+          final trial = a.completedTrials
+              .where((t) => t.accelerations.isNotEmpty)
+              .fold<TrialResultModel?>(null, (best, t) {
+            if (best == null) return t;
+            return (t.totalTime ?? double.infinity) < (best.totalTime ?? double.infinity)
+                ? t
+                : best;
+          });
+          return trial != null ? MapEntry(a, trial) : null;
+        })
+        .whereType<MapEntry<AthleteResultModel, TrialResultModel>>()
+        .toList();
+
+    if (entries.isEmpty) return const SizedBox();
+
+    // Cap at 6 athletes — more than 6 lines is unreadable
+    final capped = entries.take(6).toList();
+    final maxSegments = capped.map((e) => e.value.accelerations.length).reduce((a, b) => a > b ? a : b);
+    final segLabels = _buildSegmentLabels(gateDistances, maxSegments);
+    const segPx = 42.0;
+    const leftReserved = 48.0;
+    final chartWidth = maxSegments * segPx;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SdSectionTitle('Acceleration Profile (Best Trial)'),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            const Text('+ = accelerating, − = decelerating',
+                style: TextStyle(color: sdSubtext, fontSize: 11)),
+            if (entries.length > 6) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: sdGold.withAlpha(30),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('Top 6 of ${entries.length}',
+                    style: const TextStyle(color: sdGold, fontSize: 10, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 4,
+          children: capped.asMap().entries.map((e) {
+            final color = _barColors[e.key];
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                const SizedBox(width: 4),
+                Text(e.value.key.fullName.split(' ').first, style: const TextStyle(color: sdText, fontSize: 11)),
+              ],
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 220,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: chartWidth + leftReserved,
+              child: LineChart(
+                LineChartData(
+                  minX: 0,
+                  maxX: (maxSegments - 1).toDouble(),
+                  clipData: const FlClipData.all(),
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      fitInsideHorizontally: true,
+                      fitInsideVertically: true,
+                      getTooltipItems: (spots) => spots.map((s) {
+                        final name = capped[s.barIndex].key.fullName.split(' ').first;
+                        final sign = s.y >= 0 ? '+' : '';
+                        return LineTooltipItem(
+                          '$name: $sign${s.y.toStringAsFixed(2)} m/s²',
+                          TextStyle(color: _barColors[s.barIndex], fontSize: 11, fontWeight: FontWeight.w600),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        interval: 1,
+                        reservedSize: 22,
+                        getTitlesWidget: (v, meta) {
+                          final idx = v.toInt();
+                          final fullLabel = idx < segLabels.length
+                              ? segLabels[idx]
+                              : (idx == 0 ? 'M→G1' : 'G$idx→G${idx + 1}');
+                          final display = fullLabel.split('→').last;
+                          return SideTitleWidget(
+                            meta: meta,
+                            space: 4,
+                            child: Text(display,
+                                style: const TextStyle(color: sdSubtext, fontSize: 9)),
+                          );
+                        },
+                      ),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: leftReserved,
+                        getTitlesWidget: (v, meta) {
+                          if (v == meta.min || v == meta.max) return const SizedBox.shrink();
+                          final sign = v >= 0 ? '+' : '';
+                          return Text('$sign${v.toStringAsFixed(1)}',
+                              style: const TextStyle(color: sdSubtext, fontSize: 9));
+                        },
+                      ),
+                    ),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  ),
+                  gridData: FlGridData(
+                    drawVerticalLine: false,
+                    horizontalInterval: 1,
+                    getDrawingHorizontalLine: (v) => FlLine(
+                      color: v == 0 ? sdText.withValues(alpha: 0.3) : sdBorder,
+                      strokeWidth: v == 0 ? 1 : 0.5,
+                    ),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  lineBarsData: capped.asMap().entries.map((e) {
+                    final color = _barColors[e.key];
+                    final accels = e.value.value.accelerations;
+                    return LineChartBarData(
+                      spots: accels.asMap().entries.map((a) => FlSpot(a.key.toDouble(), a.value)).toList(),
+                      isCurved: false,
+                      color: color,
+                      barWidth: 2.5,
+                      dotData: FlDotData(
+                        getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(radius: 3, color: color),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

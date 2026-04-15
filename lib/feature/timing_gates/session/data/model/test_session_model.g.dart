@@ -33,13 +33,16 @@ class TestSessionModelAdapter extends TypeAdapter<TestSessionModel> {
       location: fields[13] as String,
       notes: fields[14] as String,
       completedAt: fields[15] as DateTime?,
+      gateDistances: fields[16] == null
+          ? const []
+          : (fields[16] as List).cast<double>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, TestSessionModel obj) {
     writer
-      ..writeByte(16)
+      ..writeByte(17)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -71,7 +74,9 @@ class TestSessionModelAdapter extends TypeAdapter<TestSessionModel> {
       ..writeByte(14)
       ..write(obj.notes)
       ..writeByte(15)
-      ..write(obj.completedAt);
+      ..write(obj.completedAt)
+      ..writeByte(16)
+      ..write(obj.gateDistances);
   }
 
   @override

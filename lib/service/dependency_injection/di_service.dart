@@ -1,9 +1,20 @@
 import 'package:get_it/get_it.dart';
+import 'package:xelex_esp/service/api/api_service.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/common/sport/data/repository/sport_repository_impl.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/common/sport/data/source/sport_local_datasource.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/common/sport/data/source/sport_remote_datasource.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/common/sport/domain/repository/sport_repository.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/common/sport/domain/usecase/get_sports_usecase.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/common/sport/presentation/cubit/sport_cubit.dart';
 import 'package:xelex_esp/feature/auth/data/datasource/auth_remote_datasource.dart';
 import 'package:xelex_esp/feature/auth/data/repository/auth_repository_impl.dart';
 import 'package:xelex_esp/feature/auth/domain/repository/auth_repository.dart';
 import 'package:xelex_esp/feature/auth/domain/usecase/sign_in_with_google_usecase.dart';
+import 'package:xelex_esp/feature/auth/domain/usecase/sign_in_with_linkedin_usecase.dart';
+import 'package:xelex_esp/feature/auth/domain/usecase/sign_in_with_microsoft_usecase.dart';
+import 'package:xelex_esp/feature/auth/domain/usecase/sign_in_with_apple_usecase.dart';
 import 'package:xelex_esp/feature/auth/domain/usecase/sign_out_usecase.dart';
 import 'package:xelex_esp/feature/auth/presentation/cubit/auth_cubit.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
@@ -61,7 +72,11 @@ import '../permission/bluetooth_permission_service.dart';
 
 final sl = GetIt.instance;
 
-void setupDI() {
+void setupDI({required SharedPreferences sharedPreferences}) {
+  // Core
+  sl.registerLazySingleton<SharedPreferences>(() => sharedPreferences);
+  sl.registerLazySingleton<ApiService>(() => ApiService.instance);
+
   // Auth
   sl.registerLazySingleton<GoogleSignIn>(
     () => GoogleSignIn(scopes: ['email', 'profile']),
@@ -75,11 +90,27 @@ void setupDI() {
   sl.registerLazySingleton<SignInWithGoogleUseCase>(
     () => SignInWithGoogleUseCase(sl()),
   );
+  sl.registerLazySingleton<SignInWithLinkedInUseCase>(
+    () => SignInWithLinkedInUseCase(sl()),
+  );
+  sl.registerLazySingleton<SignInWithMicrosoftUseCase>(
+    () => SignInWithMicrosoftUseCase(sl()),
+  );
+  sl.registerLazySingleton<SignInWithAppleUseCase>(
+    () => SignInWithAppleUseCase(sl()),
+  );
   sl.registerLazySingleton<SignOutUseCase>(
     () => SignOutUseCase(sl()),
   );
   sl.registerFactory<AuthCubit>(
-    () => AuthCubit(signInWithGoogle: sl(), signOut: sl()),
+    () => AuthCubit(
+      signInWithGoogle: sl(),
+      signInWithLinkedIn: sl(),
+      signInWithMicrosoft: sl(),
+      signInWithApple: sl(),
+      signOut: sl(),
+      pref: sl(),
+    ),
   );
 
   // Services
@@ -309,7 +340,24 @@ void setupDI() {
 
   sl.registerLazySingleton<IndiviProfileRegistrationCubit>(
     () => IndiviProfileRegistrationCubit(),
-    );
+  );
+
+  // Sport (Common - Heart Rate Tracker)
+  sl.registerLazySingleton<SportRemoteDataSource>(
+    () => SportRemoteDataSourceImpl(sl<ApiService>()),
+  );
+  sl.registerLazySingleton<SportLocalDataSource>(
+    () => SportLocalDataSourceImpl(sl()),
+  );
+  sl.registerLazySingleton<SportRepository>(
+    () => SportRepositoryImpl(sl(), sl()),
+  );
+  sl.registerLazySingleton<GetSportsUseCase>(
+    () => GetSportsUseCase(sl()),
+  );
+  sl.registerFactory<SportCubit>(
+    () => SportCubit(getSports: sl()),
+  );
 
   sl.registerLazySingleton<HeartBleCubit>(
     () => HeartBleCubit(errorCubit: sl()));

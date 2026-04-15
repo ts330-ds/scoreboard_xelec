@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/feature/timing_gates/session/data/model/trial_result_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/session/timing_session_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/session/timing_session_state.dart';
 
@@ -936,11 +937,40 @@ class StepRunTest extends StatelessWidget {
     final result = state.lastTrialResult!;
     final splits = result.splits;
 
-    double cumulative = 0;
-    final cumulativeList = splits.map((s) {
-      cumulative += s;
-      return cumulative;
-    }).toList();
+    // Build labels + display splits from gateDistances, skipping zero-distance
+    // segments (e.g. M→G1=0 when athlete starts at G1).
+    //
+    // The firmware MAY still send a near-zero split for a zero-distance gate
+    // crossing (athlete physically walks past the Master gate while starting at
+    // G1). In that case splits.length > non-zero segments count.
+    // We compute an offset to trim those leading phantom splits before display.
+    final segDists = state.gateDistances;
+    final List<String> segLabels;
+    final List<double> segTimes; // display-only trimmed splits
+
+    if (segDists.length >= 2) {
+      final labels = <String>[];
+      for (int i = 0; i < segDists.length - 1; i++) {
+        if (segDists[i + 1] <= 0) continue;
+        labels.add(i == 0 ? 'M→G1' : 'G$i→G${i + 1}');
+      }
+      if (labels.isNotEmpty && labels.length <= splits.length) {
+        // Trim leading zero-distance splits sent by firmware
+        final offset = splits.length - labels.length;
+        segLabels = labels;
+        segTimes = splits.sublist(offset);
+      } else {
+        // Fallback: use all splits with positional labels
+        segLabels = List.generate(
+          splits.length, (i) => i == 0 ? 'M→G1' : 'G$i→G${i + 1}');
+        segTimes = List<double>.from(splits);
+      }
+    } else {
+      // No gateDistances available — positional labels
+      segLabels = List.generate(
+        splits.length, (i) => i == 0 ? 'M→G1' : 'G$i→G${i + 1}');
+      segTimes = List<double>.from(splits);
+    }
 
     return Container(
       width: double.infinity,
@@ -969,14 +999,22 @@ class StepRunTest extends StatelessWidget {
               ],
             ),
           ),
+          // ── Speed & Acceleration (sprint only) ─────────────────────────
+          if (result.speeds.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 12),
+            _buildSpeedAccelSection(result, state),
+          ],
+
           if (splits.isNotEmpty) ...[
             const SizedBox(height: 16),
             const Divider(height: 1),
             const SizedBox(height: 12),
             Row(children: const [
               Expanded(
-                  flex: 2,
-                  child: Text('Gate',
+                  flex: 3,
+                  child: Text('Segment',
                       style: TextStyle(
                           color: _subtext,
                           fontSize: 11,
@@ -996,12 +1034,14 @@ class StepRunTest extends StatelessWidget {
                           fontSize: 11,
                           fontWeight: FontWeight.w600))),
             ]),
+
             const SizedBox(height: 8),
-            ...splits.asMap().entries.map((e) {
-              final gateNum = e.key + 1;
-              final splitTime = e.value;
-              final cum = cumulativeList[e.key];
-              final isLast = e.key == splits.length - 1;
+            ...List.generate(segTimes.length, (idx) {
+              final label = segLabels[idx];
+              final segTime = segTimes[idx];
+              // cumulative = sum of all segment times up to and including this one
+              final cum = splits.take(idx + 1).fold(0.0, (a, b) => a + b);
+              final isLast = idx == segTimes.length - 1;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 6),
@@ -1020,29 +1060,19 @@ class StepRunTest extends StatelessWidget {
                 ),
                 child: Row(children: [
                   Expanded(
-                    flex: 2,
-                    child: Container(
-                      width: 22,
-                      height: 22,
-                      decoration: BoxDecoration(
-                        color: isLast ? _success : _primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '$gateNum',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700),
-                        ),
-                      ),
+                    flex: 3,
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                          color: isLast ? _success : _primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700),
                     ),
                   ),
                   Expanded(
                     flex: 3,
                     child: Text(
-                      '${splitTime.toStringAsFixed(3)} s',
+                      '${segTime.toStringAsFixed(3)} s',
                       style: TextStyle(
                           color: _text,
                           fontSize: 13,
@@ -1073,6 +1103,173 @@ class StepRunTest extends StatelessWidget {
   }
 
   // ── Footer ─────────────────────────────────────────────────────────────────
+
+  // ── Speed & Acceleration section ───────────────────────────────────────────
+
+  Widget _buildSpeedAccelSection(TrialResultModel result, TimingSessionState state) {
+    final speeds = result.speeds;
+    final accels = result.accelerations;
+    final peakSpeed = result.peakSpeed;
+    final peakAccel = result.peakAcceleration;
+
+    // Build segment labels from gateDistances, skipping zero-distance segments
+    // (same skip logic as _enrichWithSpeedAccel in the cubit).
+    // gateDistances = [0 (Master), M→G1, G1→G2, G2→G3, ...]
+    final segDists = state.gateDistances;
+    final segLabels = <String>[];
+    for (int i = 0; i < segDists.length - 1; i++) {
+      if (segDists[i + 1] <= 0) continue; // skip zero-distance (athlete at G1)
+      segLabels.add(i == 0 ? 'M→G1' : 'G$i→G${i + 1}');
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section label
+        const Text(
+          'Velocity & Acceleration',
+          style: TextStyle(color: _text, fontSize: 12, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 10),
+
+        // Peak summary row
+        Row(
+          children: [
+            _buildPeakChip(
+              label: 'Peak Speed',
+              value: peakSpeed != null
+                  ? '${peakSpeed.toStringAsFixed(2)} m/s'
+                  : '--',
+              sub: peakSpeed != null
+                  ? '${(peakSpeed * 3.6).toStringAsFixed(1)} km/h'
+                  : '',
+              color: _primary,
+            ),
+            const SizedBox(width: 10),
+            _buildPeakChip(
+              label: 'Peak Accel',
+              value: peakAccel != null
+                  ? '${peakAccel.toStringAsFixed(2)} m/s²'
+                  : '--',
+              sub: peakAccel != null
+                  ? (peakAccel >= 0 ? 'Accelerating' : 'Decelerating')
+                  : '',
+              color: _success,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // Per-segment table header
+        Row(children: const [
+          Expanded(
+              flex: 2,
+              child: Text('Segment',
+                  style: TextStyle(color: _subtext, fontSize: 11, fontWeight: FontWeight.w600))),
+          Expanded(
+              flex: 3,
+              child: Text('Speed (m/s)',
+                  style: TextStyle(color: _subtext, fontSize: 11, fontWeight: FontWeight.w600))),
+          Expanded(
+              flex: 3,
+              child: Text('Accel (m/s²)',
+                  style: TextStyle(color: _subtext, fontSize: 11, fontWeight: FontWeight.w600))),
+        ]),
+        const SizedBox(height: 6),
+
+        // Per-segment rows
+        ...speeds.asMap().entries.map((e) {
+          final i = e.key;
+          final speed = e.value;
+          final isPeakSpeed = speed == peakSpeed;
+          // Use label from gateDistances if available, fallback to positional
+          final label = i < segLabels.length
+              ? segLabels[i]
+              : (i == 0 ? 'M→G1' : 'G$i→G${i + 1}');
+          // accels[i] maps directly to speeds[i] — one acceleration per segment.
+          // First segment uses v_initial = 0 (athlete starts from rest).
+          final accel = i < accels.length ? accels[i] : null;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+              color: isPeakSpeed ? _primary.withValues(alpha: 0.07) : _surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isPeakSpeed ? _primary.withValues(alpha: 0.3) : _border,
+              ),
+            ),
+            child: Row(children: [
+              Expanded(
+                flex: 2,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: isPeakSpeed ? _primary : _text,
+                    fontSize: 12,
+                    fontWeight: isPeakSpeed ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  '${speed.toStringAsFixed(2)} m/s',
+                  style: TextStyle(
+                    color: isPeakSpeed ? _primary : _text,
+                    fontSize: 12,
+                    fontWeight: isPeakSpeed ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: accel != null
+                    ? Text(
+                        '${accel >= 0 ? '+' : ''}${accel.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: accel >= 0 ? _success : const Color(0xFFDC2626),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      )
+                    : const Text('--', style: TextStyle(color: _subtext, fontSize: 12)),
+              ),
+            ]),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildPeakChip({
+    required String label,
+    required String value,
+    required String sub,
+    required Color color,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 3),
+            Text(value, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w800)),
+            if (sub.isNotEmpty)
+              Text(sub, style: const TextStyle(color: _subtext, fontSize: 10)),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildFooter(BuildContext context, TimingSessionState state) {
     final cubit = context.read<TimingSessionCubit>();

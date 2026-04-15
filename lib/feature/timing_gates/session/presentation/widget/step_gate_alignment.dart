@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/session/timing_session_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/session/timing_session_state.dart';
@@ -17,6 +20,16 @@ class StepGateAlignment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<TimingSessionCubit, TimingSessionState>(
+      // Only rebuild when structurally relevant fields change.
+      // Gate distance values are handled locally in _SprintGateDistances —
+      // so gateDistances content changes don't trigger a full screen rebuild.
+      buildWhen: (prev, curr) =>
+          prev.currentStep != curr.currentStep ||
+          prev.registeredGatesCount != curr.registeredGatesCount ||
+          prev.allGatesReady != curr.allGatesReady ||
+          prev.gateSetupLog.length != curr.gateSetupLog.length ||
+          prev.yoyoLaneStatuses != curr.yoyoLaneStatuses ||
+          prev.gateDistances.length != curr.gateDistances.length,
       builder: (context, state) {
         return Column(
           children: [
@@ -28,6 +41,13 @@ class StepGateAlignment extends StatelessWidget {
                   const SizedBox(height: 20),
                   if (state.mode == 'yoyo') ...[
                     _buildYoyoGateGrid(state),
+                    if (state.gateSetupLog.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _buildLog(state),
+                    ],
+                  ] else if (state.mode == 'linear' && state.subMode == 'sprint' &&
+                      state.gateDistances.isNotEmpty) ...[
+                    _SprintGateDistances(state: state),
                     if (state.gateSetupLog.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       _buildLog(state),
@@ -62,6 +82,16 @@ class StepGateAlignment extends StatelessWidget {
       subtitle = ready
           ? 'Tap Start Test to begin'
           : '$completedLanes / ${state.yoyoNumLanes} lanes fully configured';
+    } else if (state.mode == 'linear' && state.subMode == 'sprint') {
+      final reg = state.registeredGatesCount;
+      title = reg > 0
+          ? '$reg gate${reg == 1 ? '' : 's'} registered'
+          : 'No gates registered';
+      subtitle = reg >= 2
+          ? 'Enter gate distances below, then tap Start Test'
+          : reg == 1
+              ? 'Walk through at least one more gate'
+              : 'Walk through each gate to register it';
     } else {
       final reg = state.registeredGatesCount;
       title = reg > 0
@@ -396,9 +426,9 @@ class StepGateAlignment extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 flex: 2,
-                // 1+ gate registered → "Start Test" enabled
+                // Sprint: needs 2+ gates; others: 1+ gate
                 // 0 gates → "Setup Gates" or "Setting up..."
-                child: state.registeredGatesCount > 0
+                child: state.registeredGatesCount >= (state.mode == 'linear' && state.subMode == 'sprint' ? 2 : 1)
                     ? ElevatedButton.icon(
                         icon: const Icon(Icons.play_arrow, size: 18),
                         label: Text('Start Test (${state.registeredGatesCount} gate${state.registeredGatesCount == 1 ? '' : 's'})'),
@@ -417,6 +447,366 @@ class StepGateAlignment extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Sprint gate distance inputs ───────────────────────────────────────────────
+
+class _SprintGateDistances extends StatefulWidget {
+  final TimingSessionState state;
+  const _SprintGateDistances({required this.state});
+
+  @override
+  State<_SprintGateDistances> createState() => _SprintGateDistancesState();
+}
+
+class _SprintGateDistancesState extends State<_SprintGateDistances> {
+  static const _primary      = Color(0xFF1565C0);
+  static const _primaryLight = Color(0xFFE3F2FD);
+  static const _text         = Color(0xFF1E2A3A);
+  static const _subtext      = Color(0xFF6B7A8D);
+  static const _border       = Color(0xFFDDE3EC);
+  static const _success      = Color(0xFF16A34A);
+
+  late List<TextEditingController> _controllers;
+  // One debounce timer per gate — cubit call fires 400ms after last keystroke
+  late List<Timer?> _debounceTimers;
+
+  @override
+  void initState() {
+    super.initState();
+    _initControllers(widget.state.gateDistances);
+  }
+
+  // Total distance from protocol / custom field
+  double get _totalDistance {
+    if (widget.state.protocol == 'custom') {
+      return widget.state.customDistance ?? 0.0;
+    }
+    final data = TimingSessionState.protocolData[widget.state.protocol];
+    if (data != null) return (data['distance'] as int).toDouble();
+    return 0.0;
+  }
+
+  // Current value of gate i (from text controller, fallback to state)
+  double _currentVal(int i) {
+    final text = _controllers[i].text;
+    return double.tryParse(text) ?? widget.state.gateDistances[i];
+  }
+
+  @override
+  void didUpdateWidget(_SprintGateDistances old) {
+    super.didUpdateWidget(old);
+    // Reinit if gate count changed (e.g. retry setup)
+    if (old.state.gateDistances.length != widget.state.gateDistances.length) {
+      _disposeControllers();
+      _initControllers(widget.state.gateDistances);
+    }
+  }
+
+  void _initControllers(List<double> distances) {
+    _debounceTimers = List.filled(distances.length, null);
+    _controllers = List.generate(distances.length, (i) {
+      final val    = distances[i];
+      final isAuto = (i == 0) || (i == distances.length - 1);
+      final text   = isAuto
+          ? val.toStringAsFixed(0)
+          : (val > 0 ? val.toStringAsFixed(0) : '');
+      // No addListener — onChanged in the TextField handles local setState.
+      return TextEditingController(text: text);
+    });
+  }
+
+  void _disposeControllers() {
+    for (final t in _debounceTimers) {
+      t?.cancel();
+    }
+    for (final c in _controllers) {
+      c.dispose();
+    }
+  }
+
+  /// Called on every keystroke:
+  /// - setState immediately → live segment/remaining display (local only, fast)
+  /// - cubit call debounced 400ms → avoids a state emit per keystroke
+  void _onGateChanged(int index, String val, TimingSessionCubit cubit) {
+    setState(() {}); // local rebuild only — no BlocBuilder involved
+    _debounceTimers[index]?.cancel();
+    _debounceTimers[index] = Timer(const Duration(milliseconds: 400), () {
+      final d = double.tryParse(val);
+      if (d != null) cubit.setGateDistance(index, d);
+    });
+  }
+
+  @override
+  void dispose() {
+    _disposeControllers();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final distances  = widget.state.gateDistances;
+    final cubit      = context.read<TimingSessionCubit>();
+    final totalDist  = _totalDistance;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Header ────────────────────────────────────────────────────────
+        Row(
+          children: [
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Gate Distances',
+                    style: TextStyle(
+                        color: _text, fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Enter segment distance between each gate',
+                    style: TextStyle(color: _subtext, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            // Total distance badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: _primaryLight,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: _primary.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                'Total: ${totalDist.toStringAsFixed(0)} m',
+                style: const TextStyle(
+                    color: _primary, fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        // ── Gate rows ─────────────────────────────────────────────────────
+        ...List.generate(distances.length, (i) {
+          final isMaster = i == 0;
+          final isLast   = i == distances.length - 1;
+          final isAuto   = isMaster || isLast;
+          final badgeLabel = isMaster ? 'M' : 'G$i';
+
+          // gateDistances stores RELATIVE distances:
+          //   index 0 = Master (0, ignored)
+          //   index i = distance from G[i-1] → G[i]
+          // segDist = current field value (already a segment distance)
+          final segDist = _currentVal(i);
+
+          // Remaining = totalDist - sum of all entered segment distances so far
+          double enteredSoFar = 0;
+          for (int j = 1; j <= i; j++) {
+            enteredSoFar += _currentVal(j);
+          }
+          final remaining = totalDist - enteredSoFar;
+          final isError   = !isMaster && !isLast && enteredSoFar > totalDist;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isError
+                      ? const Color(0xFFFEF2F2)
+                      : isAuto
+                          ? _primaryLight
+                          : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isError
+                        ? const Color(0xFFDC2626).withValues(alpha: 0.4)
+                        : isAuto
+                            ? _primary.withValues(alpha: 0.3)
+                            : _border,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Badge
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: isError
+                            ? const Color(0xFFDC2626)
+                            : isAuto
+                                ? _primary
+                                : _success,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          badgeLabel,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Content
+                    Expanded(
+                      child: isAuto
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isMaster ? 'Master (Start)' : 'Finish gate',
+                                  style: const TextStyle(
+                                    color: _text,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  isMaster
+                                      ? '0 m (auto)'
+                                      : () {
+                                          // Compute actual last segment = total - sum of all middle segments
+                                          double midSum = 0;
+                                          for (int j = 1; j < distances.length - 1; j++) {
+                                            midSum += _currentVal(j);
+                                          }
+                                          final lastSeg = (totalDist - midSum).clamp(0.0, double.infinity);
+                                          return '${lastSeg.toStringAsFixed(1)} m (auto)';
+                                        }(),
+                                  style: const TextStyle(
+                                      color: _subtext, fontSize: 12),
+                                ),
+                              ],
+                            )
+                          : TextFormField(
+                              controller: _controllers[i],
+                              keyboardType: const TextInputType.numberWithOptions(
+                                  decimal: true),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                    RegExp(r'^\d*\.?\d*')),
+                              ],
+                              decoration: InputDecoration(
+                                hintText: i == 1
+                                    ? 'M → G1 segment (0 = athlete starts at G1)'
+                                    : 'G${i - 1} → G$i segment (m)',
+                                hintStyle: const TextStyle(
+                                    color: _subtext, fontSize: 12),
+                                suffixText: 'm',
+                                suffixStyle: const TextStyle(
+                                    color: _subtext, fontSize: 13),
+                                isDense: true,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 8),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide:
+                                      const BorderSide(color: _border),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide:
+                                      const BorderSide(color: _border),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(
+                                    color: _primary.withValues(alpha: 0.6),
+                                  ),
+                                ),
+                                errorBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(
+                                      color: Color(0xFFDC2626)),
+                                ),
+                              ),
+                              onChanged: (val) =>
+                                _onGateChanged(i, val, cubit),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Segment + Remaining info row ────────────────────────────
+              if (!isMaster) ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 54, top: 4, bottom: 8),
+                  child: Row(
+                    children: [
+                      // Segment chip
+                      if (i > 0 && !isMaster)
+                        _infoChip(
+                          icon: Icons.straighten,
+                          label: segDist >= 0
+                              ? 'Seg: ${segDist.toStringAsFixed(1)} m'
+                              : 'Seg: —',
+                          color: segDist >= 0 ? _subtext : const Color(0xFFDC2626),
+                        ),
+                      const SizedBox(width: 8),
+                      // Remaining chip
+                      if (!isLast)
+                        _infoChip(
+                          icon: Icons.flag_outlined,
+                          label: isError
+                              ? 'Exceeds total!'
+                              : remaining == 0
+                                  ? 'At finish'
+                                  : '${remaining.toStringAsFixed(1)} m left',
+                          color: isError
+                              ? const Color(0xFFDC2626)
+                              : remaining == 0
+                                  ? _success
+                                  : _primary,
+                        ),
+                      if (isLast)
+                        _infoChip(
+                          icon: Icons.check_circle_outline,
+                          label: 'Finish ✓',
+                          color: _success,
+                        ),
+                    ],
+                  ),
+                ),
+              ] else
+                const SizedBox(height: 4),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _infoChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 11, color: color),
+        const SizedBox(width: 3),
+        Text(
+          label,
+          style: TextStyle(
+              color: color, fontSize: 11, fontWeight: FontWeight.w500),
+        ),
+      ],
     );
   }
 }

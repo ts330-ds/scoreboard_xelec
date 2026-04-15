@@ -5,6 +5,9 @@ import '../model/auth_user_model.dart';
 
 abstract interface class AuthRemoteDataSource {
   TaskEither<Failure, AuthUserModel> signInWithGoogle();
+  TaskEither<Failure, AuthUserModel> signInWithLinkedIn();
+  TaskEither<Failure, AuthUserModel> signInWithMicrosoft();
+  TaskEither<Failure, AuthUserModel> signInWithApple();
   TaskEither<Failure, Unit> signOut();
 }
 
@@ -23,6 +26,47 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       return left(AuthFailure('Google sign-in failed: $e'));
     }
   });
+
+  @override
+  TaskEither<Failure, AuthUserModel> signInWithLinkedIn() =>
+      TaskEither(() async {
+        await Future.delayed(const Duration(seconds: 1));
+        return right(
+          const AuthUserModel(
+            id: 'linkedin_dummy_001',
+            email: 'user@linkedin.com',
+            displayName: 'LinkedIn User',
+            photoUrl: null,
+          ),
+        );
+      });
+
+  @override
+  TaskEither<Failure, AuthUserModel> signInWithMicrosoft() =>
+      TaskEither(() async {
+        await Future.delayed(const Duration(seconds: 1));
+        return right(
+          const AuthUserModel(
+            id: 'microsoft_dummy_001',
+            email: 'user@microsoft.com',
+            displayName: 'Microsoft User',
+            photoUrl: null,
+          ),
+        );
+      });
+
+  @override
+  TaskEither<Failure, AuthUserModel> signInWithApple() => TaskEither(() async {
+        await Future.delayed(const Duration(seconds: 1));
+        return right(
+          const AuthUserModel(
+            id: 'apple_dummy_001',
+            email: 'user@icloud.com',
+            displayName: 'Apple User',
+            photoUrl: null,
+          ),
+        );
+      });
 
   @override
   TaskEither<Failure, Unit> signOut() => TaskEither(() async {
