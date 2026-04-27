@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
+import 'package:xelex_esp/error/cubit/error_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/auth/presentation/cubit/athlete_auth_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/auth/presentation/cubit/athlete_auth_state.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/profile_registration/presentation/widget/loding_widget.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 import 'package:xelex_esp/router/heart_tracker_path.dart';
+import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 
 class ProfileChooseMobile extends StatelessWidget {
   const ProfileChooseMobile({super.key});
@@ -13,15 +21,24 @@ class ProfileChooseMobile extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (_) => _IndividualRoleSheet(
         onCoach: () {
-          Navigator.pop(context);
+          context.pop();
           context.push(HeartTrackerPaths.coachRegistration);
         },
         onAthlete: () {
-          Navigator.pop(context);
-          context.push(HeartTrackerPaths.athleteRegistration);
+          context.pop();
+          _checkAthleteAccount(context);
         },
       ),
     );
+  }
+
+  void _checkAthleteAccount(BuildContext context) {
+    context.push(HeartTrackerPaths.athleteRegistration);
+    // final email = sl<SharedPreferences>().getString(PrefKeys.userEmail) ?? '';
+    // context.read<AthleteAuthCubit>().login(
+    //   email: 'tusharsoni@gmail.com',
+    //   password: '123456',
+    // );
   }
 
   void _onSelectOrganisation(BuildContext context) {
@@ -32,11 +49,18 @@ class ProfileChooseMobile extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Row(
           children: [
-            Icon(Icons.rocket_launch_outlined, color: AppColors.primary, size: 28),
+            Icon(
+              Icons.rocket_launch_outlined,
+              color: AppColors.primary,
+              size: 28,
+            ),
             SizedBox(width: 12),
             Text(
               'Coming Soon',
-              style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: AppColors.text,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
@@ -50,7 +74,9 @@ class ProfileChooseMobile extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text('Got it'),
           ),
@@ -61,105 +87,146 @@ class ProfileChooseMobile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AdaptiveScaffold(
-      title: "Choose Profile",
-      bodyBackground: AppColors.bg,
-      appBarBackground: AppColors.primary,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Individual Button
-              GestureDetector(
-                onTap: () => _onSelectIndividual(context),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryLight,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.primary, width: 2),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.person, size: 40, color: AppColors.primary),
-                      SizedBox(width: 16),
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Individual',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            Text(
-                              'Personal account for single user',
-                              style: TextStyle(fontSize: 13, color: AppColors.subtext),
-                              softWrap: true,
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(Icons.chevron_right, color: AppColors.primary),
-                    ],
-                  ),
-                ),
-              ),
+    return BlocConsumer<AthleteAuthCubit, AthleteAuthState>(
+      listener: (context, state) {
+        if (state.status == AthleteAuthStatus.authenticated) {
+          context.go(HeartTrackerPaths.athleteHome);
+        } else if (state.status == AthleteAuthStatus.notRegistered) {
+          context.push(HeartTrackerPaths.athleteRegistration);
+        } else if (state.status == AthleteAuthStatus.error) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.errorMessage ?? 'Something went wrong'),
+            ),
+          );
+        }
+      },
+      builder: (context, state) {
+        // Loading state
+        if (state.status == AthleteAuthStatus.loading) {
+          return const AdaptiveScaffold(
+            title: 'Choose Profile',
+            bodyBackground: AppColors.bg,
+            appBarBackground: AppColors.primary,
+            body: Center(child: LoadingOverlay()),
+          );
+        }
 
-              const SizedBox(height: 20),
-
-              // Organisation Button
-              GestureDetector(
-                onTap: () => _onSelectOrganisation(context),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.successBg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.success, width: 2),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.business, size: 40, color: AppColors.success),
-                      SizedBox(width: 16),
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Organisation',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.success,
-                              ),
-                            ),
-                            Text(
-                              'Account for teams or businesses',
-                              style: TextStyle(fontSize: 13, color: AppColors.subtext),
-                              softWrap: true,
-                            ),
-                          ],
-                        ),
+        // Normal UI
+        return AdaptiveScaffold(
+          title: 'Choose Profile',
+          bodyBackground: AppColors.bg,
+          appBarBackground: AppColors.primary,
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: () => _onSelectIndividual(context),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.primary, width: 2),
                       ),
-                      SizedBox(width: 8),
-                      _ComingSoonBadge(),
-                    ],
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.person,
+                            size: 40,
+                            color: AppColors.primary,
+                          ),
+                          SizedBox(width: 16),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Individual',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                Text(
+                                  'Personal account for single user',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.subtext,
+                                  ),
+                                  softWrap: true,
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.chevron_right, color: AppColors.primary),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+
+                  const SizedBox(height: 20),
+
+                  // Organisation Button
+                  GestureDetector(
+                    onTap: () => _onSelectOrganisation(context),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: AppColors.successBg,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.success, width: 2),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.business,
+                            size: 40,
+                            color: AppColors.success,
+                          ),
+                          SizedBox(width: 16),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Organisation',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.success,
+                                  ),
+                                ),
+                                Text(
+                                  'Account for teams or businesses',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppColors.subtext,
+                                  ),
+                                  softWrap: true,
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          _ComingSoonBadge(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -196,10 +263,7 @@ class _IndividualRoleSheet extends StatelessWidget {
   final VoidCallback onCoach;
   final VoidCallback onAthlete;
 
-  const _IndividualRoleSheet({
-    required this.onCoach,
-    required this.onAthlete,
-  });
+  const _IndividualRoleSheet({required this.onCoach, required this.onAthlete});
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +277,6 @@ class _IndividualRoleSheet extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Drag handle
             Center(
               child: Container(
                 width: 40,
@@ -224,9 +287,7 @@ class _IndividualRoleSheet extends StatelessWidget {
                 ),
               ),
             ),
-      
             const SizedBox(height: 20),
-      
             const Text(
               'Select Your Role',
               style: TextStyle(
@@ -240,10 +301,7 @@ class _IndividualRoleSheet extends StatelessWidget {
               'Choose the role that best describes you',
               style: TextStyle(color: AppColors.subtext, fontSize: 13),
             ),
-      
             const SizedBox(height: 24),
-      
-            // Coach tile
             _RoleTile(
               icon: Icons.sports,
               iconColor: AppColors.primary,
@@ -253,10 +311,7 @@ class _IndividualRoleSheet extends StatelessWidget {
               borderColor: AppColors.primary,
               onTap: onCoach,
             ),
-      
             const SizedBox(height: 14),
-      
-            // Athlete tile
             _RoleTile(
               icon: Icons.directions_run,
               iconColor: AppColors.heartRed,
@@ -266,7 +321,6 @@ class _IndividualRoleSheet extends StatelessWidget {
               borderColor: AppColors.heartRed,
               onTap: onAthlete,
             ),
-      
             const SizedBox(height: 8),
           ],
         ),
@@ -274,6 +328,8 @@ class _IndividualRoleSheet extends StatelessWidget {
     );
   }
 }
+
+// ── Role Tile ─────────────────────────────────────────────────────────────────
 
 class _RoleTile extends StatelessWidget {
   final IconData icon;

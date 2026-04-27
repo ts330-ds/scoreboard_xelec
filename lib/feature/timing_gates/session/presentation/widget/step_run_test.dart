@@ -1282,10 +1282,8 @@ class StepRunTest extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // DEV ONLY: simulate result (non-shuttle only)
-          if (kDebugMode &&
-              state.mode != 'shuttle' &&
-              state.phase == RunTestPhase.waitingForResult) ...[
+          // DEV ONLY: simulate result
+          if (kDebugMode && state.phase == RunTestPhase.waitingForResult) ...[
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -1300,7 +1298,9 @@ class StepRunTest extends StatelessWidget {
                   textStyle: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w500),
                 ),
-                onPressed: cubit.simulateTrialResult,
+                onPressed: state.mode == 'shuttle'
+                    ? cubit.simulateShuttleResult
+                    : cubit.simulateTrialResult,
               ),
             ),
             const SizedBox(height: 10),

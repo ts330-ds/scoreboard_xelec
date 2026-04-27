@@ -72,7 +72,7 @@ class _NotificationItem extends StatelessWidget {
   const _NotificationItem({
     required this.icon,
     required this.iconColor,
-    required this.title,,
+    required this.title,
     required this.subtitle,
     required this.time,
     required this.isUnread,

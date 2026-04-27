@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/session/timing_session_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/session/presentation/cubit/session/timing_session_state.dart';
 
@@ -125,14 +126,7 @@ class _StepTestSetupState extends State<StepTestSetup> {
 
   void _showSnackbar(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+    context.read<GlobalErrorCubit>().showWarning(msg);
   }
 
   void _showPermissionDeniedDialog() {

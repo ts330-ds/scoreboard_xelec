@@ -523,12 +523,7 @@ class TimingGateHomeMobile extends StatelessWidget {
             onPressed: () {
               Navigator.pop(ctx);
               context.read<TimingGateBleCubit>().sendCommand('RESET');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Reset command sent to gate'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              context.read<GlobalErrorCubit>().showInfo('Reset command sent to gate');
             },
             style: TextButton.styleFrom(foregroundColor: _error),
             child: const Text('Reset'),

@@ -69,6 +69,19 @@ import '../../feature/scoreboard/kho_kho/presentation/cubit/match_timer/match_ti
 import '../../feature/scoreboard/kho_kho/presentation/cubit/timer/khokho_timer_cubit.dart';
 import '../../feature/scoreboard/table_tennis/presentation/cubit/controller/table_tennis_controller_cubit.dart';
 import '../permission/bluetooth_permission_service.dart';
+import '../../feature/heart_rate_tracker/athlete/auth/data/datasource/athlete_auth_remote_datasource.dart';
+import '../../feature/heart_rate_tracker/athlete/auth/data/repository/athlete_auth_repository_impl.dart';
+import '../../feature/heart_rate_tracker/athlete/auth/domain/repository/athlete_auth_repository.dart';
+import '../../feature/heart_rate_tracker/athlete/auth/domain/usecase/login_athlete_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/auth/domain/usecase/logout_athlete_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/auth/domain/usecase/register_athlete_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/auth/presentation/cubit/athlete_auth_cubit.dart';
+import '../../feature/heart_rate_tracker/athlete/profile/data/datasource/athlete_profile_remote_datasource.dart';
+import '../../feature/heart_rate_tracker/athlete/profile/data/repository/athlete_profile_repository_impl.dart';
+import '../../feature/heart_rate_tracker/athlete/profile/domain/repository/athlete_profile_repository.dart';
+import '../../feature/heart_rate_tracker/athlete/profile/domain/usecase/get_athlete_profile_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/profile/domain/usecase/update_athlete_profile_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/profile/presentation/cubit/athlete_profile_cubit.dart';
 
 final sl = GetIt.instance;
 
@@ -111,6 +124,43 @@ void setupDI({required SharedPreferences sharedPreferences}) {
       signOut: sl(),
       pref: sl(),
     ),
+  );
+
+  // Athlete Auth
+  sl.registerLazySingleton<AthleteAuthRemoteDataSource>(
+    () => AthleteAuthRemoteDataSourceImpl(sl<ApiService>().dio),
+  );
+  sl.registerLazySingleton<AthleteAuthRepository>(
+    () => AthleteAuthRepositoryImpl(sl(), sl()),
+  );
+  sl.registerLazySingleton<LoginAthleteUseCase>(
+    () => LoginAthleteUseCase(sl()),
+  );
+  sl.registerLazySingleton<RegisterAthleteUseCase>(
+    () => RegisterAthleteUseCase(sl()),
+  );
+  sl.registerLazySingleton<LogoutAthleteUseCase>(
+    () => LogoutAthleteUseCase(sl()),
+  );
+  sl.registerFactory<AthleteAuthCubit>(
+    () => AthleteAuthCubit(login: sl(), register: sl(), logout: sl()),
+  );
+
+  // Athlete Profile
+  sl.registerLazySingleton<AthleteProfileRemoteDataSource>(
+    () => AthleteProfileRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+  );
+  sl.registerLazySingleton<AthleteProfileRepository>(
+    () => AthleteProfileRepositoryImpl(sl()),
+  );
+  sl.registerLazySingleton<GetAthleteProfileUseCase>(
+    () => GetAthleteProfileUseCase(sl()),
+  );
+  sl.registerLazySingleton<UpdateAthleteProfileUseCase>(
+    () => UpdateAthleteProfileUseCase(sl()),
+  );
+  sl.registerFactory<AthleteProfileCubit>(
+    () => AthleteProfileCubit(getProfile: sl(), updateProfile: sl()),
   );
 
   // Services

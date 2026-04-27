@@ -4,12 +4,33 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/feature/auth/presentation/cubit/auth_cubit.dart';
 import 'package:xelex_esp/feature/auth/presentation/cubit/auth_state.dart';
 import 'package:xelex_esp/router/app_path.dart';
+import 'package:xelex_esp/router/heart_tracker_path.dart';
+import 'package:xelex_esp/router/timing_gate_path.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 import '../../../../utility/appColor.dart';
 import '../widget/socialButton.dart';
+
+String _routeForFeature(String? feature) {
+  switch (feature) {
+    case 'scoreboard':
+      return '${AppPaths.deviceSelection}?feature=scoreboard';
+    case 'heart_rate':
+      return HeartTrackerPaths.chooseProfile;
+    case 'timing_gates':
+      return TimingGatePaths.timingGateHomeMobile;
+    case 'vbt':
+    case 'eeg':
+    case 'ams':
+      return HeartTrackerPaths.chooseProfile;
+    default:
+      return AppPaths.featureSelection;
+  }
+}
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -21,7 +42,8 @@ class LoginScreen extends StatelessWidget {
       child: BlocConsumer<AuthCubit, AuthState>(
         listener: (context, state) {
           if (state.status == AuthStatus.authenticated) {
-            context.go(AppPaths.featureSelection);
+            final feature = sl<SharedPreferences>().getString(PrefKeys.selectedFeature);
+            context.go(_routeForFeature(feature));
           } else if (state.status == AuthStatus.error) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

@@ -326,22 +326,22 @@ class SessionPdfService {
             pw.Text(
               'Sports IQ',
               style: pw.TextStyle(
-                fontSize: 20,
+                fontSize: 24,
                 fontWeight: pw.FontWeight.bold,
                 color: _primaryColor,
               ),
             ),
             pw.Text(
               'Generated: ${_dateFmt.format(DateTime.now())}',
-              style: pw.TextStyle(fontSize: 9, color: _subtextColor),
+              style: pw.TextStyle(fontSize: 11, color: _subtextColor),
             ),
           ],
         ),
         pw.SizedBox(height: 4),
         // Session name
         pw.Text(
-          'Session Report — ${session.sessionName}',
-          style: pw.TextStyle(fontSize: 11, color: _subtextColor),
+          'Session Report: ${session.sessionName}',
+          style: pw.TextStyle(fontSize: 13, color: _subtextColor),
         ),
         // "Conducted by" — only if profile exists
         if (conductorLine != null) ...[
@@ -374,7 +374,7 @@ class SessionPdfService {
           child: pw.Text(
             'Conducted by',
             style: pw.TextStyle(
-              fontSize: 8,
+              fontSize: 9,
               color: _primaryColor,
               fontWeight: pw.FontWeight.bold,
             ),
@@ -382,8 +382,8 @@ class SessionPdfService {
         ),
         pw.SizedBox(width: 6),
         pw.Text(
-          parts.join('  ·  '),
-          style: pw.TextStyle(fontSize: 9, color: _textColor),
+          parts.join('  |  '),
+          style: pw.TextStyle(fontSize: 10, color: _textColor),
         ),
       ],
     );
@@ -400,13 +400,13 @@ class SessionPdfService {
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Text(
-              'Sports IQ — Timing Report',
-              style: pw.TextStyle(fontSize: 8, color: _subtextColor),
+              'Sports IQ - Timing Report',
+              style: pw.TextStyle(fontSize: 10, color: _subtextColor),
             ),
             // `context.pageNumber` current page, `context.pagesCount` total pages
             pw.Text(
               'Page ${context.pageNumber} of ${context.pagesCount}',
-              style: pw.TextStyle(fontSize: 8, color: _subtextColor),
+              style: pw.TextStyle(fontSize: 10, color: _subtextColor),
             ),
           ],
         ),
@@ -420,15 +420,15 @@ class SessionPdfService {
   static pw.Widget _buildSessionInfo(TestSessionModel s) {
     // _infoRow: ek helper jo "Label: Value" row banata hai
     pw.Widget infoRow(String label, String value) => pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(vertical: 3),
+          padding: const pw.EdgeInsets.symmetric(vertical: 4),
           child: pw.Row(
             children: [
               pw.SizedBox(
-                width: 110,
+                width: 120,
                 child: pw.Text(
                   label,
                   style: pw.TextStyle(
-                    fontSize: 10,
+                    fontSize: 11,
                     color: _subtextColor,
                   ),
                 ),
@@ -437,7 +437,7 @@ class SessionPdfService {
                 child: pw.Text(
                   value,
                   style: pw.TextStyle(
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: pw.FontWeight.bold,
                     color: _textColor,
                   ),
@@ -465,13 +465,13 @@ class SessionPdfService {
           pw.Text(
             'SESSION DETAILS',
             style: pw.TextStyle(
-              fontSize: 9,
+              fontSize: 11,
               fontWeight: pw.FontWeight.bold,
               color: _primaryColor,
               letterSpacing: 1.2,
             ),
           ),
-          pw.SizedBox(height: 8),
+          pw.SizedBox(height: 10),
           // 2-column grid of info rows
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -490,7 +490,7 @@ class SessionPdfService {
               pw.Expanded(
                 child: pw.Column(
                   children: [
-                    infoRow('Location', s.location.isEmpty ? '—' : s.location),
+                    infoRow('Location', s.location.isEmpty ? '-' : s.location),
                     infoRow('Trial order',
                         s.trialMode == 'round_robin' ? 'Round robin' : 'Athlete complete'),
                     infoRow('Completed', '$completed / $total trials'),
@@ -538,10 +538,10 @@ class SessionPdfService {
       bool bold = false,
       PdfColor? color,
       pw.Alignment align = pw.Alignment.centerLeft,
-      double fontSize = 9.5,
+      double fontSize = 11,
     }) =>
         pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 7),
           child: pw.Align(
             alignment: align,
             child: pw.Text(
@@ -581,12 +581,12 @@ class SessionPdfService {
             children: [
               // Rank number
               pw.Padding(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 7),
                 child: pw.Align(
                   alignment: pw.Alignment.center,
                   child: pw.Container(
-                    width: 20,
-                    height: 20,
+                    width: 22,
+                    height: 22,
                     decoration: pw.BoxDecoration(
                       shape: pw.BoxShape.circle,
                       color: rank <= 3
@@ -597,7 +597,7 @@ class SessionPdfService {
                     child: pw.Text(
                       '$rank',
                       style: pw.TextStyle(
-                        fontSize: 9,
+                        fontSize: 10,
                         fontWeight: pw.FontWeight.bold,
                         color: rankColor(rank),
                       ),
@@ -606,15 +606,15 @@ class SessionPdfService {
                 ),
               ),
               cell(r.fullName, bold: rank <= 3, color: rankColor(rank)),
-              cell(r.team.isEmpty ? '—' : r.team),
+              cell(r.team.isEmpty ? '-' : r.team),
               cell(
-                r.bestTime != null ? '${r.bestTime!.toStringAsFixed(3)}s' : '—',
+                r.bestTime != null ? '${r.bestTime!.toStringAsFixed(3)}s' : '-',
                 bold: true,
                 color: rankColor(rank),
                 align: pw.Alignment.center,
               ),
               cell(
-                r.avgTime != null ? '${r.avgTime!.toStringAsFixed(3)}s' : '—',
+                r.avgTime != null ? '${r.avgTime!.toStringAsFixed(3)}s' : '-',
                 align: pw.Alignment.center,
               ),
               cell(
@@ -659,36 +659,50 @@ class SessionPdfService {
       children: [
         _sectionTitle('DETAILED TRIAL RESULTS'),
         pw.SizedBox(height: 8),
-        ...ranked.map((r) => _buildAthleteCard(r, session.trialsCount, session.gateDistances)),
+        ...ranked.map((r) => _buildAthleteCard(r, session.trialsCount, session.gateDistances, isShuttle: session.isShuttle)),
       ],
     );
   }
 
   /// Builds ordered segment labels from [gateDistances], skipping zero-distance
   /// segments (e.g. M→G1=0 when athlete starts at G1).
-  static List<String> _segmentLabels(List<double> gateDistances, int segCount) {
+  static List<String> _segmentLabels(
+    List<double> gateDistances,
+    int segCount, {
+    bool startFromMaster = true,
+  }) {
+    if (!startFromMaster) {
+      return List.generate(
+        segCount,
+        (i) => i % 2 == 0 ? 'G1>G2' : 'G2>G1',
+      );
+    }
     if (gateDistances.length >= 2) {
       final labels = <String>[];
       for (int i = 0; i < gateDistances.length - 1; i++) {
         if (gateDistances[i + 1] <= 0) continue;
-        labels.add(i == 0 ? 'M→G1' : 'G$i→G${i + 1}');
+        labels.add(i == 0 ? 'M>G1' : 'G$i>G${i + 1}');
       }
       if (labels.length == segCount) return labels;
     }
-    return List.generate(segCount, (i) => i == 0 ? 'M→G1' : 'G$i→G${i + 1}');
+    return List.generate(
+      segCount,
+      (i) => i == 0 ? 'M>G1' : 'G$i>G${i + 1}',
+    );
   }
 
   static pw.Widget _buildAthleteCard(
     AthleteResultModel r,
     int trialsCount,
-    List<double> gateDistances,
-  ) {
+    List<double> gateDistances, {
+    bool isShuttle = false,
+  }) {
     // ── Trial status label ──────────────────────────────────────────────────
     String statusLabel(TrialResultModel t) {
       if (t.isCompleted) return '${t.totalTime!.toStringAsFixed(3)}s';
       if (t.isFalseStart) return 'FS';
       if (t.isSkipped) return 'Skip';
-      return '—';
+      return '-';
     }
 
     PdfColor statusColor(TrialResultModel t) {
@@ -699,9 +713,9 @@ class SessionPdfService {
     }
 
     // ── Build header: name + bib + team ────────────────────────────────────
-    final bibText = r.bib.isNotEmpty ? '  ·  BIB: ${r.bib}' : '';
-    final teamText = r.team.isNotEmpty ? '  ·  ${r.team}' : '';
-    final laneText = r.shuttleLane != null ? '  ·  Lane ${r.shuttleLane}' : '';
+    final bibText = r.bib.isNotEmpty ? '  |  BIB: ${r.bib}' : '';
+    final teamText = r.team.isNotEmpty ? '  |  ${r.team}' : '';
+    final laneText = r.shuttleLane != null ? '  |  Lane ${r.shuttleLane}' : '';
 
     return pw.Padding(
       padding: const pw.EdgeInsets.only(bottom: 12),
@@ -730,14 +744,14 @@ class SessionPdfService {
                   pw.Text(
                     r.fullName,
                     style: pw.TextStyle(
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: pw.FontWeight.bold,
                       color: _primaryColor,
                     ),
                   ),
                   pw.Text(
-                    '$bibText$teamText$laneText'.trimLeft().replaceFirst('  ·  ', ''),
-                    style: pw.TextStyle(fontSize: 9, color: _subtextColor),
+                    '$bibText$teamText$laneText'.trimLeft().replaceFirst('  |  ', ''),
+                    style: pw.TextStyle(fontSize: 10, color: _subtextColor),
                   ),
                 ],
               ),
@@ -771,7 +785,7 @@ class SessionPdfService {
                       for (int i = 1; i <= trialsCount; i++) ...[
                         () {
                           final t = r.trials.where((t) => t.trialNumber == i).firstOrNull;
-                          if (t == null) return _tCell('—', center: true, color: _subtextColor);
+                          if (t == null) return _tCell('-', center: true, color: _subtextColor);
                           return _tCell(
                             statusLabel(t),
                             center: true,
@@ -794,9 +808,9 @@ class SessionPdfService {
                                 .where((t) => t.trialNumber == i)
                                 .firstOrNull;
                             if (t == null || t.splits.isEmpty) {
-                              return _tCell('—', center: true, color: _subtextColor);
+                              return _tCell('-', center: true, color: _subtextColor);
                             }
-                            final labels = _segmentLabels(gateDistances, t.splits.length);
+                            final labels = _segmentLabels(gateDistances, t.splits.length, startFromMaster: !isShuttle);
                             final splitsStr = t.splits.asMap().entries.map((e) {
                               final lbl = e.key < labels.length ? labels[e.key] : 'G${e.key}→G${e.key + 1}';
                               return '$lbl: ${e.value.toStringAsFixed(2)}s';
@@ -817,9 +831,9 @@ class SessionPdfService {
                                 .where((t) => t.trialNumber == i)
                                 .firstOrNull;
                             if (t == null || t.speeds.isEmpty) {
-                              return _tCell('—', center: true, color: _subtextColor);
+                              return _tCell('-', center: true, color: _subtextColor);
                             }
-                            final labels = _segmentLabels(gateDistances, t.speeds.length);
+                            final labels = _segmentLabels(gateDistances, t.speeds.length, startFromMaster: !isShuttle);
                             final str = t.speeds.asMap().entries.map((e) {
                               final lbl = e.key < labels.length ? labels[e.key] : 'G${e.key}→G${e.key + 1}';
                               return '$lbl: ${e.value.toStringAsFixed(2)}';
@@ -841,9 +855,9 @@ class SessionPdfService {
                                 .where((t) => t.trialNumber == i)
                                 .firstOrNull;
                             if (t == null || t.accelerations.isEmpty) {
-                              return _tCell('—', center: true, color: _subtextColor);
+                              return _tCell('-', center: true, color: _subtextColor);
                             }
-                            final labels = _segmentLabels(gateDistances, t.accelerations.length);
+                            final labels = _segmentLabels(gateDistances, t.accelerations.length, startFromMaster: !isShuttle);
                             final str = t.accelerations.asMap().entries.map((e) {
                               final lbl = e.key < labels.length ? labels[e.key] : 'G${e.key}→G${e.key + 1}';
                               final sign = e.value >= 0 ? '+' : '';
@@ -865,7 +879,7 @@ class SessionPdfService {
                                 .where((t) => t.trialNumber == i)
                                 .firstOrNull;
                             final peak = t?.peakSpeed;
-                            if (peak == null) return _tCell('—', center: true, color: _subtextColor);
+                            if (peak == null) return _tCell('-', center: true, color: _subtextColor);
                             return _tCell(
                               '${peak.toStringAsFixed(2)} m/s\n${(peak * 3.6).toStringAsFixed(1)} km/h',
                               center: true,
@@ -913,13 +927,13 @@ class SessionPdfService {
     PdfColor? color,
   }) =>
       pw.Padding(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 6),
         child: pw.Align(
           alignment: center ? pw.Alignment.center : pw.Alignment.centerLeft,
           child: pw.Text(
             text,
             style: pw.TextStyle(
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: (isHeader || bold) ? pw.FontWeight.bold : pw.FontWeight.normal,
               color: color ?? (isHeader ? _subtextColor : _textColor),
             ),
@@ -930,7 +944,7 @@ class SessionPdfService {
   // ── Small colored badge: "Best  3.142s" ──────────────────────────────────
   static pw.Widget _statBadge(String label, String value, PdfColor color) =>
       pw.Container(
-        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const pw.EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         decoration: pw.BoxDecoration(
           color: color.shade(0.1),
           borderRadius: pw.BorderRadius.circular(4),
@@ -941,12 +955,12 @@ class SessionPdfService {
             children: [
               pw.TextSpan(
                 text: '$label  ',
-                style: pw.TextStyle(fontSize: 8, color: _subtextColor),
+                style: pw.TextStyle(fontSize: 9, color: _subtextColor),
               ),
               pw.TextSpan(
                 text: value,
                 style: pw.TextStyle(
-                  fontSize: 9,
+                  fontSize: 10,
                   fontWeight: pw.FontWeight.bold,
                   color: color,
                 ),
@@ -959,12 +973,12 @@ class SessionPdfService {
   // ── Section Title (LEADERBOARD, DETAILED RESULTS etc.) ───────────────────
   static pw.Widget _sectionTitle(String title) => pw.Row(
         children: [
-          pw.Container(width: 4, height: 14, color: _primaryColor),
+          pw.Container(width: 4, height: 16, color: _primaryColor),
           pw.SizedBox(width: 8),
           pw.Text(
             title,
             style: pw.TextStyle(
-              fontSize: 10,
+              fontSize: 13,
               fontWeight: pw.FontWeight.bold,
               color: _primaryColor,
               letterSpacing: 0.8,
@@ -1017,21 +1031,21 @@ class SessionPdfService {
   // ══════════════════════════════════════════════════════════════════════════
   static pw.Widget _buildYoyoSessionInfo(TestSessionModel s) {
     pw.Widget infoRow(String label, String value) => pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(vertical: 3),
+          padding: const pw.EdgeInsets.symmetric(vertical: 4),
           child: pw.Row(
             children: [
               pw.SizedBox(
-                width: 110,
+                width: 120,
                 child: pw.Text(
                   label,
-                  style: pw.TextStyle(fontSize: 10, color: _subtextColor),
+                  style: pw.TextStyle(fontSize: 11, color: _subtextColor),
                 ),
               ),
               pw.Expanded(
                 child: pw.Text(
                   value,
                   style: pw.TextStyle(
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: pw.FontWeight.bold,
                     color: _textColor,
                   ),
@@ -1059,13 +1073,13 @@ class SessionPdfService {
           pw.Text(
             'SESSION DETAILS',
             style: pw.TextStyle(
-              fontSize: 9,
+              fontSize: 11,
               fontWeight: pw.FontWeight.bold,
               color: _primaryColor,
               letterSpacing: 1.2,
             ),
           ),
-          pw.SizedBox(height: 8),
+          pw.SizedBox(height: 10),
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
@@ -1083,10 +1097,10 @@ class SessionPdfService {
               pw.Expanded(
                 child: pw.Column(
                   children: [
-                    infoRow('Location', s.location.isEmpty ? '—' : s.location),
+                    infoRow('Location', s.location.isEmpty ? '-' : s.location),
                     infoRow('Eliminated', '$eliminated / $lanes'),
                     infoRow('Status', _capitalize(s.status)),
-                    infoRow('Protocol', '2 × 20m shuttle, 10s recovery'),
+                    infoRow('Protocol', '2 x 20m shuttle, 10s recovery'),
                   ],
                 ),
               ),
@@ -1119,10 +1133,10 @@ class SessionPdfService {
       bool bold = false,
       PdfColor? color,
       pw.Alignment align = pw.Alignment.centerLeft,
-      double fontSize = 9.5,
+      double fontSize = 11,
     }) =>
         pw.Padding(
-          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 7),
           child: pw.Align(
             alignment: align,
             child: pw.Text(
@@ -1155,7 +1169,7 @@ class SessionPdfService {
           final isEliminated = r.trials.isNotEmpty &&
               r.trials.first.status == 'eliminated';
           final level = r.bestTime;
-          final levelStr = level != null ? level.toStringAsFixed(1) : '—';
+          final levelStr = level != null ? level.toStringAsFixed(1) : '-';
 
           return pw.TableRow(
             decoration: pw.BoxDecoration(
@@ -1163,12 +1177,12 @@ class SessionPdfService {
             ),
             children: [
               pw.Padding(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 7),
                 child: pw.Align(
                   alignment: pw.Alignment.center,
                   child: pw.Container(
-                    width: 20,
-                    height: 20,
+                    width: 22,
+                    height: 22,
                     decoration: pw.BoxDecoration(
                       shape: pw.BoxShape.circle,
                       color: rank <= 3
@@ -1179,7 +1193,7 @@ class SessionPdfService {
                     child: pw.Text(
                       '$rank',
                       style: pw.TextStyle(
-                        fontSize: 9,
+                        fontSize: 10,
                         fontWeight: pw.FontWeight.bold,
                         color: rankColor(rank),
                       ),
@@ -1188,7 +1202,7 @@ class SessionPdfService {
                 ),
               ),
               cell(r.fullName, bold: rank <= 3, color: rankColor(rank)),
-              cell(r.team.isEmpty ? '—' : r.team),
+              cell(r.team.isEmpty ? '-' : r.team),
               cell(
                 'Lv $levelStr',
                 bold: true,
@@ -1243,7 +1257,7 @@ class SessionPdfService {
     final isEliminated = r.trials.isNotEmpty &&
         r.trials.first.status == 'eliminated';
     final level = r.bestTime;
-    final levelStr = level != null ? level.toStringAsFixed(1) : '—';
+    final levelStr = level != null ? level.toStringAsFixed(1) : '-';
     final laneNum = r.shuttleLane ?? 0;
     final statusColor = isEliminated ? PdfColors.red700 : _successColor;
     final statusBg = isEliminated
@@ -1287,7 +1301,7 @@ class SessionPdfService {
                           child: pw.Text(
                             'L$laneNum',
                             style: pw.TextStyle(
-                              fontSize: 8,
+                              fontSize: 9,
                               fontWeight: pw.FontWeight.bold,
                               color: PdfColors.white,
                             ),
@@ -1298,7 +1312,7 @@ class SessionPdfService {
                       pw.Text(
                         r.fullName,
                         style: pw.TextStyle(
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: pw.FontWeight.bold,
                           color: _primaryColor,
                         ),
@@ -1310,7 +1324,7 @@ class SessionPdfService {
                       if (r.team.isNotEmpty) ...[
                         pw.Text(
                           r.team,
-                          style: pw.TextStyle(fontSize: 9, color: _subtextColor),
+                          style: pw.TextStyle(fontSize: 10, color: _subtextColor),
                         ),
                         pw.SizedBox(width: 12),
                       ],

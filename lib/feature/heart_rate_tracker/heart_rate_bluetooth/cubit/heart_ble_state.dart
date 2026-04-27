@@ -50,18 +50,20 @@ class HeartBleState extends Equatable {
 
   // ── Real-time Sport & Health ──
   final int steps;
-  final int distance; 
+  final int distance;
   final int calorie;
   final String bodySensorLocation;
   final String bondingStatus;
-  final int spo2;          
-  final int systolic;      
-  final int diastolic;     
-  final int stressLevel;   
-  final double bodyTemp1;  
-  final double bodyTemp2;  
-  final double bodyTemp3;  
+  final int spo2;
+  final int systolic;
+  final int diastolic;
+  final int stressLevel;
+  final double bodyTemp1;
+  final double bodyTemp2;
+  final double bodyTemp3;
   final int hrMax;
+  final List<int> rrIntervals; // latest batch from device (ms)
+  final double hrv;            // RMSSD in ms, 0.0 if unavailable
 
   // ── History Data ──
   final List<Map<dynamic, dynamic>> historySport;
@@ -113,6 +115,8 @@ class HeartBleState extends Equatable {
     this.bodyTemp2 = 0.0,
     this.bodyTemp3 = 0.0,
     this.hrMax = 0,
+    this.rrIntervals = const [],
+    this.hrv = 0.0,
     this.historySport = const [],
     this.historyHrRecord = const [],
     this.historyHrData = const [],
@@ -197,6 +201,8 @@ class HeartBleState extends Equatable {
     double? bodyTemp2,
     double? bodyTemp3,
     int? hrMax,
+    List<int>? rrIntervals,
+    double? hrv,
     List<Map<dynamic, dynamic>>? historySport,
     List<Map<dynamic, dynamic>>? historyHrRecord,
     List<Map<dynamic, dynamic>>? historyHrData,
@@ -246,6 +252,8 @@ class HeartBleState extends Equatable {
       bodyTemp2: bodyTemp2 ?? this.bodyTemp2,
       bodyTemp3: bodyTemp3 ?? this.bodyTemp3,
       hrMax: hrMax ?? this.hrMax,
+      rrIntervals: rrIntervals ?? this.rrIntervals,
+      hrv: hrv ?? this.hrv,
       historySport: historySport ?? this.historySport,
       historyHrRecord: historyHrRecord ?? this.historyHrRecord,
       historyHrData: historyHrData ?? this.historyHrData,
@@ -271,7 +279,7 @@ class HeartBleState extends Equatable {
     hardwareVersion, softwareVersion, serialNumber, systemId, vendorName, 
     steps, distance, calorie, bodySensorLocation, bondingStatus, spo2, 
     systolic, diastolic, stressLevel, bodyTemp1, bodyTemp2, bodyTemp3, 
-    hrMax, historySport, historyHrRecord, historyHrData, historyRrRecord, 
+    hrMax, rrIntervals, hrv, historySport, historyHrRecord, historyHrData, historyRrRecord,
     historyRrData, historyStepRecord, historyStepData, historySleep, 
     historySingleRecord, history3D, tempHistory3D, intervalSteps, 
     singleTapRecords, customData,

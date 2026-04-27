@@ -14,3 +14,12 @@ class CancelledByUserFailure extends Failure {
 class SportFailure extends Failure {
   const SportFailure(super.message);
 }
+
+class AthleteNotFoundFailure extends Failure {
+  const AthleteNotFoundFailure() : super('Athlete not found');
+}
+
+class ServerFailure extends Failure {
+  const ServerFailure(super.message);
+}
+

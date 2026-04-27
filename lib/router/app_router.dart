@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/feature/auth/presentation/screen/loginScreen.dart';
 import 'package:xelex_esp/feature/bluetooth/presentation/screen/device_selection_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/auth/presentation/cubit/athlete_auth_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/cubit/shell_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_activity_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_history_mobile.dart';
@@ -491,6 +492,7 @@ final GoRouter appRouter = GoRouter(
         return MultiBlocProvider(
           providers: [
             BlocProvider(create: (_) => AthleteShellCubit()),
+            BlocProvider(create: (_) => sl<AthleteAuthCubit>()),
             BlocProvider.value(value: sl<HeartBleCubit>()),
           ],
           child: BackButtonListener(
@@ -668,7 +670,7 @@ final GoRouter appRouter = GoRouter(
                     ],
                   ),
                   content: const Text(
-                    'Kya aap Timing Gate se bahar jaana chahte hain?',
+                    'Are you sure, you want to exit ?',
                     style: TextStyle(color: Color(0xFF6B7A8D)),
                   ),
                   actions: [

@@ -157,9 +157,10 @@ ThemeData lightTheme(BuildContext context) {
     ),
 
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.text,
       behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      contentTextStyle: const TextStyle(color: Colors.white, fontSize: 13),
     ),
 
     dialogTheme: DialogThemeData(

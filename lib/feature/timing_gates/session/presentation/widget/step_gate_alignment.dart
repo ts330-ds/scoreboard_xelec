@@ -325,6 +325,22 @@ class StepGateAlignment extends StatelessWidget {
     );
   }
 
+  // ── Can start test? ─────────────────────────────────────────────────────────
+
+  bool _canStartTest(TimingSessionState state) {
+    // Sprint: needs at least 2 physical gates — no bypass
+    if (state.mode == 'linear' && state.subMode == 'sprint') {
+      return state.registeredGatesCount >= 2;
+    }
+    // Shuttle: firmware may fire ALL_LANES_CONFIGURED without individual
+    // gate-registered events — treat allGatesReady as sufficient
+    if (state.mode == 'shuttle') {
+      return state.allGatesReady || state.registeredGatesCount >= 1;
+    }
+    // 505 / ttest / other linear modes: require at least 1 gate as before
+    return state.registeredGatesCount >= 1;
+  }
+
   // ── Setup Gates button ──────────────────────────────────────────────────────
 
   Widget _buildSetupGatesButton(
@@ -426,12 +442,18 @@ class StepGateAlignment extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 flex: 2,
-                // Sprint: needs 2+ gates; others: 1+ gate
-                // 0 gates → "Setup Gates" or "Setting up..."
-                child: state.registeredGatesCount >= (state.mode == 'linear' && state.subMode == 'sprint' ? 2 : 1)
+                // Sprint: needs 2+ gates; others: 1+ gate or allGatesReady.
+                // allGatesReady covers the case where the firmware fires
+                // ALL_LANES_CONFIGURED without individual gate-registered events
+                // (shuttle firmware may not send per-gate confirmations).
+                child: _canStartTest(state)
                     ? ElevatedButton.icon(
                         icon: const Icon(Icons.play_arrow, size: 18),
-                        label: Text('Start Test (${state.registeredGatesCount} gate${state.registeredGatesCount == 1 ? '' : 's'})'),
+                        label: Text(
+                          state.registeredGatesCount > 0
+                              ? 'Start Test (${state.registeredGatesCount} gate${state.registeredGatesCount == 1 ? '' : 's'})'
+                              : 'Start Test',
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _success,
                           foregroundColor: Colors.white,

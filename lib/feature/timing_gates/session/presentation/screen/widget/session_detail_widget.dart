@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/profile/data/model/timing_gate_profile_model.dart';
 import 'package:xelex_esp/feature/timing_gates/profile/presentation/cubit/profile_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/profile/presentation/cubit/profile_state.dart';
@@ -26,7 +27,18 @@ const Color sdBronze       = Color(0xFF92400E);
 /// Builds ordered segment labels from [gateDistances], skipping any segment
 /// whose distance is 0 (e.g. M→G1=0 when athlete starts at G1).
 /// Falls back to positional labels when [gateDistances] is empty.
-List<String> _buildSegmentLabels(List<double> gateDistances, int segCount) {
+List<String> _buildSegmentLabels(
+  List<double> gateDistances,
+  int segCount, {
+  bool startFromMaster = true,
+}) {
+  if (!startFromMaster) {
+    // Shuttle: athlete bounces G1↔G2↔G1↔G2...
+    return List.generate(
+      segCount,
+      (i) => i % 2 == 0 ? 'G1→G2' : 'G2→G1',
+    );
+  }
   if (gateDistances.length >= 2) {
     final labels = <String>[];
     for (int i = 0; i < gateDistances.length - 1; i++) {
@@ -35,7 +47,6 @@ List<String> _buildSegmentLabels(List<double> gateDistances, int segCount) {
     }
     if (labels.length == segCount) return labels;
   }
-  // Fallback: positional
   return List.generate(
     segCount,
     (i) => i == 0 ? 'M→G1' : 'G$i→G${i + 1}',
@@ -336,12 +347,14 @@ class LeaderboardTab extends StatelessWidget {
   final List<AthleteResultModel> ranked;
   final List<double> gateDistances;
   final bool isYoyo;
+  final bool isShuttle;
 
   const LeaderboardTab({
     super.key,
     required this.ranked,
     this.gateDistances = const [],
     this.isYoyo = false,
+    this.isShuttle = false,
   });
 
   @override
@@ -356,6 +369,7 @@ class LeaderboardTab extends StatelessWidget {
           rank: i + 1,
           gateDistances: gateDistances,
           isYoyo: isYoyo,
+          isShuttle: isShuttle,
         ),
       ),
     );
@@ -369,6 +383,7 @@ class AthleteDetailCard extends StatelessWidget {
   final int rank;
   final List<double> gateDistances;
   final bool isYoyo;
+  final bool isShuttle;
 
   const AthleteDetailCard({
     super.key,
@@ -376,6 +391,7 @@ class AthleteDetailCard extends StatelessWidget {
     required this.rank,
     this.gateDistances = const [],
     this.isYoyo = false,
+    this.isShuttle = false,
   });
 
   @override
@@ -647,6 +663,7 @@ class AthleteDetailCard extends StatelessWidget {
                   result: result,
                   gateDistances: gateDistances,
                   isYoyo: isYoyo,
+                  isShuttle: isShuttle,
                 )),
           ],
         ],
@@ -662,6 +679,7 @@ class TrialRow extends StatefulWidget {
   final AthleteResultModel result;
   final List<double> gateDistances;
   final bool isYoyo;
+  final bool isShuttle;
 
   const TrialRow({
     super.key,
@@ -669,6 +687,7 @@ class TrialRow extends StatefulWidget {
     required this.result,
     this.gateDistances = const [],
     this.isYoyo = false,
+    this.isShuttle = false,
   });
 
   @override
@@ -834,7 +853,7 @@ class _TrialRowState extends State<TrialRow> {
 
     final hasSpeedData = t.isCompleted && t.speeds.isNotEmpty;
     final segCount = t.speeds.isNotEmpty ? t.speeds.length : t.splits.length;
-    final segLabels = _buildSegmentLabels(gateDistances, segCount);
+    final segLabels = _buildSegmentLabels(gateDistances, segCount, startFromMaster: !widget.isShuttle);
 
     // Average speed = total distance / total time
     double? avgSpeed;
@@ -1164,12 +1183,14 @@ class ChartsTab extends StatelessWidget {
   final List<AthleteResultModel> ranked;
   final List<double> gateDistances;
   final bool isYoyo;
+  final bool isShuttle;
 
   const ChartsTab({
     super.key,
     required this.ranked,
     this.gateDistances = const [],
     this.isYoyo = false,
+    this.isShuttle = false,
   });
 
   @override
@@ -1216,9 +1237,9 @@ class ChartsTab extends StatelessWidget {
           SdCard(child: TrialProgressionChart(athletes: athletesWithData)),
         if (hasSpeedData) ...[
           const SizedBox(height: 16),
-          SdCard(child: SpeedProfileChart(athletes: athletesWithData, gateDistances: gateDistances)),
+          SdCard(child: SpeedProfileChart(athletes: athletesWithData, gateDistances: gateDistances, isShuttle: isShuttle)),
           const SizedBox(height: 16),
-          SdCard(child: AccelerationChart(athletes: athletesWithData, gateDistances: gateDistances)),
+          SdCard(child: AccelerationChart(athletes: athletesWithData, gateDistances: gateDistances, isShuttle: isShuttle)),
         ],
       ],
     );
@@ -1743,30 +1764,8 @@ class _PdfOptionsSheetState extends State<PdfOptionsSheet> {
       Navigator.of(context).pop();
 
       if (path != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: sdSuccess,
-            duration: const Duration(seconds: 4),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'PDF saved!',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _shortPath(path),
-                  style:
-                      const TextStyle(color: Colors.white70, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
+        context.read<GlobalErrorCubit>().showSuccess(
+          'PDF saved! ${_shortPath(path)}',
         );
       } else {
         _showError('Could not access device storage.');
@@ -1784,12 +1783,7 @@ class _PdfOptionsSheetState extends State<PdfOptionsSheet> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: Colors.red.shade700,
-      ),
-    );
+    context.read<GlobalErrorCubit>().showError(msg);
   }
 
   @override
@@ -2102,10 +2096,12 @@ String sdFormatDate(DateTime dt) {
 class SpeedProfileChart extends StatelessWidget {
   final List<AthleteResultModel> athletes;
   final List<double> gateDistances;
+  final bool isShuttle;
   const SpeedProfileChart({
     super.key,
     required this.athletes,
     this.gateDistances = const [],
+    this.isShuttle = false,
   });
 
   static const _barColors = [
@@ -2135,7 +2131,7 @@ class SpeedProfileChart extends StatelessWidget {
     // Cap at 6 athletes (one per colour) — more than 6 is unreadable on a line chart
     final capped = entries.take(6).toList();
     final maxSegments = capped.map((e) => e.value.speeds.length).reduce((a, b) => a > b ? a : b);
-    final segLabels = _buildSegmentLabels(gateDistances, maxSegments);
+    final segLabels = _buildSegmentLabels(gateDistances, maxSegments, startFromMaster: !isShuttle);
     // Each segment gets 42 px minimum so labels never crowd
     const segPx = 42.0;
     const leftReserved = 44.0;
@@ -2181,16 +2177,20 @@ class SpeedProfileChart extends StatelessWidget {
           }).toList(),
         ),
         const SizedBox(height: 12),
-        SizedBox(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final minWidth = chartWidth + leftReserved;
+            final width = minWidth < constraints.maxWidth ? constraints.maxWidth : minWidth;
+            return SizedBox(
           height: 220,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: chartWidth + leftReserved,
+                child: SizedBox(
+                  width: width,
               child: LineChart(
                 LineChartData(
                   minX: 0,
-                  maxX: (maxSegments - 1).toDouble(),
+                  maxX: maxSegments.toDouble(),
                   minY: 0,
                   clipData: const FlClipData.all(),
                   lineTouchData: LineTouchData(
@@ -2214,15 +2214,13 @@ class SpeedProfileChart extends StatelessWidget {
                         reservedSize: 22,
                         getTitlesWidget: (v, meta) {
                           final idx = v.toInt();
-                          final fullLabel = idx < segLabels.length
-                              ? segLabels[idx]
-                              : (idx == 0 ? 'M→G1' : 'G$idx→G${idx + 1}');
-                          // Use short label (destination gate) e.g. "G3"
-                          final display = fullLabel.split('→').last;
+                          final label = isShuttle
+                              ? (idx % 2 == 0 ? 'G1' : 'G2')
+                              : (idx == 0 ? 'M' : 'G$idx');
                           return SideTitleWidget(
                             meta: meta,
                             space: 4,
-                            child: Text(display,
+                            child: Text(label,
                                 style: const TextStyle(color: sdSubtext, fontSize: 9)),
                           );
                         },
@@ -2251,7 +2249,7 @@ class SpeedProfileChart extends StatelessWidget {
                     final color = _barColors[e.key];
                     final speeds = e.value.value.speeds;
                     return LineChartBarData(
-                      spots: speeds.asMap().entries.map((s) => FlSpot(s.key.toDouble(), s.value)).toList(),
+                      spots: speeds.asMap().entries.map((s) => FlSpot((s.key + 1).toDouble(), s.value)).toList(),
                       isCurved: true,
                       color: color,
                       barWidth: 2.5,
@@ -2264,6 +2262,8 @@ class SpeedProfileChart extends StatelessWidget {
               ),
             ),
           ),
+            );
+          },
         ),
       ],
     );
@@ -2275,10 +2275,12 @@ class SpeedProfileChart extends StatelessWidget {
 class AccelerationChart extends StatelessWidget {
   final List<AthleteResultModel> athletes;
   final List<double> gateDistances;
+  final bool isShuttle;
   const AccelerationChart({
     super.key,
     required this.athletes,
     this.gateDistances = const [],
+    this.isShuttle = false,
   });
 
   static const _barColors = [
@@ -2307,7 +2309,7 @@ class AccelerationChart extends StatelessWidget {
     // Cap at 6 athletes — more than 6 lines is unreadable
     final capped = entries.take(6).toList();
     final maxSegments = capped.map((e) => e.value.accelerations.length).reduce((a, b) => a > b ? a : b);
-    final segLabels = _buildSegmentLabels(gateDistances, maxSegments);
+    final segLabels = _buildSegmentLabels(gateDistances, maxSegments, startFromMaster: !isShuttle);
     const segPx = 42.0;
     const leftReserved = 48.0;
     final chartWidth = maxSegments * segPx;
@@ -2352,16 +2354,20 @@ class AccelerationChart extends StatelessWidget {
           }).toList(),
         ),
         const SizedBox(height: 12),
-        SizedBox(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final minWidth = chartWidth + leftReserved;
+            final width = minWidth < constraints.maxWidth ? constraints.maxWidth : minWidth;
+            return SizedBox(
           height: 220,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: chartWidth + leftReserved,
+                child: SizedBox(
+                  width: width,
               child: LineChart(
                 LineChartData(
                   minX: 0,
-                  maxX: (maxSegments - 1).toDouble(),
+                  maxX: maxSegments.toDouble(),
                   clipData: const FlClipData.all(),
                   lineTouchData: LineTouchData(
                     touchTooltipData: LineTouchTooltipData(
@@ -2385,14 +2391,13 @@ class AccelerationChart extends StatelessWidget {
                         reservedSize: 22,
                         getTitlesWidget: (v, meta) {
                           final idx = v.toInt();
-                          final fullLabel = idx < segLabels.length
-                              ? segLabels[idx]
-                              : (idx == 0 ? 'M→G1' : 'G$idx→G${idx + 1}');
-                          final display = fullLabel.split('→').last;
+                          final label = isShuttle
+                              ? (idx % 2 == 0 ? 'G1' : 'G2')
+                              : (idx == 0 ? 'M' : 'G$idx');
                           return SideTitleWidget(
                             meta: meta,
                             space: 4,
-                            child: Text(display,
+                            child: Text(label,
                                 style: const TextStyle(color: sdSubtext, fontSize: 9)),
                           );
                         },
@@ -2426,7 +2431,7 @@ class AccelerationChart extends StatelessWidget {
                     final color = _barColors[e.key];
                     final accels = e.value.value.accelerations;
                     return LineChartBarData(
-                      spots: accels.asMap().entries.map((a) => FlSpot(a.key.toDouble(), a.value)).toList(),
+                      spots: accels.asMap().entries.map((a) => FlSpot((a.key + 1).toDouble(), a.value)).toList(),
                       isCurved: false,
                       color: color,
                       barWidth: 2.5,
@@ -2439,6 +2444,8 @@ class AccelerationChart extends StatelessWidget {
               ),
             ),
           ),
+            );
+          },
         ),
       ],
     );

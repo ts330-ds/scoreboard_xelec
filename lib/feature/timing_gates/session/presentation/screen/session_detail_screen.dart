@@ -81,8 +81,8 @@ class _SessionDetailScreenState extends State<SessionDetailScreen>
                 controller: _tabs,
                 children: [
                   OverviewTab(session: s, ranked: _ranked),
-                  LeaderboardTab(ranked: _ranked, gateDistances: s.gateDistances, isYoyo: s.isYoyo),
-                  ChartsTab(ranked: _ranked, gateDistances: s.gateDistances, isYoyo: s.isYoyo),
+                  LeaderboardTab(ranked: _ranked, gateDistances: s.gateDistances, isYoyo: s.isYoyo, isShuttle: s.isShuttle),
+                  ChartsTab(ranked: _ranked, gateDistances: s.gateDistances, isYoyo: s.isYoyo, isShuttle: s.isShuttle),
                 ],
               ),
             ),

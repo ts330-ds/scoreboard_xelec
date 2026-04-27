@@ -1,11 +1,11 @@
 import 'dart:math';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/athlete_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/athlete_result_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/test_session_model.dart';
@@ -32,165 +32,6 @@ class _TimingGateResultsMobileState extends State<TimingGateResultsMobile> {
   static const _subtext = Color(0xFF6B7A8D);
   static const _border = Color(0xFFDDE3EC);
   static const _gold = Color(0xFFD97706);
-
-  // ── Dev: seed a large test session ────────────────────────────────────────
-  Future<void> _seedLargeSession() async {
-    if (_seeding) return;
-    setState(() => _seeding = true);
-    try {
-      const uuid = Uuid();
-      final rng = Random();
-
-      const gateCount = 20; // Master + 19 timing gates
-      const segCount = gateCount - 1; // 19 segments
-      const segDist = 5.0; // 5 m per segment → 95 m total
-
-      // gateDistances: [Master=0, seg1=5, seg2=5, ..., seg19=5]
-      final gateDists = [0.0, ...List.filled(segCount, segDist)];
-
-      // ── Helper: simulate one trial ────────────────────────────────────
-      TrialResultModel makeTrialForAthlete(int trialNum, double athleteBonus) {
-        // First segment (from rest): slow; subsequent segments faster then plateau
-        final splits = <double>[];
-        final speeds = <double>[];
-        final segTimes = <double>[];
-
-        for (int i = 0; i < segCount; i++) {
-          double base;
-          if (i == 0) {
-            base = 1.35 + rng.nextDouble() * 0.25; // 1.35–1.60s
-          } else if (i < 5) {
-            base = 0.78 - i * 0.03 + rng.nextDouble() * 0.06; // accelerating
-          } else if (i < 12) {
-            base = 0.63 + rng.nextDouble() * 0.05; // peak speed
-          } else {
-            base = 0.65 + (i - 12) * 0.01 + rng.nextDouble() * 0.04; // mild decel
-          }
-          final t = double.parse(
-              ((base - athleteBonus).clamp(0.45, 2.0)).toStringAsFixed(3));
-          splits.add(t);
-          segTimes.add(t);
-          speeds.add(segDist / t);
-        }
-
-        final accels = <double>[];
-        for (int i = 0; i < speeds.length; i++) {
-          final vPrev = i == 0 ? 0.0 : speeds[i - 1];
-          accels.add(double.parse(
-              ((speeds[i] - vPrev) / segTimes[i]).toStringAsFixed(3)));
-        }
-
-        final totalTime = double.parse(
-            splits.fold(0.0, (a, b) => a + b).toStringAsFixed(3));
-
-        return TrialResultModel(
-          trialNumber: trialNum,
-          totalTime: totalTime,
-          splits: splits,
-          status: 'completed',
-          timestamp: DateTime.now(),
-          speeds: speeds,
-          accelerations: accels,
-        );
-      }
-
-      // ── 50 athletes ───────────────────────────────────────────────────
-      const firstNames = [
-        'Aarav', 'Vihaan', 'Arjun', 'Rohan', 'Karan', 'Dev', 'Ayaan', 'Kabir',
-        'Ishaan', 'Reyansh', 'Aditya', 'Siddharth', 'Vivaan', 'Neel', 'Dhruv',
-        'Shaurya', 'Arnav', 'Yash', 'Pranav', 'Ansh', 'Samar', 'Kunal', 'Nikhil',
-        'Mihir', 'Param', 'Ritvik', 'Laksh', 'Vedant', 'Ahan', 'Rudra',
-        'Priya', 'Ananya', 'Diya', 'Kavya', 'Ishita', 'Aisha', 'Riya', 'Sneha',
-        'Pooja', 'Meera', 'Shruti', 'Tara', 'Anya', 'Nisha', 'Aditi',
-        'Carlos', 'James', 'Luca', 'Omar', 'Yuki',
-      ];
-      const lastNames = [
-        'Sharma', 'Patel', 'Singh', 'Kumar', 'Verma', 'Gupta', 'Joshi',
-        'Nair', 'Rao', 'Reddy', 'Mehta', 'Shah', 'Kapoor', 'Malhotra',
-        'Bose', 'Das', 'Iyer', 'Pillai', 'Menon', 'Saxena',
-      ];
-
-      final athletes = <AthleteModel>[];
-      final results = <AthleteResultModel>[];
-
-      for (int i = 0; i < 50; i++) {
-        final id = uuid.v4();
-        final name =
-            '${firstNames[i % firstNames.length]} ${lastNames[i % lastNames.length]}';
-        // Bonus makes each athlete slightly different in speed
-        final bonus = (i / 50) * 0.12; // 0 → 0.12s per segment spread
-
-        athletes.add(AthleteModel(
-          id: id,
-          fullName: name,
-          athleteId: 'ATH${(i + 1).toString().padLeft(3, '0')}',
-          bib: '${i + 1}',
-          dob: '',
-          age: 18 + (i % 12),
-          sex: i < 30 ? 'Male' : 'Female',
-          discipline: 'Sprint',
-          team: i < 25 ? 'Team Alpha' : 'Team Beta',
-          trials: 3,
-          completedTrials: 3,
-        ));
-
-        results.add(AthleteResultModel(
-          athleteId: id,
-          fullName: name,
-          bib: '${i + 1}',
-          team: i < 25 ? 'Team Alpha' : 'Team Beta',
-          discipline: 'Sprint',
-          trials: [
-            makeTrialForAthlete(1, bonus),
-            makeTrialForAthlete(2, bonus + 0.01),
-            makeTrialForAthlete(3, bonus - 0.005),
-          ],
-        ));
-      }
-
-      final sessionId = uuid.v4();
-      final session = TestSessionModel(
-        id: sessionId,
-        sessionName: '🧪 Stress Test — 50 Athletes / 20 Gates',
-        date: DateTime.now(),
-        mode: 'linear',
-        subMode: 'sprint',
-        protocol: 'custom',
-        customDistance: segDist * segCount,
-        trialMode: 'round_robin',
-        trialsCount: 3,
-        status: 'completed',
-        athletes: athletes,
-        results: results,
-        location: 'Dev Sandbox',
-        notes: 'Auto-generated stress-test session',
-        completedAt: DateTime.now(),
-        gateDistances: gateDists,
-      );
-
-      await GetIt.instance<SessionRepository>().save(session);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Stress-test session saved — 50 athletes, 20 gates'),
-            backgroundColor: Color(0xFF16A34A),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Seed failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _seeding = false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {

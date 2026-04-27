@@ -1,4 +1,4 @@
-enum ErrorType { error, warning, none }
+enum ErrorType { error, warning, success, info, none }
 
 class GlobalErrorState {
   final String message;

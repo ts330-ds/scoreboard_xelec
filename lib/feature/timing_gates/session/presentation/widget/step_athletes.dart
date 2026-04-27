@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/services.dart';
@@ -33,7 +34,6 @@ class _StepAthletesState extends State<StepAthletes> {
   static const _subtext = Color(0xFF6B7A8D);
   static const _success = Color(0xFF16A34A);
   static const _error = Color(0xFFDC2626);
-
   bool _isUploading = false;
 
   // ── Permission handling ───────────────────────────────────────
@@ -157,7 +157,13 @@ class _StepAthletesState extends State<StepAthletes> {
       setState(() => _isUploading = false);
 
       if (context.mounted) {
-        _showImportPreview(context, cubit, parsed, file.name, skippedRows: skippedRows);
+        _showImportPreview(
+          context,
+          cubit,
+          parsed,
+          file.name,
+          skippedRows: skippedRows,
+        );
       }
     } catch (e) {
       setState(() => _isUploading = false);
@@ -209,11 +215,19 @@ class _StepAthletesState extends State<StepAthletes> {
         if (h.contains('dob') || h.contains('birth')) colMap['dob'] = i;
         if (h == 'age') colMap['age'] = i;
         if (h.contains('sex') || h.contains('gender')) colMap['sex'] = i;
-        if (h.contains('discipline') || h.contains('event')) colMap['discipline'] = i;
+        if (h.contains('discipline') || h.contains('event'))
+          colMap['discipline'] = i;
         if (h.contains('trial')) colMap['trials'] = i;
       }
     } else {
-      colMap = {'name': 0, 'athleteId': 1, 'bib': 2, 'team': 3, 'dob': 4, 'trials': 5};
+      colMap = {
+        'name': 0,
+        'athleteId': 1,
+        'bib': 2,
+        'team': 3,
+        'dob': 4,
+        'trials': 5,
+      };
     }
 
     final dataLines = hasHeader ? lines.skip(1).toList() : lines;
@@ -222,22 +236,30 @@ class _StepAthletesState extends State<StepAthletes> {
 
     for (final line in dataLines) {
       final cols = _splitCsvRow(line);
-      if (cols.isEmpty) { skipped++; continue; }
+      if (cols.isEmpty) {
+        skipped++;
+        continue;
+      }
       final name = _col(cols, colMap['name']).trim();
-      if (name.isEmpty) { skipped++; continue; }
+      if (name.isEmpty) {
+        skipped++;
+        continue;
+      }
 
-      athletes.add(AthleteModel(
-        id: const Uuid().v4(),
-        fullName: name,
-        athleteId: _col(cols, colMap['athleteId']).trim(),
-        bib: _col(cols, colMap['bib']).trim(),
-        team: _col(cols, colMap['team']).trim(),
-        dob: _col(cols, colMap['dob']).trim(),
-        age: int.tryParse(_col(cols, colMap['age']).trim()),
-        sex: _col(cols, colMap['sex']).trim(),
-        discipline: _col(cols, colMap['discipline']).trim(),
-        trials: int.tryParse(_col(cols, colMap['trials']).trim()) ?? 3,
-      ));
+      athletes.add(
+        AthleteModel(
+          id: const Uuid().v4(),
+          fullName: name,
+          athleteId: _col(cols, colMap['athleteId']).trim(),
+          bib: _col(cols, colMap['bib']).trim(),
+          team: _col(cols, colMap['team']).trim(),
+          dob: _col(cols, colMap['dob']).trim(),
+          age: int.tryParse(_col(cols, colMap['age']).trim()),
+          sex: _col(cols, colMap['sex']).trim(),
+          discipline: _col(cols, colMap['discipline']).trim(),
+          trials: int.tryParse(_col(cols, colMap['trials']).trim()) ?? 3,
+        ),
+      );
     }
     return (athletes: athletes, skipped: skipped);
   }
@@ -267,11 +289,13 @@ class _StepAthletesState extends State<StepAthletes> {
 
   // ── Excel Parsing ─────────────────────────────────────────────
   ({List<AthleteModel> athletes, int skipped}) _parseExcel(PlatformFile file) {
-    final bytes = file.bytes;
-    if (bytes == null) {
-      if (file.path == null) return (athletes: [], skipped: 0);
+    // Prefer path: file_picker always caches to local storage on Android,
+    // and reading from path avoids Uint8List type issues inside excel library.
+    if (file.path != null) {
       return _parseExcelBytes(File(file.path!).readAsBytesSync());
     }
+    final bytes = file.bytes;
+    if (bytes == null) return (athletes: [], skipped: 0);
     return _parseExcelBytes(bytes);
   }
 
@@ -300,9 +324,13 @@ class _StepAthletesState extends State<StepAthletes> {
     return v.toString();
   }
 
-  ({List<AthleteModel> athletes, int skipped}) _parseExcelBytes(List<int> bytes) {
+  ({List<AthleteModel> athletes, int skipped}) _parseExcelBytes(
+    List<int> bytes,
+  ) {
     try {
-      final excel = excel_lib.Excel.decodeBytes(bytes);
+      final Uint8List uint8Bytes =
+          bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+      final excel = excel_lib.Excel.decodeBytes(uint8Bytes);
 
       // Guard: no sheets in file
       if (excel.tables.isEmpty) return (athletes: [], skipped: 0);
@@ -314,7 +342,9 @@ class _StepAthletesState extends State<StepAthletes> {
       final rows = sheet.rows;
       if (rows.isEmpty) return (athletes: [], skipped: 0);
 
-      final firstRow = rows.first.map((c) => _cellStr(c).toLowerCase()).toList();
+      final firstRow = rows.first
+          .map((c) => _cellStr(c).toLowerCase())
+          .toList();
       final hasHeader = firstRow.any(
         (h) => h.contains('name') || h.contains('athlete'),
       );
@@ -334,11 +364,19 @@ class _StepAthletesState extends State<StepAthletes> {
           if (h.contains('dob') || h.contains('birth')) colMap['dob'] = i;
           if (h == 'age') colMap['age'] = i;
           if (h.contains('sex') || h.contains('gender')) colMap['sex'] = i;
-          if (h.contains('discipline') || h.contains('event')) colMap['discipline'] = i;
+          if (h.contains('discipline') || h.contains('event'))
+            colMap['discipline'] = i;
           if (h.contains('trial')) colMap['trials'] = i;
         }
       } else {
-        colMap = {'name': 0, 'athleteId': 1, 'bib': 2, 'team': 3, 'dob': 4, 'trials': 5};
+        colMap = {
+          'name': 0,
+          'athleteId': 1,
+          'bib': 2,
+          'team': 3,
+          'dob': 4,
+          'trials': 5,
+        };
       }
 
       final dataRows = hasHeader ? rows.skip(1).toList() : rows;
@@ -353,20 +391,25 @@ class _StepAthletesState extends State<StepAthletes> {
             continue;
           }
           final name = _col(vals, colMap['name']).trim();
-          if (name.isEmpty) { skipped++; continue; }
+          if (name.isEmpty) {
+            skipped++;
+            continue;
+          }
 
-          athletes.add(AthleteModel(
-            id: const Uuid().v4(),
-            fullName: name,
-            athleteId: _col(vals, colMap['athleteId']).trim(),
-            bib: _col(vals, colMap['bib']).trim(),
-            team: _col(vals, colMap['team']).trim(),
-            dob: _col(vals, colMap['dob']).trim(),
-            age: int.tryParse(_col(vals, colMap['age']).trim()),
-            sex: _col(vals, colMap['sex']).trim(),
-            discipline: _col(vals, colMap['discipline']).trim(),
-            trials: int.tryParse(_col(vals, colMap['trials']).trim()) ?? 3,
-          ));
+          athletes.add(
+            AthleteModel(
+              id: const Uuid().v4(),
+              fullName: name,
+              athleteId: _col(vals, colMap['athleteId']).trim(),
+              bib: _col(vals, colMap['bib']).trim(),
+              team: _col(vals, colMap['team']).trim(),
+              dob: _col(vals, colMap['dob']).trim(),
+              age: int.tryParse(_col(vals, colMap['age']).trim()),
+              sex: _col(vals, colMap['sex']).trim(),
+              discipline: _col(vals, colMap['discipline']).trim(),
+              trials: int.tryParse(_col(vals, colMap['trials']).trim()) ?? 3,
+            ),
+          );
         } catch (_) {
           // Bad row — skip silently
           skipped++;
@@ -379,8 +422,9 @@ class _StepAthletesState extends State<StepAthletes> {
   }
 
   // ── Dedupe key (mirrors cubit logic) ─────────────────────────
-  String _dedupeKey(AthleteModel a) =>
-      a.athleteId.isNotEmpty ? a.athleteId.toLowerCase() : a.fullName.toLowerCase();
+  String _dedupeKey(AthleteModel a) => a.athleteId.isNotEmpty
+      ? a.athleteId.toLowerCase()
+      : a.fullName.toLowerCase();
 
   // ── Import Preview ────────────────────────────────────────────
   void _showImportPreview(
@@ -391,10 +435,10 @@ class _StepAthletesState extends State<StepAthletes> {
     int skippedRows = 0,
   }) {
     // Calculate how many are duplicates against current session list
-    final existingKeys =
-        cubit.state.athletes.map(_dedupeKey).toSet();
-    final newCount =
-        athletes.where((a) => !existingKeys.contains(_dedupeKey(a))).length;
+    final existingKeys = cubit.state.athletes.map(_dedupeKey).toSet();
+    final newCount = athletes
+        .where((a) => !existingKeys.contains(_dedupeKey(a)))
+        .length;
     final dupCount = athletes.length - newCount;
 
     showDialog(
@@ -461,14 +505,19 @@ class _StepAthletesState extends State<StepAthletes> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.warning_amber_rounded,
-                          color: Color(0xFFEF4444), size: 16),
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Color(0xFFEF4444),
+                        size: 16,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           '$skippedRows row(s) skipped — missing Full Name field.',
                           style: const TextStyle(
-                              color: Color(0xFF991B1B), fontSize: 12),
+                            color: Color(0xFF991B1B),
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ],
@@ -504,7 +553,13 @@ class _StepAthletesState extends State<StepAthletes> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _previewRow('Athlete ID', 'Name', 'Team', 'Trials', isHeader: true),
+                    _previewRow(
+                      'Athlete ID',
+                      'Name',
+                      'Team',
+                      'Trials',
+                      isHeader: true,
+                    ),
                     const Divider(color: _border, height: 1),
                     Flexible(
                       child: ListView.separated(
@@ -558,7 +613,8 @@ class _StepAthletesState extends State<StepAthletes> {
                       foregroundColor: _primary,
                       side: const BorderSide(color: _primary),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     child: Text(
                       newCount == 0
@@ -580,7 +636,8 @@ class _StepAthletesState extends State<StepAthletes> {
                       backgroundColor: _primary,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                     child: Text('Replace All (${athletes.length} athletes)'),
                   ),
@@ -610,7 +667,8 @@ class _StepAthletesState extends State<StepAthletes> {
                         backgroundColor: _primary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                       child: Text('Import ${athletes.length} Athletes'),
                     ),
@@ -635,7 +693,10 @@ class _StepAthletesState extends State<StepAthletes> {
       child: Text(
         label,
         style: TextStyle(
-            color: color, fontSize: 11, fontWeight: FontWeight.w600),
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -648,7 +709,9 @@ class _StepAthletesState extends State<StepAthletes> {
     bool isHeader = false,
     bool isDuplicate = false,
   }) {
-    final color = isDuplicate ? const Color(0xFFD97706) : (isHeader ? _subtext : _text);
+    final color = isDuplicate
+        ? const Color(0xFFD97706)
+        : (isHeader ? _subtext : _text);
     final style = TextStyle(
       color: color,
       fontSize: isHeader ? 9 : 11,
@@ -668,7 +731,11 @@ class _StepAthletesState extends State<StepAthletes> {
             child: Row(
               children: [
                 Flexible(
-                  child: Text(name, style: style, overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    name,
+                    style: style,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 if (isDuplicate) ...[
                   const SizedBox(width: 4),
@@ -791,7 +858,11 @@ class _StepAthletesState extends State<StepAthletes> {
         const SizedBox(height: 10),
         const Text(
           'Upload Athlete File',
-          style: TextStyle(color: _primary, fontSize: 14, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: _primary,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 4),
         const Text(
@@ -823,7 +894,11 @@ class _StepAthletesState extends State<StepAthletes> {
       ),
       child: Text(
         ext,
-        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
@@ -837,7 +912,10 @@ class _StepAthletesState extends State<StepAthletes> {
           child: CircularProgressIndicator(color: _primary, strokeWidth: 2),
         ),
         SizedBox(height: 10),
-        Text('Reading file...', style: TextStyle(color: _primary, fontSize: 13)),
+        Text(
+          'Reading file...',
+          style: TextStyle(color: _primary, fontSize: 13),
+        ),
       ],
     );
   }
@@ -883,7 +961,10 @@ class _StepAthletesState extends State<StepAthletes> {
   }
 
   // ── Session list header with search + team filter ─────────────
-  Widget _sessionListHeader(TimingSessionState state, TimingSessionCubit cubit) {
+  Widget _sessionListHeader(
+    TimingSessionState state,
+    TimingSessionCubit cubit,
+  ) {
     return Row(
       children: [
         Expanded(child: _searchField(state, cubit)),
@@ -900,14 +981,9 @@ class _StepAthletesState extends State<StepAthletes> {
     final allSaved = sl<AthleteRepository>().getAll();
 
     if (allSaved.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('No saved athletes yet. Upload a file first.'),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      context.read<GlobalErrorCubit>().showError(
+        'No saved athletes yet. Upload a file first.',
+      ); 
       return;
     }
 
@@ -966,7 +1042,10 @@ class _StepAthletesState extends State<StepAthletes> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: state.teamFilter.isEmpty ? null : state.teamFilter,
-          hint: const Text('All Teams', style: TextStyle(color: _subtext, fontSize: 12)),
+          hint: const Text(
+            'All Teams',
+            style: TextStyle(color: _subtext, fontSize: 12),
+          ),
           dropdownColor: _surface,
           style: const TextStyle(color: _text, fontSize: 12),
           iconEnabledColor: _subtext,
@@ -992,7 +1071,11 @@ class _StepAthletesState extends State<StepAthletes> {
           SizedBox(height: 12),
           Text(
             'No athletes added',
-            style: TextStyle(color: _text, fontSize: 15, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: _text,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           SizedBox(height: 4),
           Text(
@@ -1076,7 +1159,11 @@ class _StepAthletesState extends State<StepAthletes> {
               const SizedBox(width: 8),
               GestureDetector(
                 onTap: () => cubit.removeAthlete(a.id),
-                child: const Icon(Icons.delete_outline, color: _error, size: 20),
+                child: const Icon(
+                  Icons.delete_outline,
+                  color: _error,
+                  size: 20,
+                ),
               ),
             ],
           ),
@@ -1116,7 +1203,9 @@ class _StepAthletesState extends State<StepAthletes> {
               foregroundColor: _subtext,
               side: const BorderSide(color: _border),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('Back'),
           ),
@@ -1160,233 +1249,259 @@ class _StepAthletesState extends State<StepAthletes> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Form(
               key: formKey,
               child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Add Athlete',
-                  style: TextStyle(
-                    color: _text,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Add Athlete',
+                    style: TextStyle(
+                      color: _text,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                _modalField(
-                  'Full Name *',
-                  nameCtrl,
-                  hint: 'First Last',
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Name is required';
-                    if (v.trim().length < 2) return 'Min 2 characters';
-                    if (RegExp(r'[0-9]').hasMatch(v)) return 'Name cannot contain numbers';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _modalField(
-                        'Athlete ID',
-                        athleteIdCtrl,
-                        hint: 'ATH-001',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _modalField(
-                        'BIB',
-                        bibCtrl,
-                        hint: '42',
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return null;
-                          final n = int.tryParse(v);
-                          if (n == null) return 'Numbers only';
-                          return null;
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _modalField(
-                        'Date of Birth',
-                        dobCtrl,
-                        hint: 'DD/MM/YYYY',
-                        isNumber: true,
-                        inputFormatters: [_DobInputFormatter()],
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return null;
-                          final regex = RegExp(r'^\d{2}/\d{2}/\d{4}$');
-                          if (!regex.hasMatch(v)) return 'Format: DD/MM/YYYY';
-                          final parts = v.split('/');
-                          final day = int.parse(parts[0]);
-                          final month = int.parse(parts[1]);
-                          final year = int.parse(parts[2]);
-                          if (day < 1 || day > 31) return 'Invalid day';
-                          if (month < 1 || month > 12) return 'Invalid month';
-                          if (year < 1900 || year > DateTime.now().year) return 'Invalid year';
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _modalField(
-                        'Age',
-                        ageCtrl,
-                        hint: '22',
-                        isNumber: true,
-                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return null;
-                          final n = int.tryParse(v);
-                          if (n == null) return 'Numbers only';
-                          if (n < 1 || n > 120) return '1 - 120';
-                          return null;
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Sex',
-                            style: TextStyle(
-                              color: _subtext,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Container(
-                            height: 42,
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                            decoration: BoxDecoration(
-                              color: _surface2,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: _border),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: selectedSex.isEmpty ? null : selectedSex,
-                                hint: const Text(
-                                  'Select',
-                                  style: TextStyle(color: _subtext, fontSize: 13),
-                                ),
-                                isExpanded: true,
-                                dropdownColor: _surface,
-                                style: const TextStyle(color: _text, fontSize: 13),
-                                items: ['Male', 'Female', 'Other']
-                                    .map((s) => DropdownMenuItem(
-                                          value: s,
-                                          child: Text(s),
-                                        ))
-                                    .toList(),
-                                onChanged: (v) =>
-                                    setModalState(() => selectedSex = v ?? ''),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _modalField('Discipline', disciplineCtrl, hint: 'Sprint'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _modalField('Team / Group', teamCtrl, hint: 'Sprint A'),
-                const SizedBox(height: 12),
-                // Row(
-                //   children: [
-                //     const Text(
-                //       'Trials',
-                //       style: TextStyle(color: _subtext, fontSize: 11),
-                //     ),
-                //     const Spacer(),
-                //     _iconBtn(
-                //       Icons.remove,
-                //       () => setModalState(() => trials = (trials - 1).clamp(1, 10)),
-                //     ),
-                //     Padding(
-                //       padding: const EdgeInsets.symmetric(horizontal: 10),
-                //       child: Text(
-                //         '$trials',
-                //         style: const TextStyle(
-                //           color: _primary,
-                //           fontSize: 18,
-                //           fontWeight: FontWeight.bold,
-                //         ),
-                //       ),
-                //     ),
-                //     _iconBtn(
-                //       Icons.add,
-                //       () => setModalState(() => trials = (trials + 1).clamp(1, 10)),
-                //     ),
-                //   ],
-                // ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () {
-                        if (!formKey.currentState!.validate()) return;
-                        final athlete = AthleteModel(
-                          id: const Uuid().v4(),
-                          fullName: nameCtrl.text.trim(),
-                          athleteId: athleteIdCtrl.text.trim(),
-                          bib: bibCtrl.text.trim(),
-                          dob: dobCtrl.text.trim(),
-                          age: int.tryParse(ageCtrl.text.trim()),
-                          sex: selectedSex,
-                          discipline: disciplineCtrl.text.trim(),
-                          team: teamCtrl.text.trim(),
-                          trials: 3,
-                        );
-                        cubit.addAthlete(athlete);
-                        sl<AthleteRepository>().save(athlete);
-                        Navigator.pop(ctx);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                  const SizedBox(height: 16),
+                  _modalField(
+                    'Full Name *',
+                    nameCtrl,
+                    hint: 'First Last',
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty)
+                        return 'Name is required';
+                      if (v.trim().length < 2) return 'Min 2 characters';
+                      if (RegExp(r'[0-9]').hasMatch(v))
+                        return 'Name cannot contain numbers';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _modalField(
+                          'Athlete ID',
+                          athleteIdCtrl,
+                          hint: 'ATH-001',
                         ),
                       ),
-                      child: const Text(' Add '),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            ),  // Form
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _modalField(
+                          'BIB',
+                          bibCtrl,
+                          hint: '42',
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return null;
+                            final n = int.tryParse(v);
+                            if (n == null) return 'Numbers only';
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _modalField(
+                          'Date of Birth',
+                          dobCtrl,
+                          hint: 'DD/MM/YYYY',
+                          isNumber: true,
+                          inputFormatters: [_DobInputFormatter()],
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return null;
+                            final regex = RegExp(r'^\d{2}/\d{2}/\d{4}$');
+                            if (!regex.hasMatch(v)) return 'Format: DD/MM/YYYY';
+                            final parts = v.split('/');
+                            final day = int.parse(parts[0]);
+                            final month = int.parse(parts[1]);
+                            final year = int.parse(parts[2]);
+                            if (day < 1 || day > 31) return 'Invalid day';
+                            if (month < 1 || month > 12) return 'Invalid month';
+                            if (year < 1900 || year > DateTime.now().year)
+                              return 'Invalid year';
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _modalField(
+                          'Age',
+                          ageCtrl,
+                          hint: '22',
+                          isNumber: true,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return null;
+                            final n = int.tryParse(v);
+                            if (n == null) return 'Numbers only';
+                            if (n < 1 || n > 120) return '1 - 120';
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Sex',
+                              style: TextStyle(
+                                color: _subtext,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              height: 42,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _surface2,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: _border),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: selectedSex.isEmpty
+                                      ? null
+                                      : selectedSex,
+                                  hint: const Text(
+                                    'Select',
+                                    style: TextStyle(
+                                      color: _subtext,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  isExpanded: true,
+                                  dropdownColor: _surface,
+                                  style: const TextStyle(
+                                    color: _text,
+                                    fontSize: 13,
+                                  ),
+                                  items: ['Male', 'Female', 'Other']
+                                      .map(
+                                        (s) => DropdownMenuItem(
+                                          value: s,
+                                          child: Text(s),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (v) => setModalState(
+                                    () => selectedSex = v ?? '',
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _modalField(
+                          'Discipline',
+                          disciplineCtrl,
+                          hint: 'Sprint',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _modalField('Team / Group', teamCtrl, hint: 'Sprint A'),
+                  const SizedBox(height: 12),
+                  // Row(
+                  //   children: [
+                  //     const Text(
+                  //       'Trials',
+                  //       style: TextStyle(color: _subtext, fontSize: 11),
+                  //     ),
+                  //     const Spacer(),
+                  //     _iconBtn(
+                  //       Icons.remove,
+                  //       () => setModalState(() => trials = (trials - 1).clamp(1, 10)),
+                  //     ),
+                  //     Padding(
+                  //       padding: const EdgeInsets.symmetric(horizontal: 10),
+                  //       child: Text(
+                  //         '$trials',
+                  //         style: const TextStyle(
+                  //           color: _primary,
+                  //           fontSize: 18,
+                  //           fontWeight: FontWeight.bold,
+                  //         ),
+                  //       ),
+                  //     ),
+                  //     _iconBtn(
+                  //       Icons.add,
+                  //       () => setModalState(() => trials = (trials + 1).clamp(1, 10)),
+                  //     ),
+                  //   ],
+                  // ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (!formKey.currentState!.validate()) return;
+                          final athlete = AthleteModel(
+                            id: const Uuid().v4(),
+                            fullName: nameCtrl.text.trim(),
+                            athleteId: athleteIdCtrl.text.trim(),
+                            bib: bibCtrl.text.trim(),
+                            dob: dobCtrl.text.trim(),
+                            age: int.tryParse(ageCtrl.text.trim()),
+                            sex: selectedSex,
+                            discipline: disciplineCtrl.text.trim(),
+                            team: teamCtrl.text.trim(),
+                            trials: 3,
+                          );
+                          cubit.addAthlete(athlete);
+                          sl<AthleteRepository>().save(athlete);
+                          Navigator.pop(ctx);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(' Add '),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ), // Form
           ),
         ),
       ),
@@ -1425,7 +1540,10 @@ class _StepAthletesState extends State<StepAthletes> {
             hintStyle: const TextStyle(color: _subtext, fontSize: 13),
             filled: true,
             fillColor: _surface2,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: _border),
@@ -1490,9 +1608,11 @@ class _SelectFromSavedSheetState extends State<_SelectFromSavedSheet> {
     super.initState();
     // Exclude athletes already in session (by dedupeKey)
     final sessionKeys = widget.alreadyInSession
-        .map((a) => a.athleteId.isNotEmpty
-            ? a.athleteId.toLowerCase()
-            : a.fullName.toLowerCase())
+        .map(
+          (a) => a.athleteId.isNotEmpty
+              ? a.athleteId.toLowerCase()
+              : a.fullName.toLowerCase(),
+        )
         .toSet();
     _available = widget.allSaved.where((a) {
       final key = a.athleteId.isNotEmpty
@@ -1517,7 +1637,8 @@ class _SelectFromSavedSheetState extends State<_SelectFromSavedSheet> {
     setState(() {
       final filtered = _filtered;
       final allSelected =
-          filtered.isNotEmpty && filtered.every((a) => _selectedIds.contains(a.id));
+          filtered.isNotEmpty &&
+          filtered.every((a) => _selectedIds.contains(a.id));
       if (allSelected) {
         for (final a in filtered) {
           _selectedIds.remove(a.id);
@@ -1535,7 +1656,8 @@ class _SelectFromSavedSheetState extends State<_SelectFromSavedSheet> {
     final filtered = _filtered;
     final selectedCount = _selectedIds.length;
     final allSelected =
-        filtered.isNotEmpty && filtered.every((a) => _selectedIds.contains(a.id));
+        filtered.isNotEmpty &&
+        filtered.every((a) => _selectedIds.contains(a.id));
 
     return SafeArea(
       child: Container(
@@ -1547,191 +1669,208 @@ class _SelectFromSavedSheetState extends State<_SelectFromSavedSheet> {
         child: Column(
           children: [
             // Header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    const Text(
-                      'Select Athletes',
-                      style: TextStyle(
-                        color: _text,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  const Text(
+                    'Select Athletes',
+                    style: TextStyle(
+                      color: _text,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
                     ),
-                    const Spacer(),
-                    if (_available.isNotEmpty)
-                      TextButton(
-                        onPressed: _toggleAll,
-                        child: Text(
-                          allSelected ? 'Deselect All' : 'Select All',
-                          style: const TextStyle(
-                              color: _primary, fontWeight: FontWeight.w600),
+                  ),
+                  const Spacer(),
+                  if (_available.isNotEmpty)
+                    TextButton(
+                      onPressed: _toggleAll,
+                      child: Text(
+                        allSelected ? 'Deselect All' : 'Select All',
+                        style: const TextStyle(
+                          color: _primary,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
-              // Search
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                child: TextField(
-                  onChanged: (v) => setState(() => _search = v),
-                  style: const TextStyle(color: _text, fontSize: 13),
-                  decoration: InputDecoration(
-                    prefixIcon:
-                        const Icon(Icons.search, color: _subtext, size: 18),
-                    hintText: 'Search by name, ID, team...',
-                    hintStyle: const TextStyle(color: _subtext, fontSize: 13),
-                    filled: true,
-                    fillColor: _surface2,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: _border),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: _border),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: _primary, width: 1.5),
-                    ),
+            ),
+            // Search
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: TextField(
+                onChanged: (v) => setState(() => _search = v),
+                style: const TextStyle(color: _text, fontSize: 13),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    color: _subtext,
+                    size: 18,
+                  ),
+                  hintText: 'Search by name, ID, team...',
+                  hintStyle: const TextStyle(color: _subtext, fontSize: 13),
+                  filled: true,
+                  fillColor: _surface2,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: _border),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: _border),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: _primary, width: 1.5),
                   ),
                 ),
               ),
-              // List
-              Expanded(
-                child: _available.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.group_off_outlined,
-                                color: _subtext, size: 40),
-                            SizedBox(height: 10),
-                            Text(
-                              'All saved athletes are already\nin this session',
-                              style: TextStyle(color: _subtext, fontSize: 13),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      )
-                    : filtered.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'No athletes match your search',
-                              style: TextStyle(color: _subtext, fontSize: 13),
-                            ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: filtered.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(color: _border, height: 1),
-                            itemBuilder: (_, i) {
-                              final a = filtered[i];
-                              final isSelected = _selectedIds.contains(a.id);
-                              final subtitle = [
-                                if (a.athleteId.isNotEmpty) a.athleteId,
-                                if (a.bib.isNotEmpty) 'BIB: ${a.bib}',
-                                if (a.team.isNotEmpty) a.team,
-                              ].join(' · ');
-                              return ListTile(
-                                contentPadding:
-                                    const EdgeInsets.symmetric(horizontal: 4),
-                                leading: CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor:
-                                      isSelected ? _primary : _primaryLight,
-                                  child: Text(
-                                    a.initials,
-                                    style: TextStyle(
-                                      color: isSelected
-                                          ? Colors.white
-                                          : _primary,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                title: Text(
-                                  a.fullName,
-                                  style: const TextStyle(
-                                      color: _text,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600),
-                                ),
-                                subtitle: subtitle.isNotEmpty
-                                    ? Text(subtitle,
-                                        style: const TextStyle(
-                                            color: _subtext, fontSize: 11))
-                                    : null,
-                                trailing: Checkbox(
-                                  value: isSelected,
-                                  activeColor: _primary,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(4)),
-                                  onChanged: (_) => setState(() {
-                                    if (isSelected) {
-                                      _selectedIds.remove(a.id);
-                                    } else {
-                                      _selectedIds.add(a.id);
-                                    }
-                                  }),
-                                ),
-                                onTap: () => setState(() {
-                                  if (isSelected) {
-                                    _selectedIds.remove(a.id);
-                                  } else {
-                                    _selectedIds.add(a.id);
-                                  }
-                                }),
-                              );
-                            },
+            ),
+            // List
+            Expanded(
+              child: _available.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.group_off_outlined,
+                            color: _subtext,
+                            size: 40,
                           ),
-              ),
-              // Confirm button
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                decoration: const BoxDecoration(
-                  color: _surface,
-                  border: Border(top: BorderSide(color: _border)),
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: selectedCount == 0
-                        ? null
-                        : () {
-                            final selected = _available
-                                .where((a) => _selectedIds.contains(a.id))
-                                .toList();
-                            widget.onConfirm(selected);
-                            Navigator.pop(context);
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _primary,
-                      disabledBackgroundColor: _border,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                          SizedBox(height: 10),
+                          Text(
+                            'All saved athletes are already\nin this session',
+                            style: TextStyle(color: _subtext, fontSize: 13),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    )
+                  : filtered.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No athletes match your search',
+                        style: TextStyle(color: _subtext, fontSize: 13),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(color: _border, height: 1),
+                      itemBuilder: (_, i) {
+                        final a = filtered[i];
+                        final isSelected = _selectedIds.contains(a.id);
+                        final subtitle = [
+                          if (a.athleteId.isNotEmpty) a.athleteId,
+                          if (a.bib.isNotEmpty) 'BIB: ${a.bib}',
+                          if (a.team.isNotEmpty) a.team,
+                        ].join(' · ');
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                          ),
+                          leading: CircleAvatar(
+                            radius: 18,
+                            backgroundColor: isSelected
+                                ? _primary
+                                : _primaryLight,
+                            child: Text(
+                              a.initials,
+                              style: TextStyle(
+                                color: isSelected ? Colors.white : _primary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            a.fullName,
+                            style: const TextStyle(
+                              color: _text,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          subtitle: subtitle.isNotEmpty
+                              ? Text(
+                                  subtitle,
+                                  style: const TextStyle(
+                                    color: _subtext,
+                                    fontSize: 11,
+                                  ),
+                                )
+                              : null,
+                          trailing: Checkbox(
+                            value: isSelected,
+                            activeColor: _primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            onChanged: (_) => setState(() {
+                              if (isSelected) {
+                                _selectedIds.remove(a.id);
+                              } else {
+                                _selectedIds.add(a.id);
+                              }
+                            }),
+                          ),
+                          onTap: () => setState(() {
+                            if (isSelected) {
+                              _selectedIds.remove(a.id);
+                            } else {
+                              _selectedIds.add(a.id);
+                            }
+                          }),
+                        );
+                      },
                     ),
-                    child: Text(
-                      selectedCount == 0
-                          ? 'Select athletes to add'
-                          : 'Add $selectedCount Athlete${selectedCount > 1 ? 's' : ''}',
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w600),
+            ),
+            // Confirm button
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              decoration: const BoxDecoration(
+                color: _surface,
+                border: Border(top: BorderSide(color: _border)),
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: selectedCount == 0
+                      ? null
+                      : () {
+                          final selected = _available
+                              .where((a) => _selectedIds.contains(a.id))
+                              .toList();
+                          widget.onConfirm(selected);
+                          Navigator.pop(context);
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _primary,
+                    disabledBackgroundColor: _border,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Text(
+                    selectedCount == 0
+                        ? 'Select athletes to add'
+                        : 'Add $selectedCount Athlete${selectedCount > 1 ? 's' : ''}',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
       ),
     );
   }

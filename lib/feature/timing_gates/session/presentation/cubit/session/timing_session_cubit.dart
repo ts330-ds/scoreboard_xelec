@@ -99,9 +99,14 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
         mode: 'yoyo',
         subMode: '',
         protocol: '',
+        trialsCount: 1,
         yoyoNumLanes: 1,
         yoyoLaneStatuses: [const YoYoLaneStatus(laneNumber: 1)],
       ));
+      return;
+    }
+    if (mode == 'shuttle') {
+      emit(state.copyWith(mode: 'shuttle', subMode: '', protocol: '', trialsCount: 1));
       return;
     }
     emit(state.copyWith(mode: mode, subMode: '', protocol: ''));
@@ -249,6 +254,24 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
 
 
 
+  /// DEV ONLY — injects fake results for all lanes in the current shuttle batch.
+  Future<void> simulateShuttleResult() async {
+    if (state.mode != 'shuttle') return;
+    if (state.phase != RunTestPhase.waitingForResult) return;
+    final rng = Random();
+    final batch = state.currentShuttleBatch;
+    for (final item in batch) {
+      final totalTime = 20.0 + rng.nextDouble() * 10.0;
+      final parsed = ParsedResult(
+        mode: 'shuttle',
+        totalTime: double.parse(totalTime.toStringAsFixed(3)),
+        splits: [],
+        lane: item.shuttleLane,
+      );
+      await _onShuttleLaneResult(parsed);
+    }
+  }
+
   /// DEV ONLY — injects a fake result for non-YOYO modes.
   Future<void> simulateTrialResult() async {
     final item = state.currentQueueItem;
@@ -279,8 +302,14 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
   // ── Step 4: Run test ───────────────────────────────────────────────────────
 
   Future<void> startTest() async {
-    if (state.registeredGatesCount == 0) {
-      errorCubit.showWarning('No gates registered yet. Walk through at least one gate.');
+    // Shuttle: firmware may fire ALL_LANES_CONFIGURED without per-gate events,
+    // so allGatesReady alone is sufficient. All other modes require at least
+    // one gate physically registered to ensure distances/data are available.
+    final gatesOk = state.mode == 'shuttle'
+        ? (state.allGatesReady || state.registeredGatesCount > 0)
+        : state.registeredGatesCount > 0;
+    if (!gatesOk) {
+      errorCubit.showWarning('No gates registered yet. Walk through each gate first.');
       return;
     }
 
@@ -425,6 +454,16 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
       return;
     }
     if (state.phase != RunTestPhase.ready) return;
+    if (state.mode == 'shuttle') {
+      final batch = state.currentShuttleBatch;
+      debugPrint(
+        '[SHUTTLE] ▶ START sent'
+        ' | trial=${batch.isEmpty ? "?" : batch.first.trialNumber}/${state.trialsCount}'
+        ' | batch size=${batch.length}'
+        ' | lanes: ${batch.map((b) => 'L${b.shuttleLane}→${b.athleteName}').join(', ')}'
+        ' | queueIndex=${state.queueIndex}/${state.trialQueue.length}',
+      );
+    }
     emit(state.copyWith(phase: RunTestPhase.waitingForResult));
     bleService.send('START');
   }
@@ -438,7 +477,7 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
 
   Future<void> _onParsedResult(ParsedResult parsed) async {
     if (state.mode == 'shuttle' && parsed.lane != null) {
-      _onShuttleLaneResult(parsed);
+      await _onShuttleLaneResult(parsed);
       return;
     }
     final item = state.currentQueueItem;
@@ -500,12 +539,24 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
 
   Future<void> _onShuttleLaneResult(ParsedResult parsed) async {
     final lane = parsed.lane!;
+    debugPrint(
+      '[SHUTTLE] 📥 Lane $lane result received'
+      ' | time=${parsed.totalTime}s'
+      ' | splits=${parsed.splits.length}'
+      ' | currentBatch=${state.currentShuttleBatch.map((i) => 'L${i.shuttleLane}').toList()}',
+    );
     TrialQueueItem? item;
     try {
       item = state.currentShuttleBatch.firstWhere((i) => i.shuttleLane == lane);
     } catch (_) {
+      debugPrint(
+        '[SHUTTLE] ⚠ Lane $lane NOT in current batch'
+        ' — expected lanes: ${state.currentShuttleBatch.map((i) => i.shuttleLane).toList()}'
+        ' | result discarded',
+      );
       return;
     }
+    debugPrint('[SHUTTLE] ✓ Lane $lane matched → ${item.athleteName} (trial ${item.trialNumber})');
     final trial = parsed.toTrialResult(item.trialNumber);
     final updatedResults = _upsertTrial(item.athleteId, trial);
     final updatedBatch = Map<int, TrialResultModel>.from(state.shuttleBatchResults)..[lane] = trial;
@@ -524,14 +575,28 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
 
     final batch = state.currentShuttleBatch;
     final allDone = batch.every((i) => updatedBatch.containsKey(i.shuttleLane));
+    debugPrint(
+      '[SHUTTLE] 📊 Batch progress: ${updatedBatch.length}/${batch.length} lanes done'
+      ' | allDone=$allDone'
+      ' | doneLanes=${updatedBatch.keys.toList()}'
+      ' | pendingLanes=${batch.where((i) => !updatedBatch.containsKey(i.shuttleLane)).map((i) => i.shuttleLane).toList()}',
+    );
 
     if (allDone && state.sessionId != null) {
       final isLastBatch = state.queueIndex + batch.length >= state.trialQueue.length;
+      debugPrint('[SHUTTLE] 🏁 Batch complete | queueIndex=${state.queueIndex} | isLastBatch=$isLastBatch');
       if (isLastBatch) {
+        debugPrint('[SHUTTLE] 🎉 Last batch — finalizing session');
         try {
+          // Merge with Hive's copy in case another lane's saveTrial() ran
+          // concurrently and the in-memory updatedResults is behind.
+          final hiveSession = sessionRepository.getById(state.sessionId!);
+          final mergedResults = hiveSession != null
+              ? hiveSession.results
+              : updatedResults;
           await sessionRepository.finalizeSession(
             sessionId: state.sessionId!,
-            results: updatedResults,
+            results: mergedResults,
             status: 'completed',
           );
         } catch (e) {
@@ -828,6 +893,10 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
     if (state.mode == 'shuttle') {
       final batchSize = state.currentShuttleBatch.length;
       final newIndex = state.queueIndex + batchSize;
+      debugPrint(
+        '[SHUTTLE] ➡ Accepted — advancing queueIndex ${state.queueIndex} → $newIndex'
+        ' | ${newIndex >= state.trialQueue.length ? "SESSION DONE" : "next batch ready"}',
+      );
       if (newIndex >= state.trialQueue.length) {
         emit(state.copyWith(phase: RunTestPhase.done, currentStep: 6));
       } else {
@@ -854,6 +923,11 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
   Future<void> skipTrial() async {
     if (state.mode == 'shuttle') {
       final batch = state.currentShuttleBatch;
+      debugPrint(
+        '[SHUTTLE] ⏭ Skip batch | ${batch.length} athletes'
+        ' | lanes: ${batch.map((b) => 'L${b.shuttleLane}→${b.athleteName}').join(', ')}'
+        ' | trial=${batch.isEmpty ? "?" : batch.first.trialNumber}',
+      );
       for (final item in batch) {
         final skipped = TrialResultModel(
           trialNumber: item.trialNumber,
@@ -897,6 +971,11 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
   Future<void> falseStart() async {
     if (state.mode == 'shuttle') {
       final batch = state.currentShuttleBatch;
+      debugPrint(
+        '[SHUTTLE] 🔴 False start | ${batch.length} athletes cancelled'
+        ' | lanes: ${batch.map((b) => 'L${b.shuttleLane}→${b.athleteName}').join(', ')}'
+        ' | will retry same batch',
+      );
       for (final item in batch) {
         final fs = TrialResultModel(
           trialNumber: item.trialNumber,
@@ -913,7 +992,7 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
           } catch (_) {}
         }
       }
-      // False start → sirf race cancel, gates dobara setup nahi
+      // False start: cancel the race, keep gates armed — no re-setup needed.
       emit(state.copyWith(
         phase: RunTestPhase.ready,
         clearLastTrialResult: true,
@@ -935,9 +1014,8 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
         trial: fs,
       );
     }
-    // False start → sirf race cancel karo, gates dobara register nahi karne
-    // RESET bhejne se gates bhi reset ho jaate — isliye sirf START bhejenge
-    // jab user ready ho
+    // False start: cancel the race only. Sending RESET would de-register the
+    // gates, so we stay ready and let the coach tap Start when ready again.
     emit(state.copyWith(
       phase: RunTestPhase.ready,
       clearLastTrialResult: true,
@@ -952,28 +1030,20 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
     final queue = <TrialQueueItem>[];
 
     if (state.mode == 'shuttle') {
+      // Shuttle lanes always run in parallel — queue must group all athletes
+      // by trial so currentShuttleBatch can collect one athlete per lane.
+      // athlete_complete ordering (athlete × trial) would place the same lane
+      // on consecutive items, causing currentShuttleBatch to return a batch of
+      // 1 and silently skip all other athletes. Always use trial × athlete order.
       final numLanes = state.shuttleNumLanes;
-      if (state.trialMode == 'round_robin') {
-        for (int t = 1; t <= trials; t++) {
-          for (int i = 0; i < athletes.length; i++) {
-            queue.add(TrialQueueItem(
-              athleteId: athletes[i].id,
-              athleteName: athletes[i].fullName,
-              trialNumber: t,
-              shuttleLane: (i % numLanes) + 1,
-            ));
-          }
-        }
-      } else {
+      for (int t = 1; t <= trials; t++) {
         for (int i = 0; i < athletes.length; i++) {
-          for (int t = 1; t <= trials; t++) {
-            queue.add(TrialQueueItem(
-              athleteId: athletes[i].id,
-              athleteName: athletes[i].fullName,
-              trialNumber: t,
-              shuttleLane: (i % numLanes) + 1,
-            ));
-          }
+          queue.add(TrialQueueItem(
+            athleteId: athletes[i].id,
+            athleteName: athletes[i].fullName,
+            trialNumber: t,
+            shuttleLane: (i % numLanes) + 1,
+          ));
         }
       }
     } else {
@@ -991,11 +1061,30 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
         }
       }
     }
+    if (state.mode == 'shuttle') {
+      final numLanes = state.shuttleNumLanes;
+      final laneMap = <int, List<String>>{};
+      for (final item in queue) {
+        laneMap.putIfAbsent(item.shuttleLane ?? 1, () => []);
+        if (!laneMap[item.shuttleLane ?? 1]!.contains(item.athleteName)) {
+          laneMap[item.shuttleLane ?? 1]!.add(item.athleteName);
+        }
+      }
+      debugPrint(
+        '[SHUTTLE] 📋 Queue built'
+        ' | ${queue.length} items total'
+        ' | ${athletes.length} athletes × ${state.trialsCount} trials × $numLanes lanes'
+        ' | lane assignments: ${laneMap.entries.map((e) => 'L${e.key}→[${e.value.join(', ')}]').join(', ')}',
+      );
+    }
     return queue;
   }
 
   List<AthleteResultModel> _buildInitialResults() {
-    return state.athletes.map((a) {
+    final numLanes = state.shuttleNumLanes;
+    return state.athletes.asMap().entries.map((entry) {
+      final i = entry.key;
+      final a = entry.value;
       return AthleteResultModel(
         athleteId: a.id,
         fullName: a.fullName,
@@ -1003,6 +1092,9 @@ class TimingSessionCubit extends Cubit<TimingSessionState> {
         team: a.team,
         discipline: a.discipline,
         trials: const [],
+        // Shuttle: persist lane assignment so results screen can show it.
+        // Uses same modulo formula as _buildQueue().
+        shuttleLane: state.mode == 'shuttle' ? (i % numLanes) + 1 : null,
       );
     }).toList();
   }

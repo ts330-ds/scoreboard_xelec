@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/router/app_path.dart';
+import 'package:xelex_esp/router/heart_tracker_path.dart';
+import 'package:xelex_esp/router/timing_gate_path.dart';
+import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 import 'package:xelex_esp/utility/appColor.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -36,8 +41,39 @@ class _SplashScreenState extends State<SplashScreen>
     _controller.forward();
 
     Future.delayed(const Duration(milliseconds: 2500), () {
-      if (mounted) context.go(AppPaths.login);
+      if (!mounted) return;
+      _navigate();
     });
+  }
+
+  void _navigate() {
+    final prefs = sl<SharedPreferences>();
+    final token = prefs.getString(PrefKeys.userToken);
+
+    if (token == null) {
+      context.go(AppPaths.featureSelection);
+      return;
+    }
+
+    final feature = prefs.getString(PrefKeys.selectedFeature);
+    context.go(_routeForFeature(feature));
+  }
+
+  String _routeForFeature(String? feature) {
+    switch (feature) {
+      case 'scoreboard':
+        return '${AppPaths.deviceSelection}?feature=scoreboard';
+      case 'heart_rate':
+        return HeartTrackerPaths.athleteHome;
+      case 'timing_gates':
+        return TimingGatePaths.timingGateHomeMobile;
+      case 'vbt':
+      case 'eeg':
+      case 'ams':
+        return HeartTrackerPaths.chooseProfile;
+      default:
+        return AppPaths.featureSelection;
+    }
   }
 
   @override
@@ -92,7 +128,7 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
                 const SizedBox(height: 28),
                 const Text(
-                  'XELEX ESP',
+                  'Sports IQ',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 28,

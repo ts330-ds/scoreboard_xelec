@@ -146,6 +146,12 @@ class _VitalGrid extends StatelessWidget {
           icon: Icons.psychology,
           color: AppColors.vitalStress,
         ),
+        _VitalTile(
+          label: "HRV (RMSSD)",
+          value: state.hrv > 0 ? "${state.hrv.toStringAsFixed(1)} ms" : "--",
+          icon: Icons.monitor_heart_outlined,
+          color: AppColors.primary,
+        ),
       ],
     );
   }

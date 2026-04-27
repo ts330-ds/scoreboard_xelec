@@ -111,6 +111,7 @@ class TestSessionModel {
 
   /// Display label e.g. "Linear · Sprint · 20m"
   bool get isYoyo => mode == 'yoyo';
+  bool get isShuttle => mode == 'shuttle';
 
   String get modeLabel {
     if (mode == 'yoyo') return 'Yo-Yo Test';

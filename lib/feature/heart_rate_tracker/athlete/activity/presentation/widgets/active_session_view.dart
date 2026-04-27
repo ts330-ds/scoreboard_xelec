@@ -128,6 +128,43 @@ class ActiveSessionView extends StatelessWidget {
             ],
           ),
 
+          const SizedBox(height: 14),
+
+          // ── HRV Row
+          Row(
+            children: [
+              LiveStatCard(
+                icon: Icons.monitor_heart_outlined,
+                label: 'HRV (RMSSD)',
+                value: bleState.isConnected && bleState.hrv > 0
+                    ? bleState.hrv.toStringAsFixed(1)
+                    : '--',
+                unit: 'ms',
+                color: AppColors.vitalStress,
+              ),
+              const SizedBox(width: 14),
+              LiveStatCard(
+                icon: Icons.timeline,
+                label: 'Last RR',
+                value: bleState.isConnected && bleState.rrIntervals.isNotEmpty
+                    ? '${bleState.rrIntervals.last}'
+                    : '--',
+                unit: 'ms',
+                color: AppColors.primary,
+              ),
+              const SizedBox(width: 14),
+              LiveStatCard(
+                icon: Icons.format_list_numbered,
+                label: 'RR Count',
+                value: bleState.isConnected && bleState.rrIntervals.isNotEmpty
+                    ? '${bleState.rrIntervals.length}'
+                    : '--',
+                unit: 'beats',
+                color: AppColors.success,
+              ),
+            ],
+          ),
+
           const SizedBox(height: 16),
 
           // ── Location

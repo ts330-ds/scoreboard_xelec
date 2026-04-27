@@ -25,55 +25,65 @@ class StepTestConfig extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.all(24),
                 children: [
-                  _buildSection(
-                    title: 'Number of Trials',
-                    child: Row(
-                      children: [
-                        _countBtn(Icons.remove, () =>
-                            cubit.updateTrialsCount(state.trialsCount - 1)),
-                        Expanded(
-                          child: Center(
-                            child: Text(
-                              '${state.trialsCount}',
-                              style: const TextStyle(
-                                  color: _text,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w700),
+                  // Yoyo: single continuous test — no concept of multiple trials.
+                  // Shuttle: firmware runs one timed set per batch — locked to 1.
+                  if (state.mode == 'yoyo' || state.mode == 'shuttle')
+                    _buildLockedTrialsNote(state.mode)
+                  else
+                    _buildSection(
+                      title: 'Number of Trials',
+                      child: Row(
+                        children: [
+                          _countBtn(Icons.remove, () =>
+                              cubit.updateTrialsCount(state.trialsCount - 1)),
+                          Expanded(
+                            child: Center(
+                              child: Text(
+                                '${state.trialsCount}',
+                                style: const TextStyle(
+                                    color: _text,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w700),
+                              ),
                             ),
                           ),
-                        ),
-                        _countBtn(Icons.add, () =>
-                            cubit.updateTrialsCount(state.trialsCount + 1)),
-                      ],
+                          _countBtn(Icons.add, () =>
+                              cubit.updateTrialsCount(state.trialsCount + 1)),
+                        ],
+                      ),
                     ),
-                  ),
                   const SizedBox(height: 20),
-                  _buildSection(
-                    title: 'Trial Order',
-                    child: Column(
-                      children: [
-                        _trialModeCard(
-                          context,
-                          mode: 'round_robin',
-                          selected: state.trialMode,
-                          title: 'Round Robin',
-                          subtitle: 'All athletes complete Trial 1, then Trial 2...',
-                          icon: Icons.repeat,
-                          onTap: () => cubit.selectTrialMode('round_robin'),
-                        ),
-                        const SizedBox(height: 10),
-                        _trialModeCard(
-                          context,
-                          mode: 'athlete_complete',
-                          selected: state.trialMode,
-                          title: 'Athlete Complete',
-                          subtitle: 'Each athlete finishes all trials before the next',
-                          icon: Icons.person,
-                          onTap: () => cubit.selectTrialMode('athlete_complete'),
-                        ),
-                      ],
-                    ),
-                  ),
+                  // Yoyo + Shuttle: trial order is not applicable — both run
+                  // a fixed single-trial format. Show an info note instead.
+                  if (state.mode != 'shuttle' && state.mode != 'yoyo')
+                    _buildSection(
+                      title: 'Trial Order',
+                      child: Column(
+                        children: [
+                          _trialModeCard(
+                            context,
+                            mode: 'round_robin',
+                            selected: state.trialMode,
+                            title: 'Round Robin',
+                            subtitle: 'All athletes complete Trial 1, then Trial 2...',
+                            icon: Icons.repeat,
+                            onTap: () => cubit.selectTrialMode('round_robin'),
+                          ),
+                          const SizedBox(height: 10),
+                          _trialModeCard(
+                            context,
+                            mode: 'athlete_complete',
+                            selected: state.trialMode,
+                            title: 'Athlete Complete',
+                            subtitle: 'Each athlete finishes all trials before the next',
+                            icon: Icons.person,
+                            onTap: () => cubit.selectTrialMode('athlete_complete'),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    _buildShuttleOrderNote(state.mode),
                 ],
               ),
             ),
@@ -81,6 +91,130 @@ class StepTestConfig extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildLockedTrialsNote(String mode) {
+    final label = mode == 'yoyo' ? 'Yo-Yo Test' : 'Shuttle Run';
+    final reason = mode == 'yoyo'
+        ? 'Yo-Yo is a single continuous test — the firmware manages levels and reps automatically.'
+        : 'Shuttle Run records one timed set per session. Use multiple sessions for repeated attempts.';
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Number of Trials',
+            style: TextStyle(
+              color: _text,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: _primaryLight,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _primary.withValues(alpha: 0.3)),
+                ),
+                alignment: Alignment.center,
+                child: const Text(
+                  '1',
+                  style: TextStyle(
+                    color: _primary,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Fixed for $label',
+                      style: const TextStyle(
+                        color: _text,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      reason,
+                      style: const TextStyle(
+                        color: _subtext,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShuttleOrderNote(String mode) {
+    final isYoyo = mode == 'yoyo';
+    final title = isYoyo ? 'Trial Order — Not Applicable' : 'Trial Order — Fixed for Shuttle';
+    final body = isYoyo
+        ? 'Yo-Yo Test manages progression automatically. There is no manual trial ordering.'
+        : 'All athletes in a batch run simultaneously across lanes. '
+            'Order is always: all athletes complete Trial 1 together, then Trial 2, and so on.';
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _primaryLight,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _primary.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, color: _primary, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: _primary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  style: const TextStyle(
+                    color: _subtext,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

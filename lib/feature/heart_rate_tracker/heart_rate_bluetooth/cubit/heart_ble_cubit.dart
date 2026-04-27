@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -144,7 +145,15 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
           case "HEART_RATE_MEASUREMENT":
             final d = value as Map<dynamic, dynamic>;
-            emit(state.copyWith(heartRate: d['heartRate'] as int? ?? state.heartRate));
+            final rawRr = d['rrIntervals'];
+            final rrList = rawRr is List
+                ? rawRr.whereType<num>().map((e) => e.toInt()).toList()
+                : <int>[];
+            emit(state.copyWith(
+              heartRate: d['heartRate'] as int? ?? state.heartRate,
+              rrIntervals: rrList.isNotEmpty ? rrList : null,
+              hrv: rrList.length >= 2 ? _calculateRmssd(rrList) : null,
+            ));
             break;
 
           // ── History Callbacks ────────────────────────────────────────
@@ -284,6 +293,8 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       bodyTemp2: isDisconnected ? 0.0 : null,
       bodyTemp3: isDisconnected ? 0.0 : null,
       hrMax: isDisconnected ? 0 : null,
+      rrIntervals: isDisconnected ? const [] : null,
+      hrv: isDisconnected ? 0.0 : null,
     ));
   }
 
@@ -448,6 +459,15 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
+  double _calculateRmssd(List<int> rr) {
+    double sumSq = 0;
+    for (int i = 1; i < rr.length; i++) {
+      final diff = (rr[i] - rr[i - 1]).toDouble();
+      sumSq += diff * diff;
+    }
+    return math.sqrt(sumSq / (rr.length - 1));
+  }
+
   int _toInt(dynamic v) => v is int ? v : int.tryParse(v.toString()) ?? 0;
   List<Map<dynamic, dynamic>> _toList(dynamic v) =>
       (v as List).cast<Map<dynamic, dynamic>>();

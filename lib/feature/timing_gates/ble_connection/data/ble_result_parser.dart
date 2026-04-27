@@ -262,12 +262,14 @@ class BleResultParser {
       return BleEvent(type: BleEventType.gateRegistered, gateId: int.parse(gateMatch.group(1)!), raw: line);
     }
 
-    final laneStartMatch = RegExp(r'\[SETUP\]:LANE_(\d+)_START_OK').firstMatch(line);
+    // Optional mode prefix: handles both [SETUP]:LANE_1_START_OK
+    // and [SETUP]:SHUTTLE:LANE_1_START_OK
+    final laneStartMatch = RegExp(r'\[SETUP\]:(?:\w+:)?LANE_(\d+)_START_OK').firstMatch(line);
     if (laneStartMatch != null) {
       return BleEvent(type: BleEventType.gateRegistered, lane: int.parse(laneStartMatch.group(1)!), raw: line);
     }
 
-    final laneTurnMatch = RegExp(r'\[SETUP\]:LANE_(\d+)_TURN_OK').firstMatch(line);
+    final laneTurnMatch = RegExp(r'\[SETUP\]:(?:\w+:)?LANE_(\d+)_TURN_OK').firstMatch(line);
     if (laneTurnMatch != null) {
       return BleEvent(type: BleEventType.gateRegistered, lane: int.parse(laneTurnMatch.group(1)!), raw: line);
     }
@@ -294,6 +296,25 @@ class BleResultParser {
         message: line.replaceFirst('[ERROR]:', '').replaceAll('_', ' '),
         raw: line,
       );
+    }
+
+    // Shuttle setup complete: [SETUP]:SHUTTLE:COMPLETE:LANES:N:GATES:N
+    // Firmware fires this when ALL shuttle gates have registered.
+    // Different from [SETUP]:ALL_LANES_CONFIGURED used by other modes.
+    if (line.startsWith('[SETUP]:SHUTTLE:') && line.contains(':COMPLETE:')) {
+      return BleEvent(type: BleEventType.allGatesReady, raw: line);
+    }
+
+    // Any other unrecognized [SETUP]: line — surface it in the UI gate log
+    // so the coach/developer can see exactly what the firmware sent.
+    if (line.startsWith('[SETUP]:')) {
+      return BleEvent(type: BleEventType.modeConfirmed, message: '⚙ FW: $line', raw: line);
+    }
+
+    // Shuttle broadcast info messages: [SHUTTLE]:SETUP:NEED_N_GATES:...
+    // Firmware sends these during SETUP as informational text.
+    if (line.startsWith('[SHUTTLE]:')) {
+      return BleEvent(type: BleEventType.modeConfirmed, message: '🔗 $line', raw: line);
     }
 
     return null;
