@@ -9,11 +9,19 @@ abstract interface class AthleteProfileRemoteDataSource {
   TaskEither<Failure, AthleteProfileModel> getProfile();
 
   TaskEither<Failure, AthleteProfileModel> updateProfile({
-    String? name,
+    required String name,
     String? phone,
-    int? age,
-    String? gender,
+    String? aadhar,
+    String? dob,
+    String? sex,
+    String? dominantHand,
+    double? heightInFeet,
+    double? heightInInches,
+    double? weightInKg,
+    double? weightInLbs,
     int? sportId,
+    String? deviceModel,
+    String? deviceSerial,
   });
 }
 
@@ -37,17 +45,13 @@ class AthleteProfileRemoteDataSourceImpl
         try {
           final response = await _dio.get(
             '/my_profile/athlete',
-            options: Options(
-              headers: {'Authorization': 'Bearer $token'},
-            ),
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
           );
           return right(AthleteProfileModel.fromJson(response.data));
         } on DioException catch (e) {
-          return left(
-            ServerFailure(
-              e.response?.data['message'] ?? e.message ?? 'Failed to fetch profile',
-            ),
-          );
+          return left(ServerFailure(
+            e.response?.data['message'] ?? e.message ?? 'Failed to fetch profile',
+          ));
         } catch (e) {
           return left(ServerFailure('Failed to fetch profile: $e'));
         }
@@ -55,11 +59,19 @@ class AthleteProfileRemoteDataSourceImpl
 
   @override
   TaskEither<Failure, AthleteProfileModel> updateProfile({
-    String? name,
+    required String name,
     String? phone,
-    int? age,
-    String? gender,
+    String? aadhar,
+    String? dob,
+    String? sex,
+    String? dominantHand,
+    double? heightInFeet,
+    double? heightInInches,
+    double? weightInKg,
+    double? weightInLbs,
     int? sportId,
+    String? deviceModel,
+    String? deviceSerial,
   }) =>
       TaskEither(() async {
         final token = _token;
@@ -69,25 +81,36 @@ class AthleteProfileRemoteDataSourceImpl
 
         try {
           final response = await _dio.put(
-            '/athlete/profile',
+            '/my_profile/athlete',
             data: {
-              if (name != null) 'name': name,
-              if (phone != null) 'phone': phone,
-              if (age != null) 'age': age,
-              if (gender != null) 'gender': gender,
-              if (sportId != null) 'sport_id': sportId,
+              'name': name,
+              'phone_no': phone,
+              'aadhar': aadhar,
+              'dob': dob,
+              'sex': sex,
+              'dominant_hand': dominantHand,
+              'height_in_feet': heightInFeet,
+              'height_in_inches': heightInInches,
+              'weight_in_kg': weightInKg,
+              'weight_in_lbs': weightInLbs,
+              'sport': sportId,
+              'device_model': deviceModel,
+              'device_serial': deviceSerial,
             },
-            options: Options(
-              headers: {'Authorization': 'Bearer $token'},
-            ),
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
           );
-          return right(AthleteProfileModel.fromJson(response.data));
+          final success = response.data['success'] as bool? ?? false;
+          if (!success) {
+            return left(ServerFailure(
+              response.data['message'] as String? ?? 'Failed to update profile',
+            ));
+          }
+          // API returns data: null on success — return a placeholder; cubit will re-fetch
+          return right(const AthleteProfileModel(id: 0, name: '', email: ''));
         } on DioException catch (e) {
-          return left(
-            ServerFailure(
-              e.response?.data['message'] ?? e.message ?? 'Failed to update profile',
-            ),
-          );
+          return left(ServerFailure(
+            e.response?.data['message'] ?? e.message ?? 'Failed to update profile',
+          ));
         } catch (e) {
           return left(ServerFailure('Failed to update profile: $e'));
         }

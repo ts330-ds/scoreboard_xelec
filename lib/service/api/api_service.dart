@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -6,6 +7,9 @@ import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 class ApiService {
   static ApiService? _instance;
   late final Dio dio;
+
+  final _tokenExpiredController = StreamController<void>.broadcast();
+  Stream<void> get tokenExpiredStream => _tokenExpiredController.stream;
 
   ApiService._internal() {
     dio = Dio(
@@ -24,13 +28,23 @@ class ApiService {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          // Token header mein inject karo (baad mein add karenge)
           handler.next(options);
         },
         onResponse: (response, handler) {
           handler.next(response);
         },
         onError: (DioException error, handler) {
+          if (error.response?.statusCode == 401) {
+            final path = error.requestOptions.path;
+            // Login/register endpoints pe 401 expected hai (wrong creds / user not found)
+            // Token expire wali handling sirf authenticated requests pe karo
+            final isAuthEndpoint = path.contains('/auth/') &&
+                (path.contains('/login') || path.contains('/register') || path.contains('/social-login'));
+            if (!isAuthEndpoint) {
+              clearAuthToken();
+              _tokenExpiredController.add(null);
+            }
+          }
           handler.next(error);
         },
       ),

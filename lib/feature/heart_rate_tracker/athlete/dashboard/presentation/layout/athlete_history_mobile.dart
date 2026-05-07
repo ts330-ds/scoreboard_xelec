@@ -1468,17 +1468,17 @@ class _DayWiseSectionState extends State<_DayWiseSection> {
         const SizedBox(height: 14),
 
         // ── Readings list for selected day ────────────────────────────────
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: sortedData.reversed.toList().length,
-          itemBuilder: (ctx, i) {
-            final r = sortedData.reversed.toList()[i];
-            final hr = (r['heartRate'] as num?)?.toInt() ?? 0;
-            final stamp = (r['stamp'] as num?)?.toInt() ?? 0;
-            return _HrRow(stamp: stamp, bpm: hr);
-          },
-        ),
+        // ListView.builder(
+        //   shrinkWrap: true,
+        //   physics: const NeverScrollableScrollPhysics(),
+        //   itemCount: sortedData.reversed.toList().length,
+        //   itemBuilder: (ctx, i) {
+        //     final r = sortedData.reversed.toList()[i];
+        //     final hr = (r['heartRate'] as num?)?.toInt() ?? 0;
+        //     final stamp = (r['stamp'] as num?)?.toInt() ?? 0;
+        //     return _HrRow(stamp: stamp, bpm: hr);
+        //   },
+        // ),
       ],
     );
   }

@@ -212,15 +212,28 @@ class ActiveSessionView extends StatelessWidget {
             width: double.infinity,
             height: 54,
             child: ElevatedButton.icon(
-              onPressed: () =>
-                  context.read<AthleteActivityCubit>().stopSession(),
-              icon: const Icon(Icons.stop_circle_outlined),
-              label: const Text('Stop Session',
-                  style:
-                      TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              onPressed: state.isStoppingSession
+                  ? null
+                  : () => context
+                      .read<AthleteActivityCubit>()
+                      .requestStopSession(),
+              icon: state.isStoppingSession
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.stop_circle_outlined),
+              label: Text(
+                state.isStoppingSession ? 'Stopping...' : 'Stop Session',
+                style: const TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.bold),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.error,
                 foregroundColor: Colors.white,
+                disabledBackgroundColor: AppColors.error.withOpacity(0.6),
+                disabledForegroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
                 elevation: 2,

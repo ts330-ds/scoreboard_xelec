@@ -1,23 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/core/failure.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/service/api/api_service.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 import '../../domain/usecase/login_athlete_usecase.dart';
+import '../../domain/usecase/login_athlete_with_social_usecase.dart';
 import '../../domain/usecase/logout_athlete_usecase.dart';
 import '../../domain/usecase/register_athlete_usecase.dart';
 import 'athlete_auth_state.dart';
 
 class AthleteAuthCubit extends Cubit<AthleteAuthState> {
   final LoginAthleteUseCase _login;
+  final LoginAthleteWithSocialUseCase _loginWithSocial;
   final RegisterAthleteUseCase _register;
   final LogoutAthleteUseCase _logout;
 
   AthleteAuthCubit({
     required LoginAthleteUseCase login,
+    required LoginAthleteWithSocialUseCase loginWithSocial,
     required RegisterAthleteUseCase register,
     required LogoutAthleteUseCase logout,
   }) : _login = login,
+       _loginWithSocial = loginWithSocial,
        _register = register,
        _logout = logout,
        super(const AthleteAuthState());
@@ -36,6 +41,22 @@ class AthleteAuthCubit extends Cubit<AthleteAuthState> {
         ));
       },
     ); 
+  }
+
+  Future<void> loginWithSocialAuth({required String email}) async {
+    debugPrint('AthleteAuthCubit: loginWithSocialAuth called — email: $email');
+    emit(state.copyWith(status: AthleteAuthStatus.loading));
+    final result = await _loginWithSocial(email: email).run();
+    result.fold(
+      (failure) => _handleLoginFailure(failure),
+      (athlete) {
+        sl<ApiService>().setAuthToken(athlete.token);
+        emit(state.copyWith(
+          status: AthleteAuthStatus.authenticated,
+          athlete: athlete,
+        ));
+      },
+    );
   }
 
   Future<void> register({
@@ -70,6 +91,12 @@ class AthleteAuthCubit extends Cubit<AthleteAuthState> {
 
   Future<void> logout() async {
     emit(state.copyWith(status: AthleteAuthStatus.loggingOut));
+
+    final bleCubit = sl<HeartBleCubit>();
+    if (bleCubit.state.isConnected) {
+      await bleCubit.disconnect();
+    }
+
     final result = await _logout().run();
     result.fold(
       (failure) => emit(state.copyWith(

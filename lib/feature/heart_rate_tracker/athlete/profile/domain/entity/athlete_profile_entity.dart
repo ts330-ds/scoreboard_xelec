@@ -4,10 +4,18 @@ class AthleteProfileEntity {
   final String email;
   final String? phone;
   final String? profileImage;
-  final int? age;
+  final String? aadhar;
+  final String? dob;
   final String? gender;
+  final String? dominantHand;
+  final double? heightInFeet;
+  final double? heightInInches;
+  final double? weightInKg;
+  final double? weightInLbs;
   final int? sportId;
   final String? sportName;
+  final String? deviceModel;
+  final String? deviceSerial;
 
   const AthleteProfileEntity({
     required this.id,
@@ -15,9 +23,17 @@ class AthleteProfileEntity {
     required this.email,
     this.phone,
     this.profileImage,
-    this.age,
+    this.aadhar,
+    this.dob,
     this.gender,
+    this.dominantHand,
+    this.heightInFeet,
+    this.heightInInches,
+    this.weightInKg,
+    this.weightInLbs,
     this.sportId,
     this.sportName,
+    this.deviceModel,
+    this.deviceSerial,
   });
 }

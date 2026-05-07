@@ -12,13 +12,30 @@ abstract class HeartTrackerPaths {
   static const String athleteActivity     = '/athlete-activity';
   static const String athleteProfile      = '/athlete-profile';
   static const String athleteHistory      = '/athlete-history';
-  static const String athleteNotification = '/athlete-notification';
+  static const String athleteNotification  = '/athlete-notification';
+  static const String athleteTaskDetail    = '/athlete-task-detail';
+  static const String athleteTaskResult    = '/athlete-task-result';
+  static const String athleteSleepDetail   = '/athlete-sleep-detail';
+  static const String athleteHrvDetail     = '/athlete-hrv-detail';
 
-  // ── Coach Registration ─────────────────────────────────────────────────────
+  // ── Coach Auth ────────────────────────────────────────────────────────────
+  static const String coachLogin        = '/coach-login';
   static const String coachRegistration = '/coach-registration';
 
-  // ── Coach Dashboard ────────────────────────────────────────────────────────
-  static const String coachHome = '/coach-home';
+  // ── Coach Request ─────────────────────────────────────────────────────────
+  static const String coachAthleteSearch = '/coach-athlete-search';
+  static const String coachSendRequest   = '/coach-send-request';
+
+  // ── Coach My Athletes ─────────────────────────────────────────────────────
+  static const String coachMyAthletes    = '/coach-my-athletes';
+  static const String coachAthleteDetail = '/coach-athlete-detail';
+
+  // ── Coach Live Now ────────────────────────────────────────────────────────
+  static const String coachLiveNow = '/coach-live-now';
+
+  // ── Coach Dashboard (ShellRoute tabs) ────────────────────────────────────
+  static const String coachHome    = '/coach-home';
+  static const String coachProfile = '/coach-profile';
 
   // ── Shared ─────────────────────────────────────────────────────────────────
   static const String heartBleSelectionScreen = '/heart-ble-selection';

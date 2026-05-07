@@ -10,6 +10,10 @@ abstract interface class AthleteAuthRemoteDataSource {
     required String password,
   });
 
+  TaskEither<Failure, AthleteAuthModel> loginWithSocial({
+    required String email,
+  });
+
   TaskEither<Failure, AthleteAuthModel> register({
     required String name,
     required String email,
@@ -47,12 +51,41 @@ class AthleteAuthRemoteDataSourceImpl implements AthleteAuthRemoteDataSource {
         } on DioException catch (e) {
           debugPrint('Login DioException type: ${e.type}');
           debugPrint('Login DioException: ${e.response?.statusCode} ${e.response?.data}');
-          if (e.response?.statusCode == 404) {
+          if (e.response?.statusCode == 404 || e.response?.statusCode == 401) {
             return left(const AthleteNotFoundFailure());
           }
           return left(AuthFailure(e.response?.data['message'] ?? e.message ?? 'Login failed'));
         } catch (e) {
           debugPrint('Login error: $e');
+          return left(AuthFailure('Login failed: $e'));
+        }
+      });
+
+  @override
+  TaskEither<Failure, AthleteAuthModel> loginWithSocial({
+    required String email,
+  }) =>
+      TaskEither(() async {
+        try {
+          final response = await _dio.post(
+            '/auth/athlete/social-login',
+            data: {'email': email},
+          );
+          debugPrint('Social login response: ${response.data}');
+
+          if (response.data['success'] == false) {
+            return left(AuthFailure(response.data['message'] ?? 'Login failed'));
+          }
+
+          return right(AthleteAuthModel.fromJson(response.data));
+        } on DioException catch (e) {
+          debugPrint('Social login DioException: ${e.response?.statusCode} ${e.response?.data}');
+          if (e.response?.statusCode == 404 || e.response?.statusCode == 401) {
+            return left(const AthleteNotFoundFailure());
+          }
+          return left(AuthFailure(e.response?.data['message'] ?? e.message ?? 'Login failed'));
+        } catch (e) {
+          debugPrint('Social login error: $e');
           return left(AuthFailure('Login failed: $e'));
         }
       });

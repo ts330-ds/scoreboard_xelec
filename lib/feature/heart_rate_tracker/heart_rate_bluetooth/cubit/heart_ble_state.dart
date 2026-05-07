@@ -62,7 +62,8 @@ class HeartBleState extends Equatable {
   final double bodyTemp2;
   final double bodyTemp3;
   final int hrMax;
-  final List<int> rrIntervals; // latest batch from device (ms)
+  final List<int> rrIntervals; // latest batch from device
+  final List<int> rrBuffer;   // rolling accumulator across notifications
   final double hrv;            // RMSSD in ms, 0.0 if unavailable
 
   // ── History Data ──
@@ -116,6 +117,7 @@ class HeartBleState extends Equatable {
     this.bodyTemp3 = 0.0,
     this.hrMax = 0,
     this.rrIntervals = const [],
+    this.rrBuffer = const [],
     this.hrv = 0.0,
     this.historySport = const [],
     this.historyHrRecord = const [],
@@ -202,6 +204,7 @@ class HeartBleState extends Equatable {
     double? bodyTemp3,
     int? hrMax,
     List<int>? rrIntervals,
+    List<int>? rrBuffer,
     double? hrv,
     List<Map<dynamic, dynamic>>? historySport,
     List<Map<dynamic, dynamic>>? historyHrRecord,
@@ -253,6 +256,7 @@ class HeartBleState extends Equatable {
       bodyTemp3: bodyTemp3 ?? this.bodyTemp3,
       hrMax: hrMax ?? this.hrMax,
       rrIntervals: rrIntervals ?? this.rrIntervals,
+      rrBuffer: rrBuffer ?? this.rrBuffer,
       hrv: hrv ?? this.hrv,
       historySport: historySport ?? this.historySport,
       historyHrRecord: historyHrRecord ?? this.historyHrRecord,
@@ -279,7 +283,7 @@ class HeartBleState extends Equatable {
     hardwareVersion, softwareVersion, serialNumber, systemId, vendorName, 
     steps, distance, calorie, bodySensorLocation, bondingStatus, spo2, 
     systolic, diastolic, stressLevel, bodyTemp1, bodyTemp2, bodyTemp3, 
-    hrMax, rrIntervals, hrv, historySport, historyHrRecord, historyHrData, historyRrRecord,
+    hrMax, rrIntervals, rrBuffer, hrv, historySport, historyHrRecord, historyHrData, historyRrRecord,
     historyRrData, historyStepRecord, historyStepData, historySleep, 
     historySingleRecord, history3D, tempHistory3D, intervalSteps, 
     singleTapRecords, customData,

@@ -82,7 +82,17 @@ class NewActivitySheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AthleteActivityCubit, AthleteActivityState>(
+    return BlocConsumer<AthleteActivityCubit, AthleteActivityState>(
+      listenWhen: (prev, curr) =>
+          prev.taskError != curr.taskError && curr.taskError != null,
+      listener: (context, state) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(state.taskError!),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      },
       builder: (context, state) {
         return Container(
           decoration: const BoxDecoration(
@@ -108,9 +118,9 @@ class NewActivitySheet extends StatelessWidget {
                     ),
                   ),
                 ),
-    
+
                 const SizedBox(height: 20),
-    
+
                 Row(
                   children: [
                     BackButton(
@@ -121,11 +131,41 @@ class NewActivitySheet extends StatelessWidget {
                             color: AppColors.text,
                             fontSize: 18,
                             fontWeight: FontWeight.bold)),
-                            ],
+                  ],
                 ),
-    
+
                 const SizedBox(height: 20),
-    
+
+                // ── Task Name
+                const Text('Task Name',
+                    style: TextStyle(
+                        color: AppColors.text,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceAlt,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: TextField(
+                    onChanged: (v) =>
+                        context.read<AthleteActivityCubit>().setTaskName(v),
+                    style: const TextStyle(color: AppColors.text, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'e.g. 1600 m running',
+                      hintStyle:
+                          TextStyle(color: AppColors.textHint, fontSize: 14),
+                      contentPadding: EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 13),
+                      border: InputBorder.none,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
                 // ── Activity Type Dropdown
                 const Text('Select Activity',
                     style: TextStyle(
@@ -139,9 +179,9 @@ class NewActivitySheet extends StatelessWidget {
                       .read<AthleteActivityCubit>()
                       .selectActivity(name),
                 ),
-    
+
                 const SizedBox(height: 24),
-    
+
                 // ── Duration Chips
                 const Text('Duration',
                     style: TextStyle(
@@ -186,9 +226,9 @@ class NewActivitySheet extends StatelessWidget {
                     );
                   }).toList(),
                 ),
-    
+
                 const SizedBox(height: 24),
-    
+
                 // ── Location
                 const Text('Location',
                     style: TextStyle(
@@ -252,27 +292,41 @@ class NewActivitySheet extends StatelessWidget {
                     ),
                   ],
                 ),
-    
+
                 const SizedBox(height: 28),
-    
-                // ── Start Button
+
+                // ── Create Task Button
                 SizedBox(
                   width: double.infinity,
                   height: 54,
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      context.read<AthleteActivityCubit>().startSession();
-                      Navigator.of(context).pop();
-                    },
-                    icon: const Icon(Icons.play_arrow_rounded),
+                    onPressed: state.isCreatingTask
+                        ? null
+                        : () async {
+                            final created = await context
+                                .read<AthleteActivityCubit>()
+                                .createTask();
+                            if (created && context.mounted) {
+                              Navigator.of(context).pop();
+                            }
+                          },
+                    icon: state.isCreatingTask
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.add_task_rounded),
                     label: Text(
-                      'Start ${state.selectedActivity} · ${state.selectedDuration} min',
+                      state.isCreatingTask ? 'Creating task...' : 'Create Task',
                       style: const TextStyle(
                           fontSize: 14, fontWeight: FontWeight.bold),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
+                      disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
+                      disabledForegroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
                       elevation: 2,
@@ -287,3 +341,4 @@ class NewActivitySheet extends StatelessWidget {
     );
   }
 }
+

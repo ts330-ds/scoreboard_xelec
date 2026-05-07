@@ -44,11 +44,6 @@
     <!-- file_picker uses SAF (system picker) on Android 13+ — no extra
          permission needed for documents/CSV/Excel via ACTION_OPEN_DOCUMENT -->
 
-    <!-- Foreground Service (keep BLE alive in background) -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature
         android:name="android.hardware.bluetooth_le"
@@ -83,12 +78,6 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- BLE Foreground Service — keeps connection alive in background -->
-        <service
-            android:name=".BleConnectionService"
-            android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
-
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

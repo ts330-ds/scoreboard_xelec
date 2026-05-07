@@ -1,71 +1,124 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/profile/presentation/cubit/athlete_profile_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/profile/presentation/cubit/athlete_profile_state.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
-import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 import 'package:xelex_esp/router/heart_tracker_path.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
+
+const _kAthleteGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xFF0D47A1), Color(0xFF1976D2)],
+);
 
 class AthleteHomeMobile extends StatelessWidget {
   const AthleteHomeMobile({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return AdaptiveScaffold(
-      title: 'Dashboard',
-      bodyBackground: AppColors.bg,
-      appBarBackground: AppColors.primary,
-      onSettingsPressed: () =>
-          context.push(HeartTrackerPaths.heartBleSelectionScreen),
-      settingsIcon: BlocBuilder<HeartBleCubit, HeartBleState>(
-        buildWhen: (p, c) => p.isConnected != c.isConnected,
-        builder: (context, state) => Icon(
-          state.isConnected ? Icons.bluetooth_connected : Icons.bluetooth,
-          color: state.isConnected ? AppColors.success : null,
+    return _AthleteHomeView();
+  }
+}
+
+class _AthleteHomeView extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    if (!Platform.isIOS) {
+      SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ));
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: Colors.transparent,
+        foregroundColor: Colors.white,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(gradient: _kAthleteGradient),
         ),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.notifications_outlined),
-          onPressed: () => context.push(HeartTrackerPaths.athleteNotification),
+        title: const Text(
+          'Dashboard',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-      ],
-      body: BlocBuilder<HeartBleCubit, HeartBleState>(
-        builder: (context, state) => SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _HeroHeader(state: state),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _SectionTitle(title: "Today's Activity"),
-                      const SizedBox(height: 12),
-                      _ActivityRow(state: state),
-                      const SizedBox(height: 28),
-                      const _SectionTitle(title: 'Health Vitals'),
-                      const SizedBox(height: 12),
-                      _VitalGrid(state: state),
-                      const SizedBox(height: 28),
-                      if (state.hasHistoryData) ...[
-                        const _SectionTitle(title: 'Data Sync'),
-                        const SizedBox(height: 12),
-                        _HistorySyncCard(state: state),
-                        const SizedBox(height: 28),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+            onPressed: () =>
+                context.push(HeartTrackerPaths.athleteNotification),
+          ),
+          BlocBuilder<HeartBleCubit, HeartBleState>(
+            buildWhen: (p, c) => p.isConnected != c.isConnected,
+            builder: (context, state) => IconButton(
+              icon: Icon(
+                state.isConnected
+                    ? Icons.bluetooth_connected
+                    : Icons.bluetooth,
+                color: state.isConnected ? AppColors.success : Colors.white,
+              ),
+              onPressed: () =>
+                  context.push(HeartTrackerPaths.heartBleSelectionScreen),
             ),
+          ),
+        ],
+      ),
+      body: BlocBuilder<HeartBleCubit, HeartBleState>(
+        builder: (context, bleState) => SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _HeroHeader(state: bleState),
+              _HealthMonitorStatusBanner(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _SectionTitle(title: "Today's Activity"),
+                    const SizedBox(height: 12),
+                    _ActivityRow(state: bleState),
+                    const SizedBox(height: 28),
+                    const _SectionTitle(title: 'Health Vitals'),
+                    const SizedBox(height: 12),
+                    _VitalGrid(state: bleState),
+                    const SizedBox(height: 28),
+                    const _SectionTitle(title: 'Sleep & Recovery'),
+                    const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: () =>
+                          context.push(HeartTrackerPaths.athleteSleepDetail),
+                      child: _SleepCard(state: bleState),
+                    ),
+                    const SizedBox(height: 28),
+                    if (bleState.hasHistoryData) ...[
+                      const _SectionTitle(title: 'Data Sync'),
+                      const SizedBox(height: 12),
+                      _HistorySyncCard(state: bleState),
+                      const SizedBox(height: 28),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -81,27 +134,27 @@ class _HeroHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final prefs = sl<SharedPreferences>();
-    final name = prefs.getString(PrefKeys.userName) ?? 'Athlete';
     final role = prefs.getString(PrefKeys.userRole) ?? '';
-    final token = prefs.getString(PrefKeys.userToken) ?? '';
-    debugPrint("Token: $token");
+    // Read name from AthleteProfileCubit so it updates when profile is edited
+    final profileState = context.watch<AthleteProfileCubit>().state;
+    final name = profileState.status == AthleteProfileStatus.loaded
+        ? (profileState.profile?.name ?? prefs.getString(PrefKeys.userName) ?? 'Athlete')
+        : (prefs.getString(PrefKeys.userName) ?? 'Athlete');
     final connected = state.isConnected;
     final accent = connected ? AppColors.success : AppColors.primary;
 
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0D47A1), Color(0xFF1976D2)],
-        ),
+        gradient: _kAthleteGradient,
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(32),
           bottomRight: Radius.circular(32),
         ),
       ),
-      child: Padding(
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -111,7 +164,7 @@ class _HeroHeader extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 26,
-                  backgroundColor: Colors.white.withOpacity(0.2),
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
                   child: Text(
                     name.isNotEmpty ? name[0].toUpperCase() : 'A',
                     style: const TextStyle(
@@ -133,7 +186,7 @@ class _HeroHeader extends StatelessWidget {
                       if (role.isNotEmpty)
                         Text(role.toUpperCase(),
                             style: TextStyle(
-                                color: Colors.white.withOpacity(0.65),
+                                color: Colors.white.withValues(alpha: 0.65),
                                 fontSize: 11,
                                 letterSpacing: 1.2)),
                     ],
@@ -148,9 +201,9 @@ class _HeroHeader extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
+                color: Colors.white.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white.withOpacity(0.2)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
@@ -168,7 +221,7 @@ class _HeroHeader extends StatelessWidget {
                           const SizedBox(width: 6),
                           Text('Heart Rate',
                               style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7),
+                                  color: Colors.white.withValues(alpha: 0.7),
                                   fontSize: 12)),
                         ]),
                         const SizedBox(height: 6),
@@ -221,7 +274,7 @@ class _HeroHeader extends StatelessWidget {
                             const SizedBox(width: 6),
                             Text('Device',
                                 style: TextStyle(
-                                    color: Colors.white.withOpacity(0.7),
+                                    color: Colors.white.withValues(alpha: 0.7),
                                     fontSize: 12)),
                           ]),
                           const SizedBox(height: 6),
@@ -241,7 +294,7 @@ class _HeroHeader extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: accent.withOpacity(0.25),
+                              color: accent.withValues(alpha: 0.25),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
@@ -289,7 +342,75 @@ class _HeroHeader extends StatelessWidget {
             ],
           ],
         ),
+        ), // SafeArea
       ),
+    );
+  }
+}
+
+// ── Health Monitor Status Banner ─────────────────────────────────────────────
+class _HealthMonitorStatusBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<AthleteHealthMonitorCubit, HealthMonitorStatus>(
+      buildWhen: (prev, curr) => prev != curr,
+      builder: (context, status) {
+        if (status == HealthMonitorStatus.idle) return const SizedBox.shrink();
+
+        final (Color bg, Color fg, IconData icon, String label) = switch (status) {
+          HealthMonitorStatus.connecting => (
+              Colors.orange.shade50,
+              Colors.orange.shade700,
+              Icons.sync,
+              'Connecting to health monitor...'
+            ),
+          HealthMonitorStatus.monitoring => (
+              const Color(0xFFE8F5E9),
+              const Color(0xFF2E7D32),
+              Icons.monitor_heart,
+              'Live Monitoring Active'
+            ),
+          HealthMonitorStatus.error => (
+              const Color(0xFFFFEBEE),
+              AppColors.error,
+              Icons.wifi_off_rounded,
+              'Health Monitor Connection Error'
+            ),
+          HealthMonitorStatus.idle => (
+              Colors.transparent,
+              Colors.transparent,
+              Icons.circle,
+              ''
+            ),
+        };
+
+        return Container(
+          width: double.infinity,
+          color: bg,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              if (status == HealthMonitorStatus.connecting)
+                SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: fg,
+                  ),
+                )
+              else
+                Icon(icon, size: 14, color: fg),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                    color: fg, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -308,7 +429,7 @@ class _BatteryChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-          color: color.withOpacity(0.2),
+          color: color.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(8)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.battery_charging_full, size: 12, color: color),
@@ -410,7 +531,7 @@ class _ActivityCard extends StatelessWidget {
           border: Border.all(color: AppColors.border),
           boxShadow: [
             BoxShadow(
-                color: color.withOpacity(0.08),
+                color: color.withValues(alpha: 0.08),
                 blurRadius: 8,
                 offset: const Offset(0, 3))
           ],
@@ -419,7 +540,7 @@ class _ActivityCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-                color: color.withOpacity(0.1), shape: BoxShape.circle),
+                color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
             child: Icon(icon, color: color, size: 18),
           ),
           const SizedBox(height: 8),
@@ -445,29 +566,26 @@ class _VitalGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vitals = [
-      _VitalData('SpO2', state.spo2 > 0 ? '${state.spo2}%' : '--',
+      _VitalData('Blood O₂ (SpO2)', state.spo2 > 0 ? '${state.spo2}%' : '--',
           Icons.bloodtype, AppColors.vitalOxygen),
       _VitalData(
           'Blood Pressure',
           state.systolic > 0 ? '${state.systolic}/${state.diastolic}' : '--',
           Icons.speed,
           AppColors.vitalBP),
-      _VitalData(
-          'Body Temp',
-          state.bodyTemp1 > 0 ? '${state.bodyTemp1.toStringAsFixed(1)}°C' : '--',
-          Icons.thermostat,
-          AppColors.vitalTemp),
       _VitalData('Stress', state.stressLevel > 0 ? '${state.stressLevel}' : '--',
           Icons.psychology, AppColors.vitalStress),
       _VitalData(
           'HRV (RMSSD)',
           state.hrv > 0 ? '${state.hrv.toStringAsFixed(1)} ms' : '--',
           Icons.monitor_heart_outlined,
-          AppColors.primary),
+          AppColors.primary,
+          route: HeartTrackerPaths.athleteHrvDetail),
     ];
 
     return GridView.builder(
       shrinkWrap: true,
+      padding: EdgeInsets.zero,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
@@ -484,7 +602,8 @@ class _VitalData {
   final String label, value;
   final IconData icon;
   final Color color;
-  const _VitalData(this.label, this.value, this.icon, this.color);
+  final String? route;
+  const _VitalData(this.label, this.value, this.icon, this.color, {this.route});
 }
 
 class _VitalTile extends StatelessWidget {
@@ -493,15 +612,19 @@ class _VitalTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final tile = Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: data.route != null
+              ? data.color.withValues(alpha: 0.25)
+              : AppColors.border,
+        ),
         boxShadow: [
           BoxShadow(
-              color: data.color.withOpacity(0.07),
+              color: data.color.withValues(alpha: 0.07),
               blurRadius: 10,
               offset: const Offset(0, 3))
         ],
@@ -509,13 +632,19 @@ class _VitalTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(7),
-            decoration: BoxDecoration(
-                color: data.color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10)),
-            child: Icon(data.icon, color: data.color, size: 16),
-          ),
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                  color: data.color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10)),
+              child: Icon(data.icon, color: data.color, size: 16),
+            ),
+            const Spacer(),
+            if (data.route != null)
+              Icon(Icons.arrow_forward_ios,
+                  size: 11, color: data.color.withValues(alpha: 0.5)),
+          ]),
           const Spacer(),
           Text(data.value,
               style: const TextStyle(
@@ -529,7 +658,224 @@ class _VitalTile extends StatelessWidget {
         ],
       ),
     );
+
+    if (data.route != null) {
+      return GestureDetector(
+        onTap: () => context.push(data.route!),
+        child: tile,
+      );
+    }
+    return tile;
   }
+}
+
+// ── Sleep Card ───────────────────────────────────────────────────────────────
+class _SleepCard extends StatelessWidget {
+  final HeartBleState state;
+  const _SleepCard({required this.state});
+
+  static const _deepColor = Color(0xFF5C6BC0);
+  static const _lightColor = Color(0xFF80CBC4);
+  static const _awakeColor = Color(0xFFEF9A9A);
+
+  ({int totalMin, int deepMin, int lightMin, int awakeMin, int utc})? _parseLast() {
+    if (state.historySleep.isEmpty) return null;
+    // pick record with highest utc (most recent)
+    final rec = state.historySleep.reduce((a, b) =>
+        ((a['utc'] as num?)?.toInt() ?? 0) >= ((b['utc'] as num?)?.toInt() ?? 0) ? a : b);
+    final utc = (rec['utc'] as num?)?.toInt() ?? 0;
+    final raw = rec['actions'];
+    // safe parse: platform channel may send num instead of int
+    final actions = raw is List
+        ? raw.map((e) => (e as num?)?.toInt() ?? 0).toList()
+        : <int>[];
+    if (actions.isEmpty) return null;
+    final deep = actions.where((a) => a >= 2).length;   // 2=deep, 3=REM
+    final light = actions.where((a) => a == 1).length;
+    final awake = actions.where((a) => a == 0).length;
+    final total = actions.length;                        // full session duration
+    return (totalMin: total, deepMin: deep, lightMin: light, awakeMin: awake, utc: utc);
+  }
+
+  String _fmt(int minutes) {
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (h == 0) return '${m}m';
+    if (m == 0) return '${h}h';
+    return '${h}h ${m}m';
+  }
+
+  String _quality(int deepMin, int sleepMin) {
+    if (sleepMin == 0) return '--';
+    final pct = deepMin / sleepMin;
+    if (pct >= 0.25) return 'Excellent';
+    if (pct >= 0.15) return 'Good';
+    if (pct >= 0.08) return 'Fair';
+    return 'Light';
+  }
+
+  Color _qualityColor(int deepMin, int sleepMin) {
+    if (sleepMin == 0) return AppColors.subtext;
+    final pct = deepMin / sleepMin;
+    if (pct >= 0.25) return AppColors.success;
+    if (pct >= 0.15) return const Color(0xFF26A69A);
+    if (pct >= 0.08) return AppColors.warning;
+    return AppColors.error;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = _parseLast();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+              color: _deepColor.withValues(alpha: 0.07),
+              blurRadius: 10,
+              offset: const Offset(0, 3))
+        ],
+      ),
+      child: data == null ? _emptyState() : _dataView(data),
+    );
+  }
+
+  Widget _emptyState() => Row(children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+              color: _deepColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12)),
+          child: const Icon(Icons.bedtime_outlined, color: _deepColor, size: 22),
+        ),
+        const SizedBox(width: 14),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Last Night Sleep',
+                  style: TextStyle(
+                      color: AppColors.text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600)),
+              SizedBox(height: 4),
+              Text('Sync device from History tab to see sleep data',
+                  style: TextStyle(color: AppColors.subtext, fontSize: 12)),
+            ],
+          ),
+        ),
+      ]);
+
+  Widget _dataView(
+      ({int totalMin, int deepMin, int lightMin, int awakeMin, int utc}) d) {
+    final sleepMin = d.deepMin + d.lightMin;
+    final quality = _quality(d.deepMin, sleepMin);
+    final qColor = _qualityColor(d.deepMin, sleepMin);
+    final deepFrac = d.totalMin > 0 ? d.deepMin / d.totalMin : 0.0;
+    final lightFrac = d.totalMin > 0 ? d.lightMin / d.totalMin : 0.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+                color: _deepColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12)),
+            child: const Icon(Icons.bedtime_outlined, color: _deepColor, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Last Night Sleep',
+                    style: TextStyle(
+                        color: AppColors.subtext, fontSize: 12)),
+                Text(_fmt(d.totalMin),
+                    style: const TextStyle(
+                        color: AppColors.text,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2)),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+                color: qColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20)),
+            child: Text(quality,
+                style: TextStyle(
+                    color: qColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700)),
+          ),
+        ]),
+
+        const SizedBox(height: 16),
+
+        // Sleep stage bar
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: Row(children: [
+            Flexible(
+                flex: (deepFrac * 100).round(),
+                child: Container(height: 10, color: _deepColor)),
+            Flexible(
+                flex: (lightFrac * 100).round(),
+                child: Container(height: 10, color: _lightColor)),
+            Flexible(
+                flex: ((1 - deepFrac - lightFrac) * 100).round().clamp(0, 100),
+                child: Container(height: 10, color: _awakeColor.withValues(alpha: 0.3))),
+          ]),
+        ),
+
+        const SizedBox(height: 12),
+
+        // Stage legend
+        Row(children: [
+          _legend(_deepColor, 'Deep', _fmt(d.deepMin)),
+          const SizedBox(width: 16),
+          _legend(_lightColor, 'Light', _fmt(d.lightMin)),
+          const SizedBox(width: 16),
+          _legend(_awakeColor, 'Awake', _fmt(d.awakeMin)),
+        ]),
+      ],
+    );
+  }
+
+  Widget _legend(Color color, String label, String value) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+              width: 8,
+              height: 8,
+              decoration:
+                  BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 5),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      color: AppColors.subtext, fontSize: 10)),
+              Text(value,
+                  style: const TextStyle(
+                      color: AppColors.text,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ],
+      );
 }
 
 // ── History Sync Card ────────────────────────────────────────────────────────
@@ -564,7 +910,7 @@ class _HistorySyncCard extends StatelessWidget {
       Container(
         padding: const EdgeInsets.all(7),
         decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8)),
         child: Icon(icon, color: color, size: 15),
       ),

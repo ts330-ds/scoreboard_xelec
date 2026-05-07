@@ -6,15 +6,37 @@ import 'package:xelex_esp/feature/auth/presentation/screen/loginScreen.dart';
 import 'package:xelex_esp/feature/bluetooth/presentation/screen/device_selection_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/auth/presentation/cubit/athlete_auth_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/cubit/shell_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/entity/athlete_task_entity.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/screen/athlete_task_detail_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/screen/task_result_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_result_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/usecase/get_task_result_usecase.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_activity_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_history_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_home_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_profile_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/screen/athlete_main_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/screen/athlete_sleep_detail_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/screen/athlete_hrv_detail_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/notification/presentation/screen/athlete_notification_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/registration/presentation/screen/athlete_registration_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/auth/presentation/cubit/coach_auth_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/auth/presentation/screen/coach_login_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/dashboard/presentation/cubit/coach_shell_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/dashboard/presentation/layout/coach_home_mobile.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/dashboard/presentation/layout/coach_profile_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/coach/dashboard/presentation/screen/coach_dashboard_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/coach/registration/presentation/screen/coach_registration_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/my_athletes/domain/entity/my_athlete_entity.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/my_athletes/presentation/cubit/my_athletes_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/my_athletes/presentation/screen/athlete_detail_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/my_athletes/presentation/screen/my_athletes_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/request/domain/entity/athlete_search_entity.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/live_now/presentation/screen/coach_live_now_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/request/presentation/screen/coach_athlete_search_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/request/presentation/screen/coach_send_request_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/presentation/screen/heart_rate_ble_selection_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/cubit/navigation_cubit/shell_cubit.dart';
@@ -479,6 +501,68 @@ final GoRouter appRouter = GoRouter(
           adaptivePage(state: state, child: const AthleteNotificationScreen()),
     ),
 
+    /// ── Athlete Sleep Detail ─────────────────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.athleteSleepDetail,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: BlocProvider.value(
+          value: sl<HeartBleCubit>(),
+          child: const AthleteSleepDetailScreen(),
+        ),
+      ),
+    ),
+
+    /// ── Athlete HRV Detail ───────────────────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.athleteHrvDetail,
+      pageBuilder: (context, state) => adaptivePage(
+        state: state,
+        child: BlocProvider.value(
+          value: sl<HeartBleCubit>(),
+          child: const AthleteHrvDetailScreen(),
+        ),
+      ),
+    ),
+
+    /// ── Athlete Task Detail (full-screen, outside ShellRoute — no bottom nav) ─
+    GoRoute(
+      path: HeartTrackerPaths.athleteTaskDetail,
+      pageBuilder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>;
+        final task = extra['task'] as AthleteTaskEntity;
+        final activityCubit = extra['activityCubit'] as AthleteActivityCubit;
+        return adaptivePage(
+          state: state,
+          child: BlocProvider.value(
+            value: sl<HeartBleCubit>(),
+            child: AthleteTaskDetailScreen(
+              task: task,
+              activityCubit: activityCubit,
+            ),
+          ),
+        );
+      },
+    ),
+
+    /// ── Athlete Task Result (completed task results screen) ──────────────────
+    GoRoute(
+      path: HeartTrackerPaths.athleteTaskResult,
+      pageBuilder: (context, state) {
+        final task = state.extra as AthleteTaskEntity;
+        return adaptivePage(
+          state: state,
+          child: BlocProvider(
+            create: (_) => TaskResultCubit(
+              taskId: task.id,
+              getTaskResult: sl<GetTaskResultUseCase>(),
+            )..load(),
+            child: TaskResultScreen(task: task),
+          ),
+        );
+      },
+    ),
+
     /// ── Athlete Registration ─────────────────────────────────────────────────
     GoRoute(
       path: HeartTrackerPaths.athleteRegistration,
@@ -494,6 +578,8 @@ final GoRouter appRouter = GoRouter(
             BlocProvider(create: (_) => AthleteShellCubit()),
             BlocProvider(create: (_) => sl<AthleteAuthCubit>()),
             BlocProvider.value(value: sl<HeartBleCubit>()),
+            // Health monitor — BLE connect hote hi 24/7 socket shuru ho jaata hai
+            BlocProvider.value(value: sl<AthleteHealthMonitorCubit>()),
           ],
           child: BackButtonListener(
             onBackButtonPressed: () async {
@@ -578,6 +664,13 @@ final GoRouter appRouter = GoRouter(
       ],
     ),
 
+    /// ── Coach Login ──────────────────────────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.coachLogin,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const CoachLoginScreen()),
+    ),
+
     /// ── Coach Registration ───────────────────────────────────────────────────
     GoRoute(
       path: HeartTrackerPaths.coachRegistration,
@@ -585,11 +678,76 @@ final GoRouter appRouter = GoRouter(
           adaptivePage(state: state, child: const CoachRegistrationScreen()),
     ),
 
-    /// ── Coach Dashboard ──────────────────────────────────────────────────────
+    /// ── Coach Athlete Search ─────────────────────────────────────────────────
     GoRoute(
-      path: HeartTrackerPaths.coachHome,
+      path: HeartTrackerPaths.coachAthleteSearch,
       pageBuilder: (context, state) =>
-          adaptivePage(state: state, child: const CoachDashboardScreen()),
+          adaptivePage(state: state, child: const CoachAthleteSearchScreen()),
+    ),
+
+    /// ── Coach Send Request ───────────────────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.coachSendRequest,
+      pageBuilder: (context, state) {
+        final athlete = state.extra as AthleteSearchEntity;
+        return adaptivePage(
+          state: state,
+          child: CoachSendRequestScreen(athlete: athlete),
+        );
+      },
+    ),
+
+    /// ── Coach My Athletes ────────────────────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.coachMyAthletes,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const MyAthletesScreen()),
+    ),
+
+    /// ── Coach Athlete Detail ─────────────────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.coachAthleteDetail,
+      pageBuilder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>;
+        final preview = extra['preview'] as MyAthleteEntity;
+        final listCubit = extra['listCubit'] as MyAthletesCubit;
+        return adaptivePage(
+          state: state,
+          child: AthleteDetailScreen(preview: preview, listCubit: listCubit),
+        );
+      },
+    ),
+
+    /// ── Coach Live Now ───────────────────────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.coachLiveNow,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const CoachLiveNowScreen()),
+    ),
+
+    /// ── Coach Dashboard (ShellRoute with bottom nav) ────────────────────────
+    ShellRoute(
+      builder: (context, state, child) {
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider(create: (_) => CoachShellCubit()),
+            BlocProvider(create: (_) => sl<CoachAuthCubit>()),
+          ],
+          child: CoachDashboardScreen(child: child),
+        );
+      },
+      routes: [
+        GoRoute(
+          path: HeartTrackerPaths.coachHome,
+          pageBuilder: (context, state) =>
+              adaptivePage(state: state, child: const CoachHomeMobile()),
+        ),
+        GoRoute(
+          path: HeartTrackerPaths.coachProfile,
+          pageBuilder: (context, state) =>
+              adaptivePage(state: state, child: const CoachProfileMobile()),
+        ),
+      ],
     ),
 
     /// Timing Gate BLE Connection Screen (gate before main screen)

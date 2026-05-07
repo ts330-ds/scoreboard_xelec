@@ -31,6 +31,15 @@ class AthleteAuthRepositoryImpl implements AthleteAuthRepository {
       });
 
   @override
+  TaskEither<Failure, AthleteAuthEntity> loginWithSocial({
+    required String email,
+  }) =>
+      _dataSource.loginWithSocial(email: email).map((athlete) {
+        _saveUser(athlete);
+        return athlete;
+      });
+
+  @override
   TaskEither<Failure, AthleteAuthEntity> register({
     required String name,
     required String email,

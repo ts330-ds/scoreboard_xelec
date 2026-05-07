@@ -45,6 +45,7 @@ class AuthCubit extends Cubit<AuthState> {
       ),
       (user) async {
         await _pref.setString(PrefKeys.userEmail, user.email);
+        await _pref.setString(PrefKeys.validEmail, user.email);
         emit(state.copyWith(status: AuthStatus.authenticated, user: user));
       },
     );

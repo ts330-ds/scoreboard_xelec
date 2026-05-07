@@ -180,9 +180,6 @@ class ChileafWearHandler(
         stopRssiPolling()
         wearManager.disconnectDevice()
 
-        // ★ Stop foreground service immediately
-        try { BleConnectionService.stop(context) }
-        catch (e: Exception) { Log.w(TAG, "stop service on disconnect: ${e.message}") }
     }
 
     // ── History Sync ──────────────────────────────────────────────────────────
@@ -192,9 +189,17 @@ class ChileafWearHandler(
      * HR / RR / Step data is auto-fetched after their record headers arrive.
      */
     fun syncAllHistory() {
-        Log.d(TAG, ">>> syncAllHistory() — HR only")
+        Log.d(TAG, ">>> syncAllHistory()")
         sendToFlutter("HISTORY_SYNC_START", "syncing")
         try { wearManager.getHistoryOfHRRecord() } catch (e: Exception) { Log.w(TAG, "getHistoryOfHRRecord: ${e.message}") }
+        // Delay sleep request so it doesn't compete with the HR request in the device's BLE queue
+        mainHandler.postDelayed({
+            try {
+                Log.d(TAG, ">>> calling getHistoryOfSleep()")
+                wearManager.getHistoryOfSleep()
+                Log.d(TAG, ">>> getHistoryOfSleep() called OK")
+            } catch (e: Exception) { Log.e(TAG, "getHistoryOfSleep FAILED: ${e.message}") }
+        }, 3000L)
     }
 
     /** Single-record lookup by timestamp */
@@ -257,14 +262,13 @@ class ChileafWearHandler(
                 energyExpanded: Int?,
                 rrIntervals: List<Int>?
             ) {
-                Log.d(TAG, "Heart Rate: $heartRate")
-                sendToFlutter("HEART_RATE", heartRate)
-
-                // ★ Update notification with live HR (skip garbage readings < 30 bpm)
-                if (heartRate in 30..220) {
-                    try { BleConnectionService.updateHeartRate(context, heartRate) }
-                    catch (e: Exception) { /* service may not be running yet */ }
-                }
+                Log.d(TAG, "Heart Rate: $heartRate, rrIntervals=${rrIntervals?.size ?: 0}")
+                val map = HashMap<String, Any?>()
+                map["heartRate"] = heartRate
+                map["contactDetected"] = contactDetected
+                map["energyExpended"] = energyExpanded
+                map["rrIntervals"] = rrIntervals
+                sendToFlutter("HEART_RATE_MEASUREMENT", map)
             }
 
             override fun onBatteryLevelChanged(device: BluetoothDevice, batteryLevel: Int) {
@@ -280,13 +284,7 @@ class ChileafWearHandler(
                 sendToFlutter("STATUS", "Connected")
                 sendToFlutter("LAST_DEVICE_ADDRESS", device.address ?: "")
                 startRssiPolling()
-
-                // ★ Start foreground service → persistent notification + process stays alive
-                try {
-                    BleConnectionService.start(context, device.name ?: device.address ?: "Watch")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to start BleConnectionService: ${e.message}")
-                }
+                try { wearManager.setUTCTime() } catch (e: Exception) { Log.w(TAG, "setUTCTime: ${e.message}") }
             }
 
             override fun onRssiRead(device: BluetoothDevice, rssi: Int) {
@@ -360,9 +358,6 @@ class ChileafWearHandler(
                 if (userInitiatedDisconnect) return
                 sendToFlutter("STATUS", "Reconnecting...")
 
-                // ★ Update notification to show "Reconnecting..."
-                try { BleConnectionService.updateStatus(context, "Reconnecting...") }
-                catch (e: Exception) { Log.w(TAG, "update service status: ${e.message}") }
                 mainHandler.postDelayed({
                     if (isConnecting || userInitiatedDisconnect) return@postDelayed
                     val last = lastConnectedDevice ?: run {
@@ -425,18 +420,11 @@ class ChileafWearHandler(
                     lastConnectedDevice = null
                     sendToFlutter("STATUS", "Disconnected")
 
-                    // ★ Stop foreground service & remove notification
-                    try { BleConnectionService.stop(context) }
-                    catch (e: Exception) { Log.w(TAG, "stop service: ${e.message}") }
                 } else {
                     // Unexpected disconnect (out of range, BLE reset, etc.)
                     // → try auto-reconnect, fall back to "Disconnected" on failure
                     Log.d(TAG, "Unexpected disconnect: ${device.address}")
                     sendToFlutter("STATUS", "Reconnecting...")
-
-                    // ★ Update notification to show "Reconnecting..."
-                    try { BleConnectionService.updateStatus(context, "Reconnecting...") }
-                    catch (e: Exception) { Log.w(TAG, "update service status: ${e.message}") }
 
                     val last = lastConnectedDevice
                     if (last == null) {
@@ -476,17 +464,6 @@ class ChileafWearHandler(
     // Individual data callbacks (v3.0.5 add*Callback pattern)
     // ═══════════════════════════════════════════════════════════════════════════
     private fun registerDataCallbacks() {
-
-        // ── Heart Rate ────────────────────────────────────────────────────────
-        wearManager.addHeartRateMeasurementCallback { device, heartRate, contactDetected, energyExpended, rrIntervals ->
-            Log.d(TAG, "[CB] Heart Rate: $heartRate, contact=$contactDetected")
-            val map = HashMap<String, Any?>()
-            map["heartRate"] = heartRate
-            map["contactDetected"] = contactDetected
-            map["energyExpended"] = energyExpended
-            map["rrIntervals"] = rrIntervals
-            sendToFlutter("HEART_RATE_MEASUREMENT", map)
-        }
 
         // ── Heart Rate Status ─────────────────────────────────────────────────
         wearManager.addHeartRateStatusCallback { device, status, interval, duration ->
@@ -537,11 +514,6 @@ class ChileafWearHandler(
             map["temperature3"] = temperature3
             sendToFlutter("BODY_HEALTH", map)
 
-            // ★ Also update notification with HR (skip garbage readings < 30 bpm)
-            if (heartRate in 30..220) {
-                try { BleConnectionService.updateHeartRate(context, heartRate) }
-                catch (e: Exception) { /* ignored */ }
-            }
         }
 
         // ── Body Sport Health ─────────────────────────────────────────────────
@@ -554,12 +526,6 @@ class ChileafWearHandler(
             map["spo2"] = spo2
             map["stress"] = stress
             sendToFlutter("BODY_SPORT_HEALTH", map)
-
-            // ★ Also update notification with HR (skip garbage readings < 30 bpm)
-            if (heartRate in 30..220) {
-                try { BleConnectionService.updateHeartRate(context, heartRate) }
-                catch (e: Exception) { /* ignored */ }
-            }
         }
 
         // ── Blood Oxygen ──────────────────────────────────────────────────────
@@ -724,6 +690,27 @@ class ChileafWearHandler(
                     sendToFlutter("HISTORY_HR_DATA_DONE", accumulatedHrData.size)
                 }
             }
+        }
+
+        // ── Sleep History ─────────────────────────────────────────────────────
+        wearManager.addHistoryOfSleepCallback { device, list ->
+            Log.d(TAG, "[CB-SLEEP] callback fired! list.size=${list.size}")
+            val records = list.map { item ->
+                val m = HashMap<String, Any>()
+                m["utc"] = item.utc
+                // Normalize actions to ArrayList<Int> regardless of SDK return type
+                // so the Flutter Platform Channel encodes it as a plain List, not TypedData
+                val actionsInt: ArrayList<Int> = when (val a = item.actions) {
+                    is IntArray  -> ArrayList(a.toList())
+                    is ByteArray -> { val l = ArrayList<Int>(a.size); a.forEach { b: Byte -> l.add(b.toInt() and 0xFF) }; l }
+                    is List<*>   -> { val l = ArrayList<Int>(a.size); a.forEach { e: Any? -> l.add((e as? Number)?.toInt() ?: 0) }; l }
+                    else         -> ArrayList()
+                }
+                Log.d(TAG, "[CB-SLEEP] utc=${item.utc}  actions=${actionsInt.size}  first5=${actionsInt.take(5)}")
+                m["actions"] = actionsInt
+                m
+            }
+            sendToFlutter("HISTORY_SLEEP", records)
         }
 
         // ── Custom Data ───────────────────────────────────────────────────────

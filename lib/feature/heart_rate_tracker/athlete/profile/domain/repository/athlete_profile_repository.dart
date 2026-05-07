@@ -6,10 +6,18 @@ abstract interface class AthleteProfileRepository {
   TaskEither<Failure, AthleteProfileEntity> getProfile();
 
   TaskEither<Failure, AthleteProfileEntity> updateProfile({
-    String? name,
+    required String name,
     String? phone,
-    int? age,
-    String? gender,
+    String? aadhar,
+    String? dob,
+    String? sex,
+    String? dominantHand,
+    double? heightInFeet,
+    double? heightInInches,
+    double? weightInKg,
+    double? weightInLbs,
     int? sportId,
+    String? deviceModel,
+    String? deviceSerial,
   });
 }

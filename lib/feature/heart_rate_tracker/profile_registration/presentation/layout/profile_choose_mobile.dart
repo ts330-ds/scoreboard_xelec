@@ -4,9 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
-import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/auth/presentation/cubit/athlete_auth_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/auth/presentation/cubit/athlete_auth_state.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/auth/presentation/cubit/coach_auth_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/auth/presentation/cubit/coach_auth_state.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/profile_registration/presentation/widget/loding_widget.dart';
 import 'package:xelex_esp/responsive/adaptive_scaffold.dart';
 import 'package:xelex_esp/router/heart_tracker_path.dart';
@@ -22,7 +23,7 @@ class ProfileChooseMobile extends StatelessWidget {
       builder: (_) => _IndividualRoleSheet(
         onCoach: () {
           context.pop();
-          context.push(HeartTrackerPaths.coachRegistration);
+          _checkCoachAccount(context);
         },
         onAthlete: () {
           context.pop();
@@ -32,13 +33,14 @@ class ProfileChooseMobile extends StatelessWidget {
     );
   }
 
+  void _checkCoachAccount(BuildContext context) {
+    final email = sl<SharedPreferences>().getString(PrefKeys.validEmail) ?? '';
+    context.read<CoachAuthCubit>().login(email: email, password:'123456');
+  }
+
   void _checkAthleteAccount(BuildContext context) {
-    context.push(HeartTrackerPaths.athleteRegistration);
-    // final email = sl<SharedPreferences>().getString(PrefKeys.userEmail) ?? '';
-    // context.read<AthleteAuthCubit>().login(
-    //   email: 'tusharsoni@gmail.com',
-    //   password: '123456',
-    // );
+    final email = sl<SharedPreferences>().getString(PrefKeys.validEmail) ?? '';
+    context.read<AthleteAuthCubit>().login(email: email, password: '123456');
   }
 
   void _onSelectOrganisation(BuildContext context) {
@@ -87,146 +89,158 @@ class ProfileChooseMobile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<AthleteAuthCubit, AthleteAuthState>(
-      listener: (context, state) {
-        if (state.status == AthleteAuthStatus.authenticated) {
-          context.go(HeartTrackerPaths.athleteHome);
-        } else if (state.status == AthleteAuthStatus.notRegistered) {
-          context.push(HeartTrackerPaths.athleteRegistration);
-        } else if (state.status == AthleteAuthStatus.error) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.errorMessage ?? 'Something went wrong'),
-            ),
-          );
-        }
-      },
-      builder: (context, state) {
-        // Loading state
-        if (state.status == AthleteAuthStatus.loading) {
-          return const AdaptiveScaffold(
-            title: 'Choose Profile',
-            bodyBackground: AppColors.bg,
-            appBarBackground: AppColors.primary,
-            body: Center(child: LoadingOverlay()),
-          );
-        }
+    return MultiBlocListener(
+      listeners: [
+        BlocListener<AthleteAuthCubit, AthleteAuthState>(
+          listener: (context, state) {
+            if (state.status == AthleteAuthStatus.authenticated) {
+              context.go(HeartTrackerPaths.athleteHome);
+            } else if (state.status == AthleteAuthStatus.notRegistered) {
+              context.push(HeartTrackerPaths.athleteRegistration);
+            } else if (state.status == AthleteAuthStatus.error) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(state.errorMessage ?? 'Something went wrong'),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.floating,
+              ));
+            }
+          },
+        ),
+        BlocListener<CoachAuthCubit, CoachAuthState>(
+          listener: (context, state) {
+            if (state.status == CoachAuthStatus.authenticated) {
+              context.go(HeartTrackerPaths.coachHome);
+            } else if (state.status == CoachAuthStatus.notRegistered) {
+              context.push(HeartTrackerPaths.coachRegistration);
+            } else if (state.status == CoachAuthStatus.error) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(state.errorMessage ?? 'Something went wrong'),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.floating,
+              ));
+            }
+          },
+        ),
+      ],
+      child: BlocBuilder<AthleteAuthCubit, AthleteAuthState>(
+        builder: (context, athleteState) {
+          return BlocBuilder<CoachAuthCubit, CoachAuthState>(
+            builder: (context, coachState) {
+              final isLoading =
+                  athleteState.status == AthleteAuthStatus.loading ||
+                  coachState.status == CoachAuthStatus.loading;
 
-        // Normal UI
-        return AdaptiveScaffold(
-          title: 'Choose Profile',
-          bodyBackground: AppColors.bg,
-          appBarBackground: AppColors.primary,
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  GestureDetector(
-                    onTap: () => _onSelectIndividual(context),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryLight,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.primary, width: 2),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(
-                            Icons.person,
-                            size: 40,
-                            color: AppColors.primary,
-                          ),
-                          SizedBox(width: 16),
-                          Flexible(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+              if (isLoading) {
+                return const AdaptiveScaffold(
+                  title: 'Choose Profile',
+                  bodyBackground: AppColors.bg,
+                  appBarBackground: AppColors.primary,
+                  body: Center(child: LoadingOverlay()),
+                );
+              }
+
+              return AdaptiveScaffold(
+                title: 'Choose Profile',
+                bodyBackground: AppColors.bg,
+                appBarBackground: AppColors.primary,
+                body: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        GestureDetector(
+                          onTap: () => _onSelectIndividual(context),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryLight,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.primary, width: 2),
+                            ),
+                            child: const Row(
                               children: [
-                                Text(
-                                  'Individual',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.primary,
+                                Icon(Icons.person, size: 40, color: AppColors.primary),
+                                SizedBox(width: 16),
+                                Flexible(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Individual',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Personal account for single user',
+                                        style: TextStyle(fontSize: 13, color: AppColors.subtext),
+                                        softWrap: true,
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                Text(
-                                  'Personal account for single user',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.subtext,
-                                  ),
-                                  softWrap: true,
-                                ),
+                                SizedBox(width: 8),
+                                Icon(Icons.chevron_right, color: AppColors.primary),
                               ],
                             ),
                           ),
-                          SizedBox(width: 8),
-                          Icon(Icons.chevron_right, color: AppColors.primary),
-                        ],
-                      ),
-                    ),
-                  ),
+                        ),
 
-                  const SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
-                  // Organisation Button
-                  GestureDetector(
-                    onTap: () => _onSelectOrganisation(context),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: AppColors.successBg,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.success, width: 2),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(
-                            Icons.business,
-                            size: 40,
-                            color: AppColors.success,
-                          ),
-                          SizedBox(width: 16),
-                          Flexible(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                        GestureDetector(
+                          onTap: () => _onSelectOrganisation(context),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: AppColors.successBg,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.success, width: 2),
+                            ),
+                            child: const Row(
                               children: [
-                                Text(
-                                  'Organisation',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.success,
+                                Icon(Icons.business, size: 40, color: AppColors.success),
+                                SizedBox(width: 16),
+                                Flexible(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Organisation',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.success,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Account for teams or businesses',
+                                        style: TextStyle(fontSize: 13, color: AppColors.subtext),
+                                        softWrap: true,
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                Text(
-                                  'Account for teams or businesses',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.subtext,
-                                  ),
-                                  softWrap: true,
-                                ),
+                                SizedBox(width: 8),
+                                _ComingSoonBadge(),
                               ],
                             ),
                           ),
-                          SizedBox(width: 8),
-                          _ComingSoonBadge(),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

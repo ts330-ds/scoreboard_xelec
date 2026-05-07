@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
@@ -140,72 +139,6 @@ void _showBondingSnackbar(BuildContext context, String bondingStatus) {
   );
 }
 
-void _showNotificationDeniedDialog(BuildContext context) {
-  final cubit = context.read<HeartBleCubit>();
-
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) => AlertDialog(
-      backgroundColor: AppColors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Row(
-        children: [
-          Icon(Icons.notifications_off, color: AppColors.error, size: 28),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Notification Permission',
-              style: TextStyle(
-                color: AppColors.text,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-          ),
-        ],
-      ),
-      content: const Text(
-        'Notification permission is required to show live heart rate in the notification bar.\n\n'
-        'Without this, heart rate will not be visible when the app is minimized.',
-        style: TextStyle(color: AppColors.subtext, fontSize: 14, height: 1.5),
-      ),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      actions: [
-        OutlinedButton(
-          onPressed: () {
-            cubit.clearNotificationDeniedFlag();
-            Navigator.of(ctx).pop();
-          },
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.subtext,
-            side: const BorderSide(color: AppColors.border),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: const Text('Skip'),
-        ),
-        ElevatedButton.icon(
-          onPressed: () {
-            cubit.clearNotificationDeniedFlag();
-            Navigator.of(ctx).pop();
-            openAppSettings();
-          },
-          icon: const Icon(Icons.settings, size: 18),
-          label: const Text('Open Settings'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
 
 class HeartBleSelectionMobile extends StatelessWidget {
   const HeartBleSelectionMobile({super.key});
@@ -216,12 +149,10 @@ class HeartBleSelectionMobile extends StatelessWidget {
       listenWhen: (p, c) =>
           (!p.isBluetoothOff && c.isBluetoothOff) ||
           (!p.isPermissionDenied && c.isPermissionDenied) ||
-          (!p.isNotificationDenied && c.isNotificationDenied) ||
           p.bondingStatus != c.bondingStatus,
       listener: (context, state) {
         if (state.isBluetoothOff) _showBluetoothOffDialog(context);
         if (state.isPermissionDenied) _showPermissionDeniedSnackbar(context);
-        if (state.isNotificationDenied) _showNotificationDeniedDialog(context);
         if (state.bondingStatus.isNotEmpty) {
           _showBondingSnackbar(context, state.bondingStatus);
         }
@@ -407,14 +338,14 @@ class _DeviceInfoCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (state.modelName.isNotEmpty) _InfoRow('Model', state.modelName),
-          if (state.vendorName.isNotEmpty) _InfoRow('Vendor', state.vendorName),
-          if (state.firmwareVersion.isNotEmpty)
-            _InfoRow('Firmware', state.firmwareVersion),
-          if (state.hardwareVersion.isNotEmpty)
-            _InfoRow('Hardware', state.hardwareVersion),
-          if (state.softwareVersion.isNotEmpty)
-            _InfoRow('Software', state.softwareVersion),
-          if (state.serialNumber.isNotEmpty)
+          //if (state.vendorName.isNotEmpty) _InfoRow('Vendor', state.vendorName),
+          // if (state.firmwareVersion.isNotEmpty)
+          //   _InfoRow('Firmware', state.firmwareVersion),
+          // if (state.hardwareVersion.isNotEmpty)
+          //   _InfoRow('Hardware', state.hardwareVersion),
+          // if (state.softwareVersion.isNotEmpty)
+          //   _InfoRow('Software', state.softwareVersion),
+          // if (state.serialNumber.isNotEmpty)
             _InfoRow('Serial', state.serialNumber),
           if (state.systemId.isNotEmpty) _InfoRow('System ID', state.systemId),
           if (state.bodySensorLocation.isNotEmpty)

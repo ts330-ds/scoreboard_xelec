@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_state.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/active_session_view.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/activity_session_list.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/my_tasks_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/my_tasks_list_view.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/new_activity_sheet.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
+import 'package:xelex_esp/router/heart_tracker_path.dart';
+import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 
 class AthleteActivityMobile extends StatelessWidget {
   const AthleteActivityMobile({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => AthleteActivityCubit(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => sl<AthleteActivityCubit>()),
+        BlocProvider(create: (_) => sl<MyTasksCubit>()..fetchTasks()),
+      ],
       child: const _ActivityBody(),
     );
   }
@@ -26,42 +29,41 @@ class _ActivityBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<HeartBleCubit, HeartBleState>(
-      listenWhen: (prev, curr) =>
-          prev.heartRate != curr.heartRate && curr.heartRate > 0,
-      listener: (context, bleState) {
-        context.read<AthleteActivityCubit>().recordHeartRate(bleState.heartRate);
-      },
-      child: BlocBuilder<AthleteActivityCubit, AthleteActivityState>(
-        builder: (context, state) {
-          return Scaffold(
-            backgroundColor: AppColors.bg,
-            appBar: AppBar(
-              title: const Text('Activity'),
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              actions: [
-                if (!state.isSessionActive)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: TextButton.icon(
-                      onPressed: () => _showNewActivitySheet(context),
-                      icon: const Icon(Icons.add, color: Colors.white, size: 18),
-                      label: const Text('New',
-                          style: TextStyle(color: Colors.white, fontSize: 13)),
-                    ),
-                  ),
-              ],
-            ),
-            body: state.isSessionActive
-                ? ActiveSessionView(state: state)
-                : ActivitySessionList(
-                    sessions: state.sessions,
-                    onStartTap: () => _showNewActivitySheet(context),
-                  ),
-          );
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(
+        title: const Text('My Tasks'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: MyTasksListView(
+        onTaskTap: (task) {
+          if (task.status?.toLowerCase() == 'completed') {
+            context.push(HeartTrackerPaths.athleteTaskResult, extra: task);
+            return;
+          }
+
+          context.push(
+            HeartTrackerPaths.athleteTaskDetail,
+            extra: {
+              'task': task,
+              'activityCubit': context.read<AthleteActivityCubit>(),
+            },
+          ).then((_) {
+            if (context.mounted) context.read<MyTasksCubit>().fetchTasks();
+          });
         },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showNewActivitySheet(context),
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text(
+          'New Task',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }
@@ -76,6 +78,8 @@ class _ActivityBody extends StatelessWidget {
         value: context.read<AthleteActivityCubit>(),
         child: const NewActivitySheet(),
       ),
-    );
+    ).then((_) {
+      if (context.mounted) context.read<MyTasksCubit>().fetchTasks();
+    });
   }
 }

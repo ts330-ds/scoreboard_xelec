@@ -19,6 +19,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   TaskEither<Failure, AuthUserModel> signInWithGoogle() => TaskEither(() async {
     try {
+      await _googleSignIn.signOut();
       final account = await _googleSignIn.signIn();
       if (account == null) return left(const CancelledByUserFailure());
       return right(AuthUserModel.fromGoogleAccount(account));
@@ -34,7 +35,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         return right(
           const AuthUserModel(
             id: 'linkedin_dummy_001',
-            email: 'user@linkedin.com',
+            email: 'tusharsoni123@gmail.com',
             displayName: 'LinkedIn User',
             photoUrl: null,
           ),
@@ -48,7 +49,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         return right(
           const AuthUserModel(
             id: 'microsoft_dummy_001',
-            email: 'user@microsoft.com',
+            email: 'tusharsoni123@gmail.com',
             displayName: 'Microsoft User',
             photoUrl: null,
           ),
@@ -61,7 +62,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         return right(
           const AuthUserModel(
             id: 'apple_dummy_001',
-            email: 'user@icloud.com',
+            email: 'tusharsoni123@gmail.com',
             displayName: 'Apple User',
             photoUrl: null,
           ),

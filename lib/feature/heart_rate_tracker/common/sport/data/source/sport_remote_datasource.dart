@@ -15,7 +15,7 @@ class SportRemoteDataSourceImpl implements SportRemoteDataSource {
   @override
   TaskEither<Failure, List<SportModel>> getSports() => TaskEither(() async {
         try {
-          final response = await _apiService.dio.get('/api/v1/common/sports');
+          final response = await _apiService.dio.get('/common/sports');
           final List<dynamic> sportsData =
               response.data['data']['sports'] as List<dynamic>;
           final sports = sportsData

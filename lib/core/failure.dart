@@ -19,6 +19,10 @@ class AthleteNotFoundFailure extends Failure {
   const AthleteNotFoundFailure() : super('Athlete not found');
 }
 
+class CoachNotFoundFailure extends Failure {
+  const CoachNotFoundFailure() : super('Coach not found');
+}
+
 class ServerFailure extends Failure {
   const ServerFailure(super.message);
 }

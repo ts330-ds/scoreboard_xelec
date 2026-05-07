@@ -8,6 +8,10 @@ abstract interface class AthleteAuthRepository {
     required String password,
   });
 
+  TaskEither<Failure, AthleteAuthEntity> loginWithSocial({
+    required String email,
+  });
+
   TaskEither<Failure, AthleteAuthEntity> register({
     required String name,
     required String email,

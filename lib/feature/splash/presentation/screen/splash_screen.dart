@@ -48,15 +48,24 @@ class _SplashScreenState extends State<SplashScreen>
 
   void _navigate() {
     final prefs = sl<SharedPreferences>();
-    final token = prefs.getString(PrefKeys.userToken);
+    final coachToken = prefs.getString(PrefKeys.coachToken);
+    final athleteToken = prefs.getString(PrefKeys.userToken);
 
-    if (token == null) {
-      context.go(AppPaths.featureSelection);
+    // Coach logged in — seedha coach dashboard
+    if (coachToken != null && coachToken.isNotEmpty) {
+      context.go(HeartTrackerPaths.coachHome);
       return;
     }
 
-    final feature = prefs.getString(PrefKeys.selectedFeature);
-    context.go(_routeForFeature(feature));
+    // Athlete logged in — feature ke hisaab se route
+    if (athleteToken != null && athleteToken.isNotEmpty) {
+      final feature = prefs.getString(PrefKeys.selectedFeature);
+      context.go(_routeForFeature(feature));
+      return;
+    }
+
+    // Koi bhi logged in nahi
+    context.go(AppPaths.featureSelection);
   }
 
   String _routeForFeature(String? feature) {

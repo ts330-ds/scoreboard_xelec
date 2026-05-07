@@ -32,7 +32,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
         final value = map['value'];
 
         // ── Log every arriving event (remove once debugging is done) ──────
-        debugPrint('[BLE] ◀ type=$type  value=$value');
+       // debugPrint('[BLE] ◀ type=$type  value=$value');
 
         switch (type) {
           case "HEART_RATE":
@@ -48,7 +48,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
             break; // RSSI spam suppressed from debugPrint above (still emitted)
 
           case "STATUS":
-            debugPrint('[BLE] STATUS → $value');
+           // debugPrint('[BLE] STATUS → $value');
             _handleStatus(value as String);
             break;
 
@@ -149,59 +149,71 @@ class HeartBleCubit extends Cubit<HeartBleState> {
             final rrList = rawRr is List
                 ? rawRr.whereType<num>().map((e) => e.toInt()).toList()
                 : <int>[];
+            // accumulate across notifications — device sends 1 value at a time
+            final newBuffer = rrList.isEmpty
+                ? state.rrBuffer
+                : ([...state.rrBuffer, ...rrList].length > 60
+                    ? ([...state.rrBuffer, ...rrList]).sublist(
+                        ([...state.rrBuffer, ...rrList]).length - 60)
+                    : [...state.rrBuffer, ...rrList]);
             emit(state.copyWith(
               heartRate: d['heartRate'] as int? ?? state.heartRate,
               rrIntervals: rrList.isNotEmpty ? rrList : null,
-              hrv: rrList.length >= 2 ? _calculateRmssd(rrList) : null,
+              rrBuffer: newBuffer,
+              hrv: newBuffer.length >= 2 ? _calculateRmssd(newBuffer) : null,
             ));
             break;
 
           // ── History Callbacks ────────────────────────────────────────
           case "HISTORY_SPORT":
             final sportList = _toList(value);
-            debugPrint('[BLE-HISTORY] HISTORY_SPORT → ${sportList.length} records  first=${sportList.isNotEmpty ? sportList.first : "—"}');
+           // debugPrint('[BLE-HISTORY] HISTORY_SPORT → ${sportList.length} records  first=${sportList.isNotEmpty ? sportList.first : "—"}');
             emit(state.copyWith(historySport: sportList));
             break;
           case "HISTORY_HR_RECORD":
             final hrRec = _toList(value);
-            debugPrint('[BLE-HISTORY] HISTORY_HR_RECORD → ${hrRec.length} records  first=${hrRec.isNotEmpty ? hrRec.first : "—"}');
+            //debugPrint('[BLE-HISTORY] HISTORY_HR_RECORD → ${hrRec.length} records  first=${hrRec.isNotEmpty ? hrRec.first : "—"}');
             emit(state.copyWith(historyHrRecord: hrRec));
             break;
           case "HISTORY_HR_DATA_CHUNK":
             final chunk = _toList(value);
-            debugPrint('[BLE-HISTORY] HR chunk +${chunk.length}  total=${state.historyHrData.length + chunk.length}');
+            //debugPrint('[BLE-HISTORY] HR chunk +${chunk.length}  total=${state.historyHrData.length + chunk.length}');
             emit(state.copyWith(
               historyHrData: [...state.historyHrData, ...chunk],
             ));
             break;
           case "HISTORY_HR_DATA_DONE":
-            debugPrint('[BLE-HISTORY] HR streaming done — ${state.historyHrData.length} total');
+            //debugPrint('[BLE-HISTORY] HR streaming done — ${state.historyHrData.length} total');
             _syncDoneTimer?.cancel();
             emit(state.copyWith(status: "Sync complete"));
             break;
           case "HISTORY_RR_RECORD":
             final rrRec = _toList(value);
-            debugPrint('[BLE-HISTORY] HISTORY_RR_RECORD → ${rrRec.length} records  first=${rrRec.isNotEmpty ? rrRec.first : "—"}');
+            //debugPrint('[BLE-HISTORY] HISTORY_RR_RECORD → ${rrRec.length} records  first=${rrRec.isNotEmpty ? rrRec.first : "—"}');
             emit(state.copyWith(historyRrRecord: rrRec));
             break;
           case "HISTORY_RR_DATA":
             final rrData = _toList(value);
-            debugPrint('[BLE-HISTORY] HISTORY_RR_DATA → ${rrData.length} entries  first=${rrData.isNotEmpty ? rrData.first : "—"}');
+            //debugPrint('[BLE-HISTORY] HISTORY_RR_DATA → ${rrData.length} entries  first=${rrData.isNotEmpty ? rrData.first : "—"}');
             emit(state.copyWith(historyRrData: rrData));
             break;
           case "HISTORY_STEP_RECORD":
             final stepRec = _toList(value);
-            debugPrint('[BLE-HISTORY] HISTORY_STEP_RECORD → ${stepRec.length} records  first=${stepRec.isNotEmpty ? stepRec.first : "—"}');
+            //debugPrint('[BLE-HISTORY] HISTORY_STEP_RECORD → ${stepRec.length} records  first=${stepRec.isNotEmpty ? stepRec.first : "—"}');
             emit(state.copyWith(historyStepRecord: stepRec));
             break;
           case "HISTORY_STEP_DATA":
             final stepData = _toList(value);
-            debugPrint('[BLE-HISTORY] HISTORY_STEP_DATA → ${stepData.length} entries  first=${stepData.isNotEmpty ? stepData.first : "—"}');
+            //debugPrint('[BLE-HISTORY] HISTORY_STEP_DATA → ${stepData.length} entries  first=${stepData.isNotEmpty ? stepData.first : "—"}');
             emit(state.copyWith(historyStepData: stepData));
             break;
           case "HISTORY_SLEEP":
             final sleepList = _toList(value);
-            debugPrint('[BLE-HISTORY] HISTORY_SLEEP → ${sleepList.length} sessions  first=${sleepList.isNotEmpty ? sleepList.first : "—"}');
+            debugPrint('[BLE-SLEEP] HISTORY_SLEEP → ${sleepList.length} sessions');
+            if (sleepList.isNotEmpty) {
+              final first = sleepList.first;
+              debugPrint('[BLE-SLEEP] first record: utc=${first['utc']}  actions=${first['actions']}');
+            }
             emit(state.copyWith(historySleep: sleepList));
             break;
           case "HISTORY_SINGLE_RECORD":
@@ -209,7 +221,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
             emit(state.copyWith(historySingleRecord: value as Map<dynamic, dynamic>));
             break;
           case "HISTORY_3D_DATA":
-            debugPrint('[BLE-HISTORY] HISTORY_3D_DATA frame → $value');
+            //debugPrint('[BLE-HISTORY] HISTORY_3D_DATA frame → $value');
             _handle3DHistory(value as Map<dynamic, dynamic>);
             break;
           case "INTERVAL_STEPS":
@@ -219,7 +231,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
             break;
           case "SINGLE_TAP_RECORDS":
             final taps = _toList(value);
-            debugPrint('[BLE-HISTORY] SINGLE_TAP_RECORDS → ${taps.length} events  first=${taps.isNotEmpty ? taps.first : "—"}');
+            //debugPrint('[BLE-HISTORY] SINGLE_TAP_RECORDS → ${taps.length} events  first=${taps.isNotEmpty ? taps.first : "—"}');
             emit(state.copyWith(singleTapRecords: taps));
             break;
           case "CUSTOM_DATA":
@@ -229,28 +241,27 @@ class HeartBleCubit extends Cubit<HeartBleState> {
             break;
 
           case "HISTORY_SYNC_START":
-            debugPrint('[BLE] History sync started — clearing old HR data');
             emit(state.copyWith(
               status: "Syncing history…",
-              historyHrData: const [],   // clear old data for fresh stream
+              historyHrData: const [],
+              historySleep: const [],
             ));
-            // Auto-dismiss syncing overlay after 35 s (all timeouts done by then)
+            // 40 s covers HR chain (up to 30 s) + 3 s sleep delay + buffer
             _syncDoneTimer?.cancel();
-            _syncDoneTimer = Timer(const Duration(seconds: 35), () {
+            _syncDoneTimer = Timer(const Duration(seconds: 40), () {
               if (!isClosed && state.status.contains('yncing')) {
-                debugPrint('[BLE] Sync timer expired — marking done');
                 emit(state.copyWith(status: "Sync complete"));
               }
             });
             break;
 
           default:
-            debugPrint('[BLE] ⚠ UNHANDLED type=$type  value=$value');
+            //debugPrint('[BLE] ⚠ UNHANDLED type=$type  value=$value');
             break;
         }
       },
       onError: (dynamic error) {
-        debugPrint('[BLE] ✖ Stream error: $error');
+        //debugPrint('[BLE] ✖ Stream error: $error');
         emit(state.copyWith(status: "Stream Error: $error"));
       },
     );
@@ -258,9 +269,6 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
   // ─── Private Handlers ──────────────────────────────────────────────────────
   void _handleStatus(String s) {
-    // After connection, check if notification permission was granted
-    if (s == "Connected") _checkNotificationPermission();
-
     final isDisconnected = s == "Disconnected";
     final rssiReset = (s == "Disconnected" || s == "Reconnecting..." || s == "Link Lost") ? 0 : null;
     emit(state.copyWith(
@@ -294,6 +302,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       bodyTemp3: isDisconnected ? 0.0 : null,
       hrMax: isDisconnected ? 0 : null,
       rrIntervals: isDisconnected ? const [] : null,
+      rrBuffer: isDisconnected ? const [] : null,
       hrv: isDisconnected ? 0.0 : null,
     ));
   }
@@ -312,9 +321,9 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   void _handle3DHistory(Map<dynamic, dynamic> d) {
     final isLast = d['isLast'] as bool? ?? false;
     final updated = [...state.tempHistory3D, d];
-    debugPrint('[BLE-3D] frame #${updated.length}  isLast=$isLast  data=$d');
+    //debugPrint('[BLE-3D] frame #${updated.length}  isLast=$isLast  data=$d');
     if (isLast) {
-      debugPrint('[BLE-3D] ✔ 3D batch complete: ${updated.length} frames saved to history3D');
+      //debugPrint('[BLE-3D] ✔ 3D batch complete: ${updated.length} frames saved to history3D');
       emit(state.copyWith(history3D: updated, tempHistory3D: []));
     } else {
       emit(state.copyWith(tempHistory3D: updated));
@@ -327,25 +336,9 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       final info = await DeviceInfoPlugin().androidInfo;
       final permissions = [Permission.bluetoothScan, Permission.bluetoothConnect];
       if (info.version.sdkInt < 31) permissions.add(Permission.location);
-      // Android 13+ (SDK 33) requires POST_NOTIFICATIONS for foreground service notification
       if (info.version.sdkInt >= 33) permissions.add(Permission.notification);
       await permissions.request();
     }
-  }
-
-  /// Check notification permission after connection — if denied, set flag for UI dialog
-  Future<void> _checkNotificationPermission() async {
-    if (!Platform.isAndroid) return;
-    final info = await DeviceInfoPlugin().androidInfo;
-    if (info.version.sdkInt < 33) return; // not needed below Android 13
-    final status = await Permission.notification.status;
-    if (status.isDenied || status.isPermanentlyDenied) {
-      emit(state.copyWith(isNotificationDenied: true));
-    }
-  }
-
-  void clearNotificationDeniedFlag() {
-    emit(state.copyWith(isNotificationDenied: false));
   }
 
   // ─── Scan ───────────────────────────────────────────────────────────────────
@@ -429,7 +422,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   /// Requests all history data from the connected device.
   /// Results arrive asynchronously via the EventChannel callbacks.
   Future<void> syncAllHistory() async {
-    debugPrint('[BLE] syncAllHistory() called');
+    //debugPrint('[BLE] syncAllHistory() called');
     try {
       await _methodChannel.invokeMethod('syncAllHistory');
     } on PlatformException catch (e) {
@@ -438,7 +431,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       } else {
         emit(state.copyWith(status: "Sync failed: ${e.message}"));
       }
-      debugPrint('[BLE] syncAllHistory error: ${e.code} ${e.message}');
+      //debugPrint('[BLE] syncAllHistory error: ${e.code} ${e.message}');
     }
   }
 

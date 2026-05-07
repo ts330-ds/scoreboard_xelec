@@ -73,6 +73,7 @@ import '../../feature/heart_rate_tracker/athlete/auth/data/datasource/athlete_au
 import '../../feature/heart_rate_tracker/athlete/auth/data/repository/athlete_auth_repository_impl.dart';
 import '../../feature/heart_rate_tracker/athlete/auth/domain/repository/athlete_auth_repository.dart';
 import '../../feature/heart_rate_tracker/athlete/auth/domain/usecase/login_athlete_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/auth/domain/usecase/login_athlete_with_social_usecase.dart';
 import '../../feature/heart_rate_tracker/athlete/auth/domain/usecase/logout_athlete_usecase.dart';
 import '../../feature/heart_rate_tracker/athlete/auth/domain/usecase/register_athlete_usecase.dart';
 import '../../feature/heart_rate_tracker/athlete/auth/presentation/cubit/athlete_auth_cubit.dart';
@@ -82,6 +83,62 @@ import '../../feature/heart_rate_tracker/athlete/profile/domain/repository/athle
 import '../../feature/heart_rate_tracker/athlete/profile/domain/usecase/get_athlete_profile_usecase.dart';
 import '../../feature/heart_rate_tracker/athlete/profile/domain/usecase/update_athlete_profile_usecase.dart';
 import '../../feature/heart_rate_tracker/athlete/profile/presentation/cubit/athlete_profile_cubit.dart';
+import '../../feature/heart_rate_tracker/coach/auth/data/datasource/coach_auth_remote_datasource.dart';
+import '../../feature/heart_rate_tracker/coach/auth/data/repository/coach_auth_repository_impl.dart';
+import '../../feature/heart_rate_tracker/coach/auth/domain/repository/coach_auth_repository.dart';
+import '../../feature/heart_rate_tracker/coach/auth/domain/usecase/login_coach_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/auth/domain/usecase/login_coach_with_social_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/auth/domain/usecase/logout_coach_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/auth/domain/usecase/register_coach_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/auth/presentation/cubit/coach_auth_cubit.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/data/datasource/my_athletes_remote_datasource.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/data/repository/my_athletes_repository_impl.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/domain/repository/my_athletes_repository.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/domain/usecase/get_athlete_detail_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/domain/usecase/get_my_athletes_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/domain/usecase/remove_athlete_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/domain/usecase/get_athlete_health_metrics_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/presentation/cubit/athlete_detail_cubit.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/presentation/cubit/athlete_health_metrics_cubit.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/presentation/cubit/my_athletes_cubit.dart';
+import '../../feature/heart_rate_tracker/coach/profile/data/datasource/coach_profile_remote_datasource.dart';
+import '../../feature/heart_rate_tracker/coach/profile/data/repository/coach_profile_repository_impl.dart';
+import '../../feature/heart_rate_tracker/coach/profile/domain/repository/coach_profile_repository.dart';
+import '../../feature/heart_rate_tracker/coach/profile/domain/usecase/get_coach_profile_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/profile/domain/usecase/update_coach_profile_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/profile/presentation/cubit/coach_profile_cubit.dart';
+import '../../feature/heart_rate_tracker/coach/request/data/datasource/coach_request_remote_datasource.dart';
+import '../../feature/heart_rate_tracker/coach/request/data/repository/coach_request_repository_impl.dart';
+import '../../feature/heart_rate_tracker/coach/request/domain/repository/coach_request_repository.dart';
+import '../../feature/heart_rate_tracker/coach/request/domain/usecase/get_athletes_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/request/domain/usecase/send_athlete_request_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/request/presentation/cubit/coach_request_cubit.dart';
+import '../../feature/heart_rate_tracker/athlete/notification/data/datasource/athlete_notification_remote_datasource.dart';
+import '../../feature/heart_rate_tracker/athlete/notification/data/repository/athlete_notification_repository_impl.dart';
+import '../../feature/heart_rate_tracker/athlete/notification/domain/repository/athlete_notification_repository.dart';
+import '../../feature/heart_rate_tracker/athlete/notification/domain/usecase/get_coach_requests_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/notification/domain/usecase/accept_coach_request_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/notification/domain/usecase/reject_coach_request_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/notification/presentation/cubit/athlete_notification_cubit.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/data/datasource/athlete_task_remote_datasource.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/data/repository/athlete_task_repository_impl.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/domain/repository/athlete_task_repository.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/domain/usecase/create_athlete_task_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/domain/usecase/get_my_tasks_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/domain/usecase/get_task_result_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/my_tasks_cubit.dart';
+import '../../feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
+import '../socket/athlete_health_monitor_socket_service.dart';
+import '../socket/athlete_task_socket_service.dart';
+import '../socket/coach_live_task_socket_service.dart';
+import '../../feature/heart_rate_tracker/coach/live_task/presentation/cubit/coach_live_task_cubit.dart';
+import '../../feature/heart_rate_tracker/coach/live_now/data/datasource/active_tasks_remote_datasource.dart';
+import '../../feature/heart_rate_tracker/coach/live_now/data/repository/active_tasks_repository_impl.dart';
+import '../../feature/heart_rate_tracker/coach/live_now/domain/repository/active_tasks_repository.dart';
+import '../../feature/heart_rate_tracker/coach/live_now/domain/usecase/get_active_tasks_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/live_now/domain/usecase/get_coach_task_result_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/live_now/presentation/cubit/coach_live_now_cubit.dart';
 
 final sl = GetIt.instance;
 
@@ -136,6 +193,9 @@ void setupDI({required SharedPreferences sharedPreferences}) {
   sl.registerLazySingleton<LoginAthleteUseCase>(
     () => LoginAthleteUseCase(sl()),
   );
+  sl.registerLazySingleton<LoginAthleteWithSocialUseCase>(
+    () => LoginAthleteWithSocialUseCase(sl()),
+  );
   sl.registerLazySingleton<RegisterAthleteUseCase>(
     () => RegisterAthleteUseCase(sl()),
   );
@@ -143,7 +203,7 @@ void setupDI({required SharedPreferences sharedPreferences}) {
     () => LogoutAthleteUseCase(sl()),
   );
   sl.registerFactory<AthleteAuthCubit>(
-    () => AthleteAuthCubit(login: sl(), register: sl(), logout: sl()),
+    () => AthleteAuthCubit(login: sl(), loginWithSocial: sl(), register: sl(), logout: sl()),
   );
 
   // Athlete Profile
@@ -161,6 +221,186 @@ void setupDI({required SharedPreferences sharedPreferences}) {
   );
   sl.registerFactory<AthleteProfileCubit>(
     () => AthleteProfileCubit(getProfile: sl(), updateProfile: sl()),
+  );
+
+  // Athlete Notification
+  sl.registerLazySingleton<AthleteNotificationRemoteDataSource>(
+    () => AthleteNotificationRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+  );
+  sl.registerLazySingleton<AthleteNotificationRepository>(
+    () => AthleteNotificationRepositoryImpl(sl()),
+  );
+  sl.registerLazySingleton<GetCoachRequestsUseCase>(
+    () => GetCoachRequestsUseCase(sl()),
+  );
+  sl.registerLazySingleton<AcceptCoachRequestUseCase>(
+    () => AcceptCoachRequestUseCase(sl()),
+  );
+  sl.registerLazySingleton<RejectCoachRequestUseCase>(
+    () => RejectCoachRequestUseCase(sl()),
+  );
+  sl.registerFactory<AthleteNotificationCubit>(
+    () => AthleteNotificationCubit(
+      getCoachRequests: sl(),
+      acceptRequest: sl(),
+      rejectRequest: sl(),
+    ),
+  );
+
+  // Athlete Activity Task
+  sl.registerLazySingleton<AthleteTaskRemoteDataSource>(
+    () => AthleteTaskRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+  );
+  sl.registerLazySingleton<AthleteTaskRepository>(
+    () => AthleteTaskRepositoryImpl(sl()),
+  );
+  sl.registerLazySingleton<CreateAthleteTaskUseCase>(
+    () => CreateAthleteTaskUseCase(sl()),
+  );
+  sl.registerLazySingleton<GetMyTasksUseCase>(
+    () => GetMyTasksUseCase(sl()),
+  );
+  sl.registerLazySingleton<GetTaskResultUseCase>(
+    () => GetTaskResultUseCase(sl()),
+  );
+  sl.registerFactory<MyTasksCubit>(
+    () => MyTasksCubit(getMyTasks: sl()),
+  );
+  sl.registerLazySingleton<AthleteTaskSocketService>(
+    () => AthleteTaskSocketService(),
+  );
+  sl.registerLazySingleton<AthleteHealthMonitorSocketService>(
+    () => AthleteHealthMonitorSocketService(),
+  );
+  sl.registerLazySingleton<AthleteHealthMonitorCubit>(
+    () => AthleteHealthMonitorCubit(
+      socketService: sl(),
+      bleCubit: sl(),
+      prefs: sl(),
+    ),
+  );
+  sl.registerFactory<AthleteActivityCubit>(
+    () => AthleteActivityCubit(
+      createTask: sl(),
+      socketService: sl(),
+      prefs: sl(),
+    ),
+  );
+
+  // Coach Auth
+  sl.registerLazySingleton<CoachAuthRemoteDataSource>(
+    () => CoachAuthRemoteDataSourceImpl(sl<ApiService>().dio),
+  );
+  sl.registerLazySingleton<CoachAuthRepository>(
+    () => CoachAuthRepositoryImpl(sl(), sl()),
+  );
+  sl.registerLazySingleton<LoginCoachUseCase>(
+    () => LoginCoachUseCase(sl()),
+  );
+  sl.registerLazySingleton<LoginCoachWithSocialUseCase>(
+    () => LoginCoachWithSocialUseCase(sl()),
+  );
+  sl.registerLazySingleton<RegisterCoachUseCase>(
+    () => RegisterCoachUseCase(sl()),
+  );
+  sl.registerLazySingleton<LogoutCoachUseCase>(
+    () => LogoutCoachUseCase(sl()),
+  );
+  sl.registerFactory<CoachAuthCubit>(
+    () => CoachAuthCubit(
+      login: sl(),
+      loginWithSocial: sl(),
+      register: sl(),
+      logout: sl(),
+    ),
+  );
+
+  // Coach Live Task (WebSocket)
+  sl.registerLazySingleton<CoachLiveTaskSocketService>(
+    () => CoachLiveTaskSocketService(),
+  );
+  sl.registerFactory<CoachLiveTaskCubit>(
+    () => CoachLiveTaskCubit(socketService: sl(), prefs: sl()),
+  );
+
+  // Coach Live Now (active tasks API)
+  sl.registerLazySingleton<ActiveTasksRemoteDataSource>(
+    () => ActiveTasksRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+  );
+  sl.registerLazySingleton<ActiveTasksRepository>(
+    () => ActiveTasksRepositoryImpl(sl()),
+  );
+  sl.registerLazySingleton<GetActiveTasksUseCase>(
+    () => GetActiveTasksUseCase(sl()),
+  );
+  sl.registerLazySingleton<GetCoachTaskResultUseCase>(
+    () => GetCoachTaskResultUseCase(sl()),
+  );
+  sl.registerFactory<CoachLiveNowCubit>(
+    () => CoachLiveNowCubit(getActiveTasks: sl()),
+  );
+
+  // Coach Profile
+  sl.registerLazySingleton<CoachProfileRemoteDataSource>(
+    () => CoachProfileRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+  );
+  sl.registerLazySingleton<CoachProfileRepository>(
+    () => CoachProfileRepositoryImpl(sl()),
+  );
+  sl.registerLazySingleton<GetCoachProfileUseCase>(
+    () => GetCoachProfileUseCase(sl()),
+  );
+  sl.registerLazySingleton<UpdateCoachProfileUseCase>(
+    () => UpdateCoachProfileUseCase(sl()),
+  );
+  sl.registerFactory<CoachProfileCubit>(
+    () => CoachProfileCubit(getProfile: sl(), updateProfile: sl()),
+  );
+
+  // My Athletes
+  sl.registerLazySingleton<MyAthletesRemoteDataSource>(
+    () => MyAthletesRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+  );
+  sl.registerLazySingleton<MyAthletesRepository>(
+    () => MyAthletesRepositoryImpl(sl()),
+  );
+  sl.registerLazySingleton<GetMyAthletesUseCase>(
+    () => GetMyAthletesUseCase(sl()),
+  );
+  sl.registerLazySingleton<RemoveAthleteUseCase>(
+    () => RemoveAthleteUseCase(sl()),
+  );
+  sl.registerFactory<MyAthletesCubit>(
+    () => MyAthletesCubit(getMyAthletes: sl(), removeAthlete: sl()),
+  );
+  sl.registerLazySingleton<GetAthleteDetailUseCase>(
+    () => GetAthleteDetailUseCase(sl()),
+  );
+  sl.registerFactory<AthleteDetailCubit>(
+    () => AthleteDetailCubit(getAthleteDetail: sl()),
+  );
+  sl.registerLazySingleton<GetAthleteHealthMetricsUseCase>(
+    () => GetAthleteHealthMetricsUseCase(sl()),
+  );
+  sl.registerFactory<AthleteHealthMetricsCubit>(
+    () => AthleteHealthMetricsCubit(sl()),
+  );
+
+  // Coach Request
+  sl.registerLazySingleton<CoachRequestRemoteDataSource>(
+    () => CoachRequestRemoteDataSourceImpl(sl<ApiService>().dio, sl<SharedPreferences>()),
+  );
+  sl.registerLazySingleton<CoachRequestRepository>(
+    () => CoachRequestRepositoryImpl(sl()),
+  );
+  sl.registerLazySingleton<GetAthletesUseCase>(
+    () => GetAthletesUseCase(sl()),
+  );
+  sl.registerLazySingleton<SendAthleteRequestUseCase>(
+    () => SendAthleteRequestUseCase(sl()),
+  );
+  sl.registerFactory<CoachRequestCubit>(
+    () => CoachRequestCubit(sl(), sl()),
   );
 
   // Services

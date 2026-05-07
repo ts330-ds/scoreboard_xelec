@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/auth/presentation/cubit/athlete_auth_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/auth/presentation/cubit/athlete_auth_state.dart';
@@ -22,17 +24,19 @@ class _AthleteRegistrationMobileState
     extends State<AthleteRegistrationMobile> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
 
-  bool _obscurePassword = true;
+  String _email = '';
   Sport? _selectedSport;
+
+  @override
+  void initState() {
+    super.initState();
+    _email = sl<SharedPreferences>().getString(PrefKeys.userEmail) ?? '';
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
@@ -80,9 +84,7 @@ class _AthleteRegistrationMobileState
                 const SizedBox(height: 36),
                 _buildNameField(),
                 const SizedBox(height: 16),
-                _buildEmailField(),
-                const SizedBox(height: 16),
-                _buildPasswordField(),
+                _buildEmailDisplay(),
                 const SizedBox(height: 16),
                 _buildSportDropdown(context),
                 const SizedBox(height: 32),
@@ -137,48 +139,36 @@ class _AthleteRegistrationMobileState
     );
   }
 
-  Widget _buildEmailField() {
-    return TextFormField(
-      controller: _emailController,
-      keyboardType: TextInputType.emailAddress,
-      textInputAction: TextInputAction.next,
-      decoration: _inputDecoration(
-          label: 'Email',
-          hint: 'Enter your email',
-          icon: Icons.email_outlined),
-      validator: (v) {
-        if (v == null || v.trim().isEmpty) return 'Email is required';
-        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) {
-          return 'Enter a valid email';
-        }
-        return null;
-      },
-    );
-  }
-
-  Widget _buildPasswordField() {
-    return TextFormField(
-      controller: _passwordController,
-      obscureText: _obscurePassword,
-      textInputAction: TextInputAction.next,
-      decoration: _inputDecoration(
-        label: 'Password',
-        hint: 'Enter your password',
-        icon: Icons.lock_outline,
-      ).copyWith(
-        suffixIcon: IconButton(
-          icon: Icon(
-              _obscurePassword ? Icons.visibility_off : Icons.visibility,
-              color: AppColors.subtext),
-          onPressed: () =>
-              setState(() => _obscurePassword = !_obscurePassword),
-        ),
+  Widget _buildEmailDisplay() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(12),
       ),
-      validator: (v) {
-        if (v == null || v.trim().isEmpty) return 'Password is required';
-        if (v.length < 6) return 'Minimum 6 characters required';
-        return null;
-      },
+      child: Row(
+        children: [
+          const Icon(Icons.email_outlined, color: AppColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Email',
+                  style: TextStyle(fontSize: 12, color: AppColors.subtext),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _email,
+                  style: const TextStyle(fontSize: 15, color: AppColors.text),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.lock_outline, size: 16, color: AppColors.subtext),
+        ],
+      ),
     );
   }
 
@@ -268,7 +258,7 @@ class _AthleteRegistrationMobileState
     if (!_formKey.currentState!.validate()) return;
     context.read<AthleteAuthCubit>().register(
           name: _nameController.text.trim(),
-          email: _emailController.text.trim(),
+          email: _email,
           password: '123456',
           sport: 1,
         );

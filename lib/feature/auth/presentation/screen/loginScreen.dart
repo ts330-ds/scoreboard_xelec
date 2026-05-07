@@ -215,30 +215,6 @@ class _LoginBody extends StatelessWidget {
                       SizedBox(height: 12.h),
                     ],
 
-                    // ── LinkedIn ──────────────────────────────────
-                    _WhiteSocialButton(
-                      text: 'Continue with LinkedIn',
-                      logo: const LinkedInLogo(),
-                      isLoading: isLoading,
-                      onPressed: isLoading
-                          ? null
-                          : () =>
-                              context.read<AuthCubit>().signInWithLinkedIn(),
-                    ),
-
-                    SizedBox(height: 12.h),
-
-                    // ── Microsoft ─────────────────────────────────
-                    _WhiteSocialButton(
-                      text: 'Continue with Microsoft',
-                      logo: const MicrosoftLogo(),
-                      isLoading: isLoading,
-                      onPressed: isLoading
-                          ? null
-                          : () =>
-                              context.read<AuthCubit>().signInWithMicrosoft(),
-                    ),
-
                     SizedBox(height: 36.h),
 
                     // ── Divider ───────────────────────────────────

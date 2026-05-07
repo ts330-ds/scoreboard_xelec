@@ -9,17 +9,33 @@ class UpdateAthleteProfileUseCase {
   const UpdateAthleteProfileUseCase(this._repository);
 
   TaskEither<Failure, AthleteProfileEntity> call({
-    String? name,
+    required String name,
     String? phone,
-    int? age,
-    String? gender,
+    String? aadhar,
+    String? dob,
+    String? sex,
+    String? dominantHand,
+    double? heightInFeet,
+    double? heightInInches,
+    double? weightInKg,
+    double? weightInLbs,
     int? sportId,
+    String? deviceModel,
+    String? deviceSerial,
   }) =>
       _repository.updateProfile(
         name: name,
         phone: phone,
-        age: age,
-        gender: gender,
+        aadhar: aadhar,
+        dob: dob,
+        sex: sex,
+        dominantHand: dominantHand,
+        heightInFeet: heightInFeet,
+        heightInInches: heightInInches,
+        weightInKg: weightInKg,
+        weightInLbs: weightInLbs,
         sportId: sportId,
+        deviceModel: deviceModel,
+        deviceSerial: deviceSerial,
       );
 }
