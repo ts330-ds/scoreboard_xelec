@@ -147,7 +147,8 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Sports Intelligence Platform',
+                  //'Sports Intelligence Platform',
+                  'Testing Version',
                   style: TextStyle(
                     color: Colors.white60,
                     fontSize: 13,

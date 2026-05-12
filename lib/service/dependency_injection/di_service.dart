@@ -129,8 +129,7 @@ import '../../feature/heart_rate_tracker/athlete/activity/domain/usecase/get_tas
 import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/my_tasks_cubit.dart';
 import '../../feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
-import '../socket/athlete_health_monitor_socket_service.dart';
-import '../socket/athlete_task_socket_service.dart';
+import '../foreground/athlete_health_watcher.dart';
 import '../socket/coach_live_task_socket_service.dart';
 import '../../feature/heart_rate_tracker/coach/live_task/presentation/cubit/coach_live_task_cubit.dart';
 import '../../feature/heart_rate_tracker/coach/live_now/data/datasource/active_tasks_remote_datasource.dart';
@@ -266,23 +265,17 @@ void setupDI({required SharedPreferences sharedPreferences}) {
   sl.registerFactory<MyTasksCubit>(
     () => MyTasksCubit(getMyTasks: sl()),
   );
-  sl.registerLazySingleton<AthleteTaskSocketService>(
-    () => AthleteTaskSocketService(),
+  sl.registerLazySingleton<AthleteHealthWatcher>(
+    () => AthleteHealthWatcher(bleCubit: sl(), prefs: sl()),
   );
-  sl.registerLazySingleton<AthleteHealthMonitorSocketService>(
-    () => AthleteHealthMonitorSocketService(),
-  );
+
+  // Socket services ab DI mein nahi — background isolate khud banata hai
   sl.registerLazySingleton<AthleteHealthMonitorCubit>(
-    () => AthleteHealthMonitorCubit(
-      socketService: sl(),
-      bleCubit: sl(),
-      prefs: sl(),
-    ),
+    () => AthleteHealthMonitorCubit(prefs: sl()),
   );
   sl.registerFactory<AthleteActivityCubit>(
     () => AthleteActivityCubit(
       createTask: sl(),
-      socketService: sl(),
       prefs: sl(),
     ),
   );

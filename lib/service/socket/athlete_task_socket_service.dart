@@ -9,6 +9,9 @@ class AthleteTaskSocketService {
   void Function(Map<String, dynamic> data)? onRecordingStopped;
   void Function(String message)? onError;
   void Function()? onDisconnected;
+  // Auth fail (token expired/invalid) — caller user ko re-login pe bhejega,
+  // reconnect attempt waste nahi hoga.
+  void Function(String message)? onAuthFailure;
 
   bool get isConnected => _socket?.connected ?? false;
 
@@ -34,6 +37,9 @@ class AthleteTaskSocketService {
           .setTransports(['websocket'])
           .setQuery({'token': token})
           .disableAutoConnect()
+          // Library ka auto-reconnect band — ReconnectController handle karega.
+          // Single source of truth, double-attempts ka risk nahi.
+          .disableReconnection()
           .build(),
     );
 
@@ -65,10 +71,24 @@ class AthleteTaskSocketService {
     _socket!.on('request_error', (data) {
       debugPrint('[SESSION SOCKET] ← request_error: $data');
       final msg = data is Map ? data['message']?.toString() ?? 'Socket error' : 'Socket error';
-      onError?.call(msg);
+      if (_isAuthError(msg)) {
+        onAuthFailure?.call(msg);
+      } else {
+        onError?.call(msg);
+      }
     });
 
     _socket!.connect();
+  }
+
+  String _mysqlTimestamp() {
+    final t = DateTime.now().toUtc();
+    final mm = t.month.toString().padLeft(2, '0');
+    final dd = t.day.toString().padLeft(2, '0');
+    final hh = t.hour.toString().padLeft(2, '0');
+    final min = t.minute.toString().padLeft(2, '0');
+    final ss = t.second.toString().padLeft(2, '0');
+    return '${t.year}-$mm-$dd $hh:$min:$ss';
   }
 
   void submitHeartbeat({
@@ -90,7 +110,7 @@ class AthleteTaskSocketService {
     final payload = <String, dynamic>{
       'task_id': taskId,
       'heart_rate': heartRate,
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
+      'timestamp': _mysqlTimestamp(),
     };
 
     if (sugarLevel != null) payload['sugar_level'] = sugarLevel;
@@ -128,5 +148,15 @@ class AthleteTaskSocketService {
     onRecordingStopped = null;
     onError = null;
     onDisconnected = null;
+    onAuthFailure = null;
+  }
+
+  // Backend ke auth-related messages — `authenticateSocket` se aate hain.
+  static bool _isAuthError(String msg) {
+    final m = msg.toLowerCase();
+    return m.contains('token') ||
+        m.contains('not authenticated') ||
+        m.contains('invalid or expired') ||
+        m.contains('user not found');
   }
 }

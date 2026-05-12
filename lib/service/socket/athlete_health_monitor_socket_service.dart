@@ -9,6 +9,9 @@ class AthleteHealthMonitorSocketService {
   void Function(Map<String, dynamic> data)? onMetricSaved;
   void Function(String message)? onError;
   void Function()? onSocketDisconnected;
+  // Auth fail — token expired/invalid. Caller re-login flow trigger karega,
+  // reconnect attempts useless honge.
+  void Function(String message)? onAuthFailure;
 
   bool get isConnected => _socket?.connected ?? false;
 
@@ -25,6 +28,12 @@ class AthleteHealthMonitorSocketService {
       return;
     }
 
+    // Purana socket saaf karo — warna duplicate instances ban jaate hain
+    if (_socket != null) {
+      _socket!.dispose();
+      _socket = null;
+    }
+
     final url = _socketUrl(baseUrl);
     debugPrint('[HEALTH SOCKET] ▶ Connecting to $url');
 
@@ -34,6 +43,8 @@ class AthleteHealthMonitorSocketService {
           .setTransports(['websocket'])
           .setQuery({'token': token})
           .disableAutoConnect()
+          // ReconnectController hi reconnect handle karega.
+          .disableReconnection()
           .build(),
     );
 
@@ -60,7 +71,7 @@ class AthleteHealthMonitorSocketService {
 
     _socket!.on('health_metric_saved', (data) {
       debugPrint('[HEALTH SOCKET] ← health_metric_saved: $data');
-      if (data is Map<String, dynamic>) onMetricSaved?.call(data);
+      if (data is Map) onMetricSaved?.call(Map<String, dynamic>.from(data));
     });
 
     _socket!.on('device_monitoring_stopped', (_) {
@@ -71,10 +82,26 @@ class AthleteHealthMonitorSocketService {
     _socket!.on('request_error', (data) {
       debugPrint('[HEALTH SOCKET] ← request_error: $data');
       final msg = data is Map ? data['message']?.toString() ?? 'Socket error' : 'Socket error';
-      onError?.call(msg);
+      if (_isAuthError(msg)) {
+        onAuthFailure?.call(msg);
+      } else {
+        onError?.call(msg);
+      }
     });
 
     _socket!.connect();
+  }
+
+  // MySQL DATETIME format: 'YYYY-MM-DD HH:MM:SS'
+  // toIso8601String() deta hai 'YYYY-MM-DDTHH:MM:SS.microsecondsZ' jo MySQL reject karta hai
+  String _mysqlTimestamp() {
+    final t = DateTime.now().toUtc();
+    final mm = t.month.toString().padLeft(2, '0');
+    final dd = t.day.toString().padLeft(2, '0');
+    final hh = t.hour.toString().padLeft(2, '0');
+    final min = t.minute.toString().padLeft(2, '0');
+    final ss = t.second.toString().padLeft(2, '0');
+    return '${t.year}-$mm-$dd $hh:$min:$ss';
   }
 
   void submitHealthMetric({
@@ -94,14 +121,17 @@ class AthleteHealthMonitorSocketService {
     _metricCount++;
     final payload = <String, dynamic>{
       'heart_rate': heartRate,
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
+      'timestamp': _mysqlTimestamp(),
     };
 
     if (sugarLevel != null) payload['sugar_level'] = sugarLevel;
     if (spo2 != null) payload['spo2'] = spo2;
     if (stressLevel != null) payload['stress_level'] = stressLevel;
-    // HRV (RMSSD) — backend will rename this key later
-    if (hrv != null && hrv > 0) payload['sugar_level'] = double.parse(hrv.toStringAsFixed(2));
+    // HRV (RMSSD) — backend will rename this key later. Only set if
+    // sugarLevel wasn't passed — warna sugar_level overwrite ho jaata.
+    if (hrv != null && hrv > 0 && sugarLevel == null) {
+      payload['sugar_level'] = double.parse(hrv.toStringAsFixed(2));
+    }
     if (lat != null) payload['lat'] = lat;
     if (lng != null) payload['lng'] = lng;
 
@@ -128,10 +158,15 @@ class AthleteHealthMonitorSocketService {
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
-    onMonitoringStarted = null;
-    onMonitoringStopped = null;
-    onMetricSaved = null;
-    onError = null;
-    onSocketDisconnected = null;
+    // Callbacks null mat karo — reconnect pe dobara lagane padenge
+    // Caller (background handler) inhe manage karta hai
+  }
+
+  static bool _isAuthError(String msg) {
+    final m = msg.toLowerCase();
+    return m.contains('token') ||
+        m.contains('not authenticated') ||
+        m.contains('invalid or expired') ||
+        m.contains('user not found');
   }
 }

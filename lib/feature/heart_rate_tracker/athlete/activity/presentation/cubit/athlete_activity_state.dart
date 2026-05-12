@@ -26,6 +26,12 @@ class AthleteActivityState extends Equatable {
   final bool isSocketConnected;
   final bool isSocketReconnecting;
   final String? socketError;
+  // Current reconnect attempt # (UI me "Reconnecting (3)…" dikhane ke liye).
+  final int reconnectAttempt;
+  // Budget khatm — automatic retry band, user "Retry" dabaye.
+  final bool isReconnectExhausted;
+  // Auth fail (token expired/invalid) — user ko re-login pe bhejna hai.
+  final bool isAuthFailure;
 
   // Biometrics (device/sensor se aate hain — heart_rate ke alawa sab optional)
   final double? sugarLevel;
@@ -52,6 +58,9 @@ class AthleteActivityState extends Equatable {
     this.isSocketConnected = false,
     this.isSocketReconnecting = false,
     this.socketError,
+    this.reconnectAttempt = 0,
+    this.isReconnectExhausted = false,
+    this.isAuthFailure = false,
     this.sugarLevel,
     this.spo2,
     this.lat,
@@ -94,6 +103,9 @@ class AthleteActivityState extends Equatable {
     bool? isSocketReconnecting,
     String? socketError,
     bool clearSocketError = false,
+    int? reconnectAttempt,
+    bool? isReconnectExhausted,
+    bool? isAuthFailure,
     double? sugarLevel,
     double? spo2,
     double? lat,
@@ -118,6 +130,9 @@ class AthleteActivityState extends Equatable {
       isSocketConnected: isSocketConnected ?? this.isSocketConnected,
       isSocketReconnecting: isSocketReconnecting ?? this.isSocketReconnecting,
       socketError: clearSocketError ? null : (socketError ?? this.socketError),
+      reconnectAttempt: reconnectAttempt ?? this.reconnectAttempt,
+      isReconnectExhausted: isReconnectExhausted ?? this.isReconnectExhausted,
+      isAuthFailure: isAuthFailure ?? this.isAuthFailure,
       sugarLevel: sugarLevel ?? this.sugarLevel,
       spo2: spo2 ?? this.spo2,
       lat: lat ?? this.lat,
@@ -145,6 +160,9 @@ class AthleteActivityState extends Equatable {
         isSocketConnected,
         isSocketReconnecting,
         socketError,
+        reconnectAttempt,
+        isReconnectExhausted,
+        isAuthFailure,
         sugarLevel,
         spo2,
         lat,

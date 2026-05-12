@@ -8,8 +8,11 @@ class CoachLiveTaskSocketService {
   void Function()? onWatching;
   void Function(CoachLiveReading reading, int totalReadings)? onLiveUpdate;
   void Function()? onAthleteStopped;
+  void Function()? onAthleteConnectionLost;
   void Function(String message)? onError;
   void Function()? onDisconnected;
+  // Auth fail — coach ko re-login pe bhejna padega.
+  void Function(String message)? onAuthFailure;
 
   bool get isConnected => _socket?.connected ?? false;
 
@@ -33,6 +36,8 @@ class CoachLiveTaskSocketService {
           .setTransports(['websocket'])
           .setQuery({'token': token})
           .disableAutoConnect()
+          // ReconnectController hi reconnect handle karega.
+          .disableReconnection()
           .build(),
     );
 
@@ -84,11 +89,22 @@ class CoachLiveTaskSocketService {
       onAthleteStopped?.call();
     });
 
+    // Athlete temporarily disconnected (internet/bluetooth drop) — NOT session end.
+    // Coach UI should show a "reconnecting" indicator, not the stop dialog.
+    _socket!.on('athlete_connection_lost', (data) {
+      debugPrint('[COACH SOCKET] athlete_connection_lost: $data');
+      onAthleteConnectionLost?.call();
+    });
+
     _socket!.on('request_error', (data) {
       final msg = data is Map
           ? data['message']?.toString() ?? 'Socket error'
           : 'Socket error';
-      onError?.call(msg);
+      if (_isAuthError(msg)) {
+        onAuthFailure?.call(msg);
+      } else {
+        onError?.call(msg);
+      }
     });
 
     _socket!.connect();
@@ -115,8 +131,18 @@ class CoachLiveTaskSocketService {
     onWatching = null;
     onLiveUpdate = null;
     onAthleteStopped = null;
+    onAthleteConnectionLost = null;
     onError = null;
     onDisconnected = null;
+    onAuthFailure = null;
+  }
+
+  static bool _isAuthError(String msg) {
+    final m = msg.toLowerCase();
+    return m.contains('token') ||
+        m.contains('not authenticated') ||
+        m.contains('invalid or expired') ||
+        m.contains('user not found');
   }
 
   int _toInt(dynamic v) {

@@ -10,77 +10,132 @@ import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/data/model/activity_session_model.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/entity/athlete_task_entity.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/usecase/create_athlete_task_usecase.dart';
-import 'package:xelex_esp/service/socket/athlete_task_socket_service.dart';
+import 'package:xelex_esp/service/foreground/athlete_foreground_service.dart';
+import 'package:xelex_esp/service/socket/reconnect_controller.dart';
 import 'athlete_activity_state.dart';
 
 class AthleteActivityCubit extends Cubit<AthleteActivityState>
     with WidgetsBindingObserver {
   final CreateAthleteTaskUseCase _createTask;
-  final AthleteTaskSocketService _socketService;
   final SharedPreferences _prefs;
+
+  // Socket ab yahan nahi — background isolate mein.
+  // Cubit ka kaam: UI state, timer, BLE data forwarding, events receive karna.
 
   AthleteActivityCubit({
     required CreateAthleteTaskUseCase createTask,
-    required AthleteTaskSocketService socketService,
     required SharedPreferences prefs,
   })  : _createTask = createTask,
-        _socketService = socketService,
         _prefs = prefs,
         super(const AthleteActivityState()) {
     WidgetsBinding.instance.addObserver(this);
-    _setupSocketCallbacks();
+    _bgSub = AthleteForegroundService.eventStream.listen(_onBackgroundEvent);
   }
 
+  StreamSubscription<Map<String, dynamic>>? _bgSub;
+
+  // UI ke liye timer — sirf elapsed seconds update karta hai
   Timer? _timer;
+  // Auto-stop — jab duration puri ho
   Timer? _autoStopTimer;
+  // Server se response na aaye to fallback
   Timer? _stopTimeoutTimer;
-  DateTime? _pausedAt; // app background gaya tab ka time
+  // App pause time record — resume pe gap calculate karne ke liye
+  DateTime? _pausedAt;
+  final ReconnectController _reconnect = ReconnectController(tag: 'ACTIVITY RECONNECT');
   static const _uuid = Uuid();
 
-  // ── Socket callbacks ───────────────────────────────────────────────────────
+  // ── Background events ───────────────────────────────────────────────────────
+  // Background isolate se socket events aate hain yahan.
+  // Event naam 'activity_' prefix se start hote hain — health monitor events ignore ho jaate hain.
 
-  void _setupSocketCallbacks() {
-    _socketService.onTaskSaved = (_) {
-      if (!isClosed && !state.isSocketConnected) {
-        emit(state.copyWith(isSocketConnected: true, isSocketReconnecting: false));
-      }
-    };
+  void _onBackgroundEvent(Map<String, dynamic> data) {
+    final event = data['event'] as String?;
 
-    _socketService.onRecordingStopped = (_) {
-      debugPrint('[CUBIT] recording_stopped — ending session');
-      _endSession();
-    };
+    switch (event) {
+      case 'activity_task_saved':
+        // Data save successful = reconnect successful. Counters reset.
+        if (!isClosed && !state.isSocketConnected) {
+          _reconnect.reset();
+          emit(state.copyWith(
+            isSocketConnected: true,
+            isSocketReconnecting: false,
+            reconnectAttempt: 0,
+            isReconnectExhausted: false,
+          ));
+        }
 
-    _socketService.onDisconnected = () {
-      if (!isClosed && state.isSessionActive) {
-        emit(state.copyWith(
-          isSocketConnected: false,
-          isSocketReconnecting: true,
-        ));
-        _scheduleReconnect();
-      }
-    };
+      case 'activity_recording_stopped':
+        debugPrint('[CUBIT] recording_stopped — ending session');
+        _endSession();
 
-    _socketService.onError = (message) {
-      if (!isClosed) {
-        emit(state.copyWith(socketError: message, isSocketReconnecting: false));
-      }
-    };
+      case 'activity_disconnected':
+        if (!isClosed && state.isSessionActive && !state.isAuthFailure) {
+          emit(state.copyWith(
+            isSocketConnected: false,
+            isSocketReconnecting: true,
+          ));
+          _scheduleReconnect();
+        }
+
+      case 'activity_auth_failure':
+        // Token expired/invalid. Retry waste — UI re-login flow trigger kare.
+        _reconnect.cancel();
+        if (!isClosed) {
+          emit(state.copyWith(
+            isSocketConnected: false,
+            isSocketReconnecting: false,
+            isAuthFailure: true,
+            socketError: data['message'] as String? ?? 'Session expired',
+          ));
+        }
+
+      case 'activity_error':
+        if (!isClosed) {
+          emit(state.copyWith(
+            socketError: data['message'] as String?,
+            isSocketReconnecting: false,
+          ));
+        }
+    }
   }
 
-  Timer? _reconnectTimer;
-
   void _scheduleReconnect() {
-    _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 3), () {
-      if (!isClosed && state.isSessionActive && !_socketService.isConnected) {
-        debugPrint('[CUBIT] Reconnecting socket...');
+    _reconnect.schedule(
+      onAttempt: (attempt) {
+        if (isClosed || !state.isSessionActive) return;
+        debugPrint('[CUBIT] Reconnect attempt #$attempt');
+        emit(state.copyWith(reconnectAttempt: attempt));
         _connectSocket();
-      }
-    });
+      },
+      onExhausted: () {
+        if (isClosed) return;
+        debugPrint('[CUBIT] Reconnect budget exhausted — waiting for user retry');
+        emit(state.copyWith(
+          isSocketReconnecting: false,
+          isReconnectExhausted: true,
+        ));
+      },
+    );
+  }
+
+  // User ne "Retry" button dabaya — budget reset karke turant attempt.
+  void retryConnectionManually() {
+    if (isClosed || !state.isSessionActive) return;
+    _reconnect.reset();
+    emit(state.copyWith(
+      isSocketReconnecting: true,
+      isReconnectExhausted: false,
+      reconnectAttempt: 0,
+      clearSocketError: true,
+    ));
+    _connectSocket();
   }
 
   // ── App Lifecycle ─────────────────────────────────────────────────────────
+  // Main isolate suspend hone pe UI timer ruk jaata hai.
+  // Lekin background service chalta rehta hai aur heartbeat bhejta rehta hai.
+  // Resume pe gap calculate karke elapsed sync karo, aur timer restart karo.
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -96,41 +151,39 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
 
   void _onAppPaused() {
     if (!state.isSessionActive) return;
-    // Timer cancel karo — background mein drift ho sakta hai
+    // UI timer cancel — background mein drift ho sakta hai
     _timer?.cancel();
     _timer = null;
     _autoStopTimer?.cancel();
     _autoStopTimer = null;
     _pausedAt = DateTime.now();
     debugPrint('[LIFECYCLE] Session paused at $_pausedAt');
+    // NOTE: Background service chalta rehta hai — socket alive hai
   }
 
   void _onAppResumed() {
-    if (!state.isSessionActive || _pausedAt == null) return;
+    if (!state.isSessionActive) return;
 
-    final gapSeconds = DateTime.now().difference(_pausedAt!).inSeconds;
-    final newElapsed = state.elapsedSeconds + gapSeconds;
-    final targetSeconds = state.activeSession!.targetDurationMinutes * 60;
+    if (_pausedAt != null) {
+      final gapSeconds = DateTime.now().difference(_pausedAt!).inSeconds;
+      final newElapsed = state.elapsedSeconds + gapSeconds;
+      final targetSeconds = state.activeSession!.targetDurationMinutes * 60;
 
-    debugPrint(
-        '[LIFECYCLE] Resumed — gap: ${gapSeconds}s, newElapsed: ${newElapsed}s, target: ${targetSeconds}s');
+      debugPrint(
+          '[LIFECYCLE] Resumed — gap: ${gapSeconds}s, newElapsed: ${newElapsed}s');
 
-    _pausedAt = null;
+      _pausedAt = null;
 
-    // Background mein hi duration puri ho gayi thi
-    if (newElapsed >= targetSeconds) {
-      emit(state.copyWith(elapsedSeconds: targetSeconds));
-      requestStopSession();
-      return;
+      if (newElapsed >= targetSeconds) {
+        emit(state.copyWith(elapsedSeconds: targetSeconds));
+        requestStopSession();
+        return;
+      }
+
+      emit(state.copyWith(elapsedSeconds: newElapsed));
     }
 
-    emit(state.copyWith(elapsedSeconds: newElapsed));
-
-    // Socket reconnect karo agar drop ho gaya tha
-    if (!_socketService.isConnected && state.activeTaskId != null) {
-      _connectSocket();
-    }
-
+    // Timer restart karo UI ke liye
     _startTimer();
   }
 
@@ -185,7 +238,7 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     }
   }
 
-  // ── Create task via API (session start nahi hoti) ─────────────────────────
+  // ── Create task ────────────────────────────────────────────────────────────
 
   Future<bool> createTask() async {
     final name = state.taskName.trim();
@@ -218,7 +271,7 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     );
   }
 
-  // ── Existing task select karo (API list se) ───────────────────────────────
+  // ── Existing task select ───────────────────────────────────────────────────
 
   void selectExistingTask(AthleteTaskEntity task) {
     if (state.isSessionActive) return;
@@ -238,11 +291,18 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   void _connectSocket() {
     final token = _prefs.getString(PrefKeys.userToken) ?? '';
     final baseUrl = dotenv.env['BASE_URL'] ?? '';
-    if (token.isEmpty || baseUrl.isEmpty) return;
-    _socketService.connect(baseUrl, token);
+    final taskId = state.activeTaskId;
+    if (token.isEmpty || baseUrl.isEmpty || taskId == null) return;
+
+    // Background isolate mein socket connect hoga
+    AthleteForegroundService.startActivitySession(
+      token: token,
+      baseUrl: baseUrl,
+      taskId: taskId,
+    );
   }
 
-  // ── Session start (user ne tap kiya) ──────────────────────────────────────
+  // ── Session start ──────────────────────────────────────────────────────────
 
   void startSession() {
     final taskId = state.pendingTaskId;
@@ -268,19 +328,17 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     _startTimer();
   }
 
-  // User ne stop button dabaya — server se confirmation ka wait karo
   void requestStopSession() {
     final taskId = state.activeTaskId;
 
-    // Timer turant cancel karo taaki heartbeat bhejne band ho
     _timer?.cancel();
     _timer = null;
 
     if (taskId != null) {
       emit(state.copyWith(isStoppingSession: true));
-      _socketService.stopTask(taskId);
+      // Background ko stop command bhejo
+      AthleteForegroundService.stopActivitySession(taskId);
 
-      // Server 8 sec mein respond na kare to forcefully end karo
       _stopTimeoutTimer?.cancel();
       _stopTimeoutTimer = Timer(const Duration(seconds: 8), () {
         if (!isClosed && state.isStoppingSession) {
@@ -293,7 +351,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     }
   }
 
-  // Server se recording_stopped aane pe ya fallback pe call hota hai
   void _endSession() {
     _timer?.cancel();
     _timer = null;
@@ -301,7 +358,9 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     _autoStopTimer = null;
     _stopTimeoutTimer?.cancel();
     _stopTimeoutTimer = null;
-    _socketService.disconnect();
+    // Pending reconnect cancel — session khatm, retry karne ka koi sense nahi.
+    _reconnect.cancel();
+    // Background service stop already stopActivitySession mein handle hota hai
 
     if (state.activeSession == null) return;
 
@@ -317,8 +376,14 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       isStoppingSession: false,
       clearActiveTaskId: true,
       clearPendingTaskId: true,
+      reconnectAttempt: 0,
+      isReconnectExhausted: false,
+      isSocketReconnecting: false,
+      isAuthFailure: false,
     ));
   }
+
+  // ── BLE data — UI mein store karo + background ko forward karo ────────────
 
   void recordHeartRate(int bpm) {
     if (!state.isSessionActive || bpm <= 0) return;
@@ -328,6 +393,16 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       heartRateSamples: [...state.activeSession!.heartRateSamples, sample],
     );
     emit(state.copyWith(activeSession: updated));
+
+    // Background handler ko latest HR forward karo
+    AthleteForegroundService.updateMetrics(
+      heartRate: bpm,
+      spo2: state.spo2,
+      stressLevel: state.stressLevel,
+      hrv: state.hrv,
+      lat: state.lat,
+      lng: state.lng,
+    );
   }
 
   void updateBiometrics({
@@ -342,9 +417,27 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       stressLevel: stressLevel,
       hrv: hrv,
     ));
+
+    // Latest biometrics background ko forward karo
+    if (state.isSessionActive) {
+      final latestBpm = state.activeSession?.heartRateSamples.isNotEmpty == true
+          ? state.activeSession!.heartRateSamples.last.bpm
+          : 0;
+      if (latestBpm > 0) {
+        AthleteForegroundService.updateMetrics(
+          heartRate: latestBpm,
+          spo2: spo2,
+          stressLevel: stressLevel,
+          hrv: hrv,
+          lat: state.lat,
+          lng: state.lng,
+        );
+      }
+    }
   }
 
-  // ── Timer — har second elapsed update + heartbeat emit ───────────────────
+  // ── UI Timer — sirf elapsed count, heartbeat nahi ─────────────────────────
+  // Heartbeat ab background onRepeatEvent mein jaata hai.
 
   void _startTimer() {
     _timer?.cancel();
@@ -355,29 +448,9 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
         _timer?.cancel();
         return;
       }
-
       emit(state.copyWith(elapsedSeconds: state.elapsedSeconds + 1));
-
-      // Latest biometrics socket pe bhejo
-      final taskId = state.activeTaskId;
-      final latestBpm = state.activeSession?.heartRateSamples.isNotEmpty == true
-          ? state.activeSession!.heartRateSamples.last.bpm
-          : 0;
-      if (taskId != null && latestBpm > 0) {
-        _socketService.submitHeartbeat(
-          taskId: taskId,
-          heartRate: latestBpm,
-          sugarLevel: state.sugarLevel,
-          spo2: state.spo2,
-          lat: state.lat,
-          lng: state.lng,
-          stressLevel: state.stressLevel,
-          hrv: state.hrv,
-        );
-      }
     });
 
-    // Exact duration ke baad ek baar fire — tick-by-tick check se zyada reliable
     final targetDuration =
         Duration(minutes: state.activeSession!.targetDurationMinutes);
     _autoStopTimer = Timer(targetDuration, () {
@@ -401,8 +474,8 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     _timer?.cancel();
     _autoStopTimer?.cancel();
     _stopTimeoutTimer?.cancel();
-    _reconnectTimer?.cancel();
-    _socketService.disconnect();
+    _reconnect.dispose();
+    _bgSub?.cancel();
     return super.close();
   }
 }

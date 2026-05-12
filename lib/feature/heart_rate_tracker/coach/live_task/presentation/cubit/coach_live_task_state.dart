@@ -15,6 +15,14 @@ class CoachLiveTaskState extends Equatable {
   final int? latestStressLevel;
   final String? errorMessage;
   final bool isAthleteStopped;
+  // Athlete temporarily offline — UI me banner dikhao, dialog NAHI.
+  final bool isAthleteConnectionLost;
+  // Coach apne socket pe reconnect kar raha hai — attempt count for banner.
+  final int reconnectAttempt;
+  // Budget khatm — automatic retry band, user "Retry" dabaye.
+  final bool isReconnectExhausted;
+  // Auth fail — coach ko re-login pe bhejna padega.
+  final bool isAuthFailure;
 
   const CoachLiveTaskState({
     this.status = CoachLiveTaskStatus.connecting,
@@ -28,6 +36,10 @@ class CoachLiveTaskState extends Equatable {
     this.latestStressLevel,
     this.errorMessage,
     this.isAthleteStopped = false,
+    this.isAthleteConnectionLost = false,
+    this.reconnectAttempt = 0,
+    this.isReconnectExhausted = false,
+    this.isAuthFailure = false,
   });
 
   CoachLiveTaskState copyWith({
@@ -42,6 +54,10 @@ class CoachLiveTaskState extends Equatable {
     int? latestStressLevel,
     String? errorMessage,
     bool? isAthleteStopped,
+    bool? isAthleteConnectionLost,
+    int? reconnectAttempt,
+    bool? isReconnectExhausted,
+    bool? isAuthFailure,
   }) {
     return CoachLiveTaskState(
       status: status ?? this.status,
@@ -55,6 +71,10 @@ class CoachLiveTaskState extends Equatable {
       latestStressLevel: latestStressLevel ?? this.latestStressLevel,
       errorMessage: errorMessage ?? this.errorMessage,
       isAthleteStopped: isAthleteStopped ?? this.isAthleteStopped,
+      isAthleteConnectionLost: isAthleteConnectionLost ?? this.isAthleteConnectionLost,
+      reconnectAttempt: reconnectAttempt ?? this.reconnectAttempt,
+      isReconnectExhausted: isReconnectExhausted ?? this.isReconnectExhausted,
+      isAuthFailure: isAuthFailure ?? this.isAuthFailure,
     );
   }
 
@@ -71,5 +91,9 @@ class CoachLiveTaskState extends Equatable {
         latestStressLevel,
         errorMessage,
         isAthleteStopped,
+        isAthleteConnectionLost,
+        reconnectAttempt,
+        isReconnectExhausted,
+        isAuthFailure,
       ];
 }

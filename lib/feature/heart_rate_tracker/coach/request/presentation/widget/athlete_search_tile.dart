@@ -49,8 +49,9 @@ class AthleteSearchTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    athlete.email,
-                    style: const TextStyle(color: AppColors.subtext, fontSize: 13),
+                    'ID: ${athlete.id}',
+                    style: const TextStyle(
+                        color: AppColors.subtext, fontSize: 13),
                   ),
                   if (athlete.sport != null) ...[
                     const SizedBox(height: 4),

@@ -22,6 +22,13 @@ class ActiveSessionView extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
+          // ── Socket / Reconnect banner (sirf jab kuch dikhane layak ho)
+          if (state.isSessionActive &&
+              (state.isSocketReconnecting ||
+                  state.isReconnectExhausted ||
+                  state.isAuthFailure))
+            const _SessionReconnectBanner(),
+
           // ── Activity Type Badge
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -336,4 +343,114 @@ class ActivityRingPainter extends CustomPainter {
   @override
   bool shouldRepaint(ActivityRingPainter old) =>
       old.progress != progress || old.color != color;
+}
+
+// ── Session Reconnect Banner ──────────────────────────────────────────────────
+// Active session ke time agar socket drop ho jaye to athlete ko visible
+// feedback do — silently background me struggle nahi.
+class _SessionReconnectBanner extends StatelessWidget {
+  const _SessionReconnectBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<AthleteActivityCubit, AthleteActivityState>(
+      buildWhen: (prev, curr) =>
+          prev.isSocketReconnecting != curr.isSocketReconnecting ||
+          prev.isReconnectExhausted != curr.isReconnectExhausted ||
+          prev.isAuthFailure != curr.isAuthFailure ||
+          prev.reconnectAttempt != curr.reconnectAttempt,
+      builder: (context, state) {
+        if (!(state.isSocketReconnecting ||
+            state.isReconnectExhausted ||
+            state.isAuthFailure)) {
+          return const SizedBox.shrink();
+        }
+
+        final Color color;
+        final IconData icon;
+        final String label;
+        final bool showSpinner;
+        final bool showRetry;
+
+        if (state.isAuthFailure) {
+          color = AppColors.error;
+          icon = Icons.lock_outline;
+          label = 'Session expired — please log in again';
+          showSpinner = false;
+          showRetry = false;
+        } else if (state.isReconnectExhausted) {
+          color = AppColors.error;
+          icon = Icons.wifi_off_rounded;
+          label = 'Cannot reach server. Data save nahi ho raha.';
+          showSpinner = false;
+          showRetry = true;
+        } else {
+          color = Colors.orange.shade700;
+          icon = Icons.sync;
+          label = state.reconnectAttempt > 0
+              ? 'Reconnecting (#${state.reconnectAttempt})...'
+              : 'Reconnecting...';
+          showSpinner = true;
+          showRetry = false;
+        }
+
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.10),
+            border: Border.all(color: color.withOpacity(0.35)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              if (showSpinner)
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: color),
+                )
+              else
+                Icon(icon, size: 16, color: color),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (showRetry)
+                InkWell(
+                  onTap: () => context
+                      .read<AthleteActivityCubit>()
+                      .retryConnectionManually(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Text(
+                      'Retry',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

@@ -352,17 +352,31 @@ class _HeroHeader extends StatelessWidget {
 class _HealthMonitorStatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AthleteHealthMonitorCubit, HealthMonitorStatus>(
-      buildWhen: (prev, curr) => prev != curr,
-      builder: (context, status) {
+    return BlocBuilder<AthleteHealthMonitorCubit, HealthMonitorState>(
+      buildWhen: (prev, curr) =>
+          prev.status != curr.status ||
+          prev.reconnectAttempt != curr.reconnectAttempt ||
+          prev.isReconnectExhausted != curr.isReconnectExhausted ||
+          prev.isAuthFailure != curr.isAuthFailure,
+      builder: (context, state) {
+        final status = state.status;
         if (status == HealthMonitorStatus.idle) return const SizedBox.shrink();
 
+        // Auth fail aur exhausted dono error case par fall karte hain.
         final (Color bg, Color fg, IconData icon, String label) = switch (status) {
           HealthMonitorStatus.connecting => (
               Colors.orange.shade50,
               Colors.orange.shade700,
               Icons.sync,
               'Connecting to health monitor...'
+            ),
+          HealthMonitorStatus.reconnecting => (
+              Colors.orange.shade50,
+              Colors.orange.shade700,
+              Icons.sync_problem,
+              state.reconnectAttempt > 0
+                  ? 'Reconnecting health monitor (#${state.reconnectAttempt})...'
+                  : 'Reconnecting health monitor...'
             ),
           HealthMonitorStatus.monitoring => (
               const Color(0xFFE8F5E9),
@@ -374,7 +388,11 @@ class _HealthMonitorStatusBanner extends StatelessWidget {
               const Color(0xFFFFEBEE),
               AppColors.error,
               Icons.wifi_off_rounded,
-              'Health Monitor Connection Error'
+              state.isAuthFailure
+                  ? 'Session expired — please log in again'
+                  : state.isReconnectExhausted
+                      ? 'Cannot reach server — tap Retry'
+                      : 'Health Monitor Connection Error'
             ),
           HealthMonitorStatus.idle => (
               Colors.transparent,
@@ -384,13 +402,17 @@ class _HealthMonitorStatusBanner extends StatelessWidget {
             ),
         };
 
+        final showRetry = state.isReconnectExhausted && !state.isAuthFailure;
+        final showSpinner = status == HealthMonitorStatus.connecting ||
+            status == HealthMonitorStatus.reconnecting;
+
         return Container(
           width: double.infinity,
           color: bg,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
             children: [
-              if (status == HealthMonitorStatus.connecting)
+              if (showSpinner)
                 SizedBox(
                   width: 12,
                   height: 12,
@@ -402,11 +424,34 @@ class _HealthMonitorStatusBanner extends StatelessWidget {
               else
                 Icon(icon, size: 14, color: fg),
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                    color: fg, fontSize: 12, fontWeight: FontWeight.w600),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                      color: fg, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
               ),
+              if (showRetry)
+                InkWell(
+                  onTap: () => context
+                      .read<AthleteHealthMonitorCubit>()
+                      .retryConnectionManually(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: fg,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Retry',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
             ],
           ),
         );

@@ -100,7 +100,7 @@ class _SearchBar extends StatelessWidget {
         autofocus: true,
         style: const TextStyle(color: AppColors.text),
         decoration: InputDecoration(
-          hintText: 'Search by name or email...',
+          hintText: 'Search by name or ID...',
           hintStyle: const TextStyle(color: AppColors.textHint),
           prefixIcon: const Icon(Icons.search, color: AppColors.subtext),
           suffixIcon: ValueListenableBuilder(
@@ -218,7 +218,7 @@ class _EmptyPrompt extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Search by athlete name or email\nto send a connection request',
+            'Search by athlete name or ID\nto send a connection request',
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.subtext, fontSize: 14, height: 1.5),
           ),

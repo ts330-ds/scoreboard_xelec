@@ -118,6 +118,7 @@ class CoachLiveTaskMobile extends StatelessWidget {
               _ => _LiveView(
                   state: state,
                   taskName: taskName,
+                  athleteName: athleteName,
                   isReconnecting:
                       state.status == CoachLiveTaskStatus.reconnecting,
                 ),
@@ -286,30 +287,176 @@ class _ErrorView extends StatelessWidget {
 // ── Reconnecting Banner ───────────────────────────────────────────────────────
 
 class _ReconnectingBanner extends StatelessWidget {
-  const _ReconnectingBanner();
+  final int attempt;
+  final bool exhausted;
+  final bool isAuthFailure;
+  const _ReconnectingBanner({
+    this.attempt = 0,
+    this.exhausted = false,
+    this.isAuthFailure = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final Color color;
+    final IconData icon;
+    final String label;
+    final bool showSpinner;
+    final bool showRetry;
+
+    if (isAuthFailure) {
+      color = AppColors.error;
+      icon = Icons.lock_outline;
+      label = 'Session expired — please log in again';
+      showSpinner = false;
+      showRetry = false;
+    } else if (exhausted) {
+      color = AppColors.error;
+      icon = Icons.wifi_off_rounded;
+      label = 'Cannot reach server';
+      showSpinner = false;
+      showRetry = true;
+    } else {
+      color = AppColors.warning;
+      icon = Icons.sync;
+      label = attempt > 0
+          ? 'Reconnecting (#$attempt)...'
+          : 'Reconnecting...';
+      showSpinner = true;
+      showRetry = false;
+    }
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      color: AppColors.warning,
-      child: const Row(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      color: color,
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(
-            width: 12,
-            height: 12,
-            child: CircularProgressIndicator(
-                strokeWidth: 2, color: Colors.white),
+          if (showSpinner)
+            const SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white),
+            )
+          else
+            Icon(icon, size: 14, color: Colors.white),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(label,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600)),
           ),
-          SizedBox(width: 8),
-          Text('Reconnecting...',
-              style: TextStyle(
+          if (showRetry) ...[
+            const SizedBox(width: 10),
+            InkWell(
+              onTap: () => context
+                  .read<CoachLiveTaskCubit>()
+                  .retryConnectionManually(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
                   color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  'Retry',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+// ── Athlete Offline Banner ────────────────────────────────────────────────────
+
+class _AthleteOfflineBanner extends StatefulWidget {
+  final String athleteName;
+  const _AthleteOfflineBanner({required this.athleteName});
+
+  @override
+  State<_AthleteOfflineBanner> createState() => _AthleteOfflineBannerState();
+}
+
+class _AthleteOfflineBannerState extends State<_AthleteOfflineBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (_, __) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.error.withValues(alpha: 0.10 + 0.06 * _pulse.value),
+          border: Border(
+            bottom: BorderSide(
+                color: AppColors.error.withValues(alpha: 0.35), width: 1),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.wifi_off_rounded,
+                color: AppColors.error,
+                size: 18 + 1.5 * _pulse.value),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${widget.athleteName} offline',
+                    style: const TextStyle(
+                      color: AppColors.error,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Athlete ka internet ya device disconnect ho gaya. '
+                    'Reconnect hote hi readings phir aayengi.',
+                    style: TextStyle(
+                      color: AppColors.subtext,
+                      fontSize: 11,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -320,10 +467,12 @@ class _ReconnectingBanner extends StatelessWidget {
 class _LiveView extends StatelessWidget {
   final CoachLiveTaskState state;
   final String taskName;
+  final String athleteName;
   final bool isReconnecting;
   const _LiveView(
       {required this.state,
       required this.taskName,
+      required this.athleteName,
       this.isReconnecting = false});
 
   int get _minBpm => state.readings.isEmpty
@@ -342,9 +491,20 @@ class _LiveView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showReconnectBanner = isReconnecting ||
+        state.isReconnectExhausted ||
+        state.isAuthFailure;
+
     return Column(
       children: [
-        if (isReconnecting) const _ReconnectingBanner(),
+        if (showReconnectBanner)
+          _ReconnectingBanner(
+            attempt: state.reconnectAttempt,
+            exhausted: state.isReconnectExhausted,
+            isAuthFailure: state.isAuthFailure,
+          ),
+        if (state.isAthleteConnectionLost)
+          _AthleteOfflineBanner(athleteName: athleteName),
         Expanded(
           child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(16, 20, 16, MediaQuery.of(context).padding.bottom + 24),
@@ -694,11 +854,11 @@ class _VitalsGrid extends StatelessWidget {
     }
     if (state.latestSugarLevel != null) {
       items.add(_VitalData(
-        icon: Icons.opacity_rounded,
+        icon: Icons.monitor_heart_outlined,
         label: 'HRV',
         value: state.latestSugarLevel!.toStringAsFixed(1),
-        color: const Color(0xFF7B1FA2),
-        subtitle: 'mg/dL',
+        color: const Color(0xFF40C4FF),
+        subtitle: 'ms RMSSD',
       ));
     }
     if (state.latestStressLevel != null) {

@@ -111,7 +111,7 @@ class _SearchBar extends StatelessWidget {
         onChanged: onChanged,
         style: const TextStyle(color: AppColors.text),
         decoration: InputDecoration(
-          hintText: 'Search by name or email...',
+          hintText: 'Search by name or ID...',
           hintStyle: const TextStyle(color: AppColors.textHint),
           prefixIcon: const Icon(Icons.search, color: AppColors.subtext),
           suffixIcon: ValueListenableBuilder(

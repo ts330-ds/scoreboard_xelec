@@ -141,6 +141,30 @@ class _FeatureSelectionScreenState extends State<FeatureSelectionScreen>
       context.push('${AppPaths.deviceSelection}?feature=scoreboard');
       return;
     }
+    if (feature.featureKey == 'ams') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('AMS is Comming Soon'),
+        ),
+      );
+      return;
+    }
+    if (feature.featureKey == 'eeg') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('EEG is Comming Soon'),
+        ),
+      );
+      return;
+    }
+    if (feature.featureKey == 'vbt') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('VBT is Comming Soon'),
+        ),
+      );
+      return;
+    }
 
     // Baaki sab features ke liye pehle login
     context.push(AppPaths.login);

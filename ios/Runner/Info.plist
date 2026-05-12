@@ -61,6 +61,12 @@
 	<string>Location is used to auto-fill the session venue and for Bluetooth device scanning.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Location is used to auto-fill the session venue and for Bluetooth device scanning.</string>
+	<!-- flutter_foreground_task: background execution modes -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
 
 </dict>
 </plist>

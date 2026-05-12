@@ -9,6 +9,18 @@ import '../../domain/entity/coach_task_result_entity.dart';
 import '../cubit/coach_task_result_cubit.dart';
 import '../cubit/coach_task_result_state.dart';
 
+// Helper: elapsed seconds → "M:SS" or "H:MM:SS"
+String _fmtElapsed(int totalSeconds) {
+  if (totalSeconds < 0) totalSeconds = 0;
+  final h = totalSeconds ~/ 3600;
+  final m = (totalSeconds % 3600) ~/ 60;
+  final s = totalSeconds % 60;
+  if (h > 0) {
+    return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+  return '$m:${s.toString().padLeft(2, '0')}';
+}
+
 class CoachTaskResultScreen extends StatelessWidget {
   final int taskId;
   final String athleteName;
@@ -168,11 +180,25 @@ class _SessionView extends StatelessWidget {
 
         // ── 3. HRV chart
         Builder(builder: (context) {
-          final hrvPoints = session.rawData
-              .where((p) => p.sugarLevel != null && p.sugarLevel! > 0)
-              .map((p) => p.sugarLevel!)
-              .toList();
-          if (!hasChart || hrvPoints.length < 2) return const SizedBox.shrink();
+          // Anchor x-axis to first raw_data timestamp (HR chart se consistent)
+          final sorted = [...session.rawData]
+            ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
+          if (sorted.isEmpty) return const SizedBox.shrink();
+          final firstTs = sorted.first.recordedAt;
+          final hrvSpots = <FlSpot>[];
+          for (final p in sorted) {
+            final v = p.sugarLevel;
+            if (v == null || v <= 0) continue;
+            hrvSpots.add(FlSpot(
+              p.recordedAt.difference(firstTs).inSeconds.toDouble(),
+              v,
+            ));
+          }
+          if (!hasChart || hrvSpots.length < 2) {
+            return const SizedBox.shrink();
+          }
+          final totalSec =
+              sorted.last.recordedAt.difference(firstTs).inSeconds.toDouble();
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -181,42 +207,14 @@ class _SessionView extends StatelessWidget {
                   title: 'HRV (RMSSD)'),
               const SizedBox(height: 10),
               _HrvLineChart(
-                hrvPoints: hrvPoints,
+                spots: hrvSpots,
                 statRange: session.stats.sugar,
+                totalSeconds: totalSec,
               ),
             ],
           );
         }),
 
-        // ── 4. SpO2 chart
-        if (hasChart &&
-            session.rawData.any((p) => p.spo2 != null)) ...[
-          const SizedBox(height: 16),
-          _SectionHeader(
-              icon: Icons.water_drop_rounded, title: 'SpO2'),
-          const SizedBox(height: 10),
-          _VitalLineChart(
-            points: session.rawData.map((p) => p.spo2 ?? 0).toList(),
-            color: AppColors.vitalOxygen,
-            unit: '%',
-            statRange: session.stats.spo2,
-          ),
-        ],
-
-        // ── 5. Stress chart
-        if (hasChart &&
-            session.rawData.any((p) => p.stressLevel != null)) ...[
-          const SizedBox(height: 16),
-          _SectionHeader(
-              icon: Icons.psychology_outlined, title: 'Stress Level'),
-          const SizedBox(height: 10),
-          _VitalLineChart(
-            points: session.rawData.map((p) => p.stressLevel ?? 0).toList(),
-            color: AppColors.vitalStress,
-            unit: '',
-            statRange: session.stats.stress,
-          ),
-        ],
       ],
     );
   }
@@ -253,17 +251,25 @@ class _HeartRateHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stats = session.stats.heartRate;
-    final bpms = session.rawData.map((p) => p.heartRate).toList();
-    final spots = bpms
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value.toDouble()))
+    // Sort raw_data by recorded_at (oldest first) — entity reverses but be safe
+    final sorted = [...session.rawData]
+      ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
+    // Anchor x-axis to first raw_data point's recorded_at, not session.startedAt
+    final firstTs = sorted.first.recordedAt;
+    final spots = sorted
+        .map((p) => FlSpot(
+              p.recordedAt.difference(firstTs).inSeconds.toDouble(),
+              p.heartRate.toDouble(),
+            ))
         .toList();
 
+    final bpms = sorted.map((p) => p.heartRate).toList();
     final maxBpm = bpms.reduce(math.max);
     final minBpm = bpms.reduce(math.min);
     final maxY = (maxBpm + 20).toDouble();
     final minY = ((minBpm - 20).clamp(0, 999)).toDouble();
+    final double maxX = spots.last.x > 0 ? spots.last.x : 1.0;
+    final double tickInterval = maxX / 4;
 
     final avgBpm = stats.avg;
 
@@ -377,6 +383,8 @@ class _HeartRateHeroCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(0, 4, 16, 8),
               child: LineChart(
                 LineChartData(
+                  minX: 0,
+                  maxX: maxX,
                   minY: minY,
                   maxY: maxY,
                   clipData: const FlClipData.all(),
@@ -407,8 +415,38 @@ class _HeartRateHeroCard extends StatelessWidget {
                         sideTitles: SideTitles(showTitles: false)),
                     topTitles: const AxisTitles(
                         sideTitles: SideTitles(showTitles: false)),
-                    bottomTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 22,
+                        interval: tickInterval,
+                        getTitlesWidget: (v, _) {
+                          if (v < 0 || v > maxX) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              _fmtElapsed(v.toInt()),
+                              style: const TextStyle(
+                                  color: AppColors.subtext, fontSize: 9),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipColor: (_) => AppColors.text,
+                      getTooltipItems: (spots) => spots
+                          .map((s) => LineTooltipItem(
+                                '${s.y.toInt()} bpm  •  ${_fmtElapsed(s.x.toInt())}',
+                                const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600),
+                              ))
+                          .toList(),
+                    ),
                   ),
                   lineBarsData: [
                     LineChartBarData(
@@ -461,12 +499,6 @@ class _HeartRateHeroCard extends StatelessWidget {
                   label: 'Max',
                   value: stats.max.toStringAsFixed(0),
                   color: AppColors.error,
-                ),
-                _Divider(),
-                _BpmStat(
-                  label: 'Readings',
-                  value: '${bpms.length}',
-                  color: AppColors.subtext,
                 ),
               ],
             ),
@@ -540,147 +572,6 @@ class _HeartRateSummaryCard extends StatelessWidget {
           ],
         ),
       );
-}
-
-// ── Vital Line Chart (SpO2, Stress, etc.) ────────────────────────────────────
-
-class _VitalLineChart extends StatelessWidget {
-  final List<double> points;
-  final Color color;
-  final String unit;
-  final StatRange statRange;
-
-  const _VitalLineChart({
-    required this.points,
-    required this.color,
-    required this.unit,
-    required this.statRange,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final spots = points
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value))
-        .toList();
-
-    final maxVal = points.reduce(math.max);
-    final minVal = points.reduce(math.min);
-    final range = maxVal - minVal;
-    final padding = range < 5 ? 5.0 : range * 0.2;
-    final maxY = maxVal + padding;
-    final minY = (minVal - padding).clamp(0.0, double.infinity);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-            child: Row(
-              children: [
-                Text(
-                  '${statRange.avg.toStringAsFixed(1)}$unit',
-                  style: TextStyle(
-                      color: color,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(width: 6),
-                Text('avg',
-                    style: const TextStyle(
-                        color: AppColors.subtext, fontSize: 12)),
-                const Spacer(),
-                Text(
-                  'min ${statRange.min.toStringAsFixed(1)}$unit  max ${statRange.max.toStringAsFixed(1)}$unit',
-                  style: const TextStyle(
-                      color: AppColors.textHint, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-
-          // ── Chart
-          SizedBox(
-            height: 120,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 8, 16, 8),
-              child: LineChart(
-                LineChartData(
-                  minY: minY,
-                  maxY: maxY,
-                  clipData: const FlClipData.all(),
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    getDrawingHorizontalLine: (_) => FlLine(
-                      color: AppColors.borderLight,
-                      strokeWidth: 1,
-                    ),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  titlesData: FlTitlesData(
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 38,
-                        getTitlesWidget: (val, _) => Text(
-                          val.toStringAsFixed(0),
-                          style: const TextStyle(
-                              color: AppColors.subtext, fontSize: 10),
-                        ),
-                      ),
-                    ),
-                    rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    bottomTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                  ),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: spots,
-                      isCurved: true,
-                      curveSmoothness: 0.3,
-                      color: color,
-                      barWidth: 2.5,
-                      dotData: const FlDotData(show: false),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            color.withValues(alpha: 0.18),
-                            color.withValues(alpha: 0.0),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 // ── Session Info Card ─────────────────────────────────────────────────────────
@@ -823,25 +714,29 @@ class _EmptyView extends StatelessWidget {
 const _kHrvColor = Color(0xFF40C4FF);
 
 class _HrvLineChart extends StatelessWidget {
-  final List<double> hrvPoints;
+  final List<FlSpot> spots;
   final StatRange statRange;
+  final double totalSeconds;
 
-  const _HrvLineChart({required this.hrvPoints, required this.statRange});
+  const _HrvLineChart({
+    required this.spots,
+    required this.statRange,
+    required this.totalSeconds,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final spots = hrvPoints
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value))
-        .toList();
-
-    final maxVal = hrvPoints.reduce(math.max);
-    final minVal = hrvPoints.reduce(math.min);
+    final ys = spots.map((s) => s.y);
+    final maxVal = ys.reduce(math.max);
+    final minVal = ys.reduce(math.min);
     final range = maxVal - minVal;
     final padding = range < 5 ? 5.0 : range * 0.2;
     final maxY = maxVal + padding;
     final minY = (minVal - padding).clamp(0.0, double.infinity);
+    final double maxX = totalSeconds > 0
+        ? totalSeconds
+        : (spots.isNotEmpty ? spots.last.x : 1.0);
+    final double tickInterval = maxX / 4;
 
     return Container(
       decoration: BoxDecoration(
@@ -890,6 +785,8 @@ class _HrvLineChart extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(0, 8, 16, 8),
               child: LineChart(
                 LineChartData(
+                  minX: 0,
+                  maxX: maxX,
                   minY: minY,
                   maxY: maxY,
                   clipData: const FlClipData.all(),
@@ -919,8 +816,25 @@ class _HrvLineChart extends StatelessWidget {
                         sideTitles: SideTitles(showTitles: false)),
                     topTitles: const AxisTitles(
                         sideTitles: SideTitles(showTitles: false)),
-                    bottomTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 22,
+                        interval: tickInterval,
+                        getTitlesWidget: (v, _) {
+                          if (v < 0 || v > maxX) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              _fmtElapsed(v.toInt()),
+                              style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.45),
+                                  fontSize: 9),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ),
                   lineBarsData: [
                     LineChartBarData(

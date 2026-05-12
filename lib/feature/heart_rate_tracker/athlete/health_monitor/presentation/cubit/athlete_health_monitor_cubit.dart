@@ -1,208 +1,174 @@
 import 'dart:async';
-import 'package:flutter/widgets.dart';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
-import 'package:xelex_esp/service/socket/athlete_health_monitor_socket_service.dart';
+import 'package:xelex_esp/service/foreground/athlete_foreground_service.dart';
+import 'package:xelex_esp/service/socket/reconnect_controller.dart';
 
-enum HealthMonitorStatus { idle, connecting, monitoring, error }
+enum HealthMonitorStatus { idle, connecting, monitoring, reconnecting, error }
 
-class AthleteHealthMonitorCubit extends Cubit<HealthMonitorStatus>
-    with WidgetsBindingObserver {
-  final AthleteHealthMonitorSocketService _socketService;
-  final HeartBleCubit _bleCubit;
+class HealthMonitorState {
+  final HealthMonitorStatus status;
+  final DateTime? lastSavedAt;
+  final int reconnectAttempt;
+  final bool isReconnectExhausted;
+  final bool isAuthFailure;
+  final String? errorMessage;
+
+  const HealthMonitorState(
+    this.status, {
+    this.lastSavedAt,
+    this.reconnectAttempt = 0,
+    this.isReconnectExhausted = false,
+    this.isAuthFailure = false,
+    this.errorMessage,
+  });
+
+  HealthMonitorState copyWith({
+    HealthMonitorStatus? status,
+    DateTime? lastSavedAt,
+    int? reconnectAttempt,
+    bool? isReconnectExhausted,
+    bool? isAuthFailure,
+    String? errorMessage,
+  }) =>
+      HealthMonitorState(
+        status ?? this.status,
+        lastSavedAt: lastSavedAt ?? this.lastSavedAt,
+        reconnectAttempt: reconnectAttempt ?? this.reconnectAttempt,
+        isReconnectExhausted: isReconnectExhausted ?? this.isReconnectExhausted,
+        isAuthFailure: isAuthFailure ?? this.isAuthFailure,
+        errorMessage: errorMessage ?? this.errorMessage,
+      );
+}
+
+class AthleteHealthMonitorCubit extends Cubit<HealthMonitorState> {
   final SharedPreferences _prefs;
+  StreamSubscription<Map<String, dynamic>>? _sub;
+  final ReconnectController _reconnect =
+      ReconnectController(tag: 'HEALTH RECONNECT');
 
-  StreamSubscription<HeartBleState>? _bleSubscription;
-  Timer? _metricTimer;
-  Timer? _reconnectTimer;
-  // BLE disconnect ke baad itni der wait karo — short glitches ignore hote hain
-  Timer? _bleDisconnectDebounce;
-
-  int _heartRate = 0;
-  double? _spo2;
-  int? _stressLevel;
-  double? _hrv;
-  bool _appInForeground = true;
-
-  AthleteHealthMonitorCubit({
-    required AthleteHealthMonitorSocketService socketService,
-    required HeartBleCubit bleCubit,
-    required SharedPreferences prefs,
-  })  : _socketService = socketService,
-        _bleCubit = bleCubit,
-        _prefs = prefs,
-        super(HealthMonitorStatus.idle) {
-    WidgetsBinding.instance.addObserver(this);
-    _listenToBle();
+  AthleteHealthMonitorCubit({required SharedPreferences prefs})
+      : _prefs = prefs,
+        super(const HealthMonitorState(HealthMonitorStatus.idle)) {
+    _sub = AthleteForegroundService.eventStream.listen(_onBackgroundEvent);
+    // Broadcast stream events buffer nahi karta. Agar cubit late create hua
+    // (e.g. fresh login → dashboard khulte hi cubit bana, lekin BLE already
+    // connect ho chuka tha aur events fire ho chuke the) to current status
+    // ko replay karo taki banner correct dikhe.
+    final cached = AthleteForegroundService.lastHealthEvent;
+    if (cached != null) _onBackgroundEvent(cached);
   }
 
-  // ── App Lifecycle ───────────────────────────────────────────────────────────
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    switch (state) {
-      case AppLifecycleState.paused:
-      case AppLifecycleState.hidden:
-        _appInForeground = false;
-        // Metric timer background me bhi chalta rahe — socket alive + data flowing
-        debugPrint('[HEALTH MONITOR] App paused — socket + metric timer kept alive');
-        break;
-
-      case AppLifecycleState.resumed:
-        _appInForeground = true;
-        debugPrint('[HEALTH MONITOR] App resumed — checking socket state');
-        _onAppResumed();
-        break;
-
-      default:
-        break;
-    }
-  }
-
-  void _onAppResumed() {
-    if (_bleCubit.state.isConnected && !_socketService.isConnected) {
-      // BLE hai lekin socket gir gaya — reconnect
-      debugPrint('[HEALTH MONITOR] Resumed — socket dropped, reconnecting');
-      if (!isClosed) emit(HealthMonitorStatus.connecting);
-      _connectAndStart();
-    }
-    // Socket connected: timer already running in background, nothing to do
-  }
-
-  // ── BLE listener ────────────────────────────────────────────────────────────
-  void _listenToBle() {
-    _bleSubscription = _bleCubit.stream.listen(_onBleStateChanged);
-    if (_bleCubit.state.isConnected) _onBleStateChanged(_bleCubit.state);
-  }
-
-  void _onBleStateChanged(HeartBleState bleState) {
-    _heartRate = bleState.heartRate;
-    if (bleState.spo2 > 0) _spo2 = bleState.spo2.toDouble();
-    if (bleState.stressLevel > 0) _stressLevel = bleState.stressLevel;
-    if (bleState.hrv > 0) _hrv = bleState.hrv;
-
-    if (bleState.isConnected) {
-      // BLE wapas aaya — pending debounce cancel karo
-      _bleDisconnectDebounce?.cancel();
-      _bleDisconnectDebounce = null;
-
-      if (!_socketService.isConnected &&
-          (state == HealthMonitorStatus.idle ||
-              state == HealthMonitorStatus.error)) {
-        _connectAndStart();
-      } else if (_socketService.isConnected &&
-          state == HealthMonitorStatus.monitoring &&
-          _metricTimer == null &&
-          _appInForeground) {
-        // Socket connected but timer stopped (app was paused) — restart
-        _startMetricTimer();
-      }
-    } else {
-      // BLE disconnected — 12 second debounce (screen lock/unlock ignore ho)
-      if (_bleDisconnectDebounce != null) return;
-      _bleDisconnectDebounce = Timer(const Duration(seconds: 12), () {
-        _bleDisconnectDebounce = null;
-        if (!_bleCubit.state.isConnected && _socketService.isConnected) {
-          debugPrint('[HEALTH MONITOR] BLE disconnected (confirmed after debounce)');
-          _stopAndDisconnect();
+  void _onBackgroundEvent(Map<String, dynamic> event) {
+    debugPrint('[HEALTH CUBIT] event: $event');
+    final name = event['event'] as String?;
+    switch (name) {
+      case 'health_connecting':
+        if (!isClosed) {
+          emit(state.copyWith(status: HealthMonitorStatus.connecting));
         }
-      });
+
+      case 'health_monitoring_started':
+        // Successful connect — reconnect counters reset.
+        _reconnect.reset();
+        if (!isClosed) {
+          emit(state.copyWith(
+            status: HealthMonitorStatus.monitoring,
+            reconnectAttempt: 0,
+            isReconnectExhausted: false,
+          ));
+        }
+
+      case 'health_monitoring_stopped':
+        // User-initiated stop — reconnect cancel kar do.
+        _reconnect.cancel();
+        if (!isClosed) {
+          emit(const HealthMonitorState(HealthMonitorStatus.idle));
+        }
+
+      case 'health_metric_saved':
+        // Data flow back — reconnect successful confirm.
+        _reconnect.reset();
+        if (!isClosed) {
+          emit(state.copyWith(
+            status: HealthMonitorStatus.monitoring,
+            lastSavedAt: DateTime.now(),
+            reconnectAttempt: 0,
+            isReconnectExhausted: false,
+          ));
+        }
+
+      case 'health_socket_disconnected':
+        // Unintentional disconnect — auto reconnect.
+        if (!isClosed && !state.isAuthFailure) {
+          emit(state.copyWith(status: HealthMonitorStatus.reconnecting));
+          _scheduleReconnect();
+        }
+
+      case 'health_auth_failure':
+        // Token invalid/expired — reconnect waste.
+        _reconnect.cancel();
+        if (!isClosed) {
+          emit(state.copyWith(
+            status: HealthMonitorStatus.error,
+            isAuthFailure: true,
+            errorMessage: event['message'] as String? ?? 'Session expired',
+          ));
+        }
+
+      case 'health_error':
+        if (!isClosed) {
+          emit(state.copyWith(
+            status: HealthMonitorStatus.error,
+            errorMessage: event['message'] as String?,
+          ));
+        }
     }
-  }
-
-  // ── Socket connect ──────────────────────────────────────────────────────────
-  void _connectAndStart() {
-    final token = _prefs.getString(PrefKeys.userToken) ?? '';
-    final baseUrl = dotenv.env['BASE_URL'] ?? '';
-    if (token.isEmpty || baseUrl.isEmpty) return;
-
-    if (!isClosed) emit(HealthMonitorStatus.connecting);
-
-    _socketService.onMonitoringStarted = () {
-      debugPrint('[HEALTH MONITOR] Monitoring started');
-      _reconnectTimer?.cancel();
-      if (!isClosed) emit(HealthMonitorStatus.monitoring);
-      _startMetricTimer();
-    };
-
-    _socketService.onMonitoringStopped = () {
-      debugPrint('[HEALTH MONITOR] Monitoring stopped');
-      _stopMetricTimer();
-      if (!isClosed) emit(HealthMonitorStatus.idle);
-    };
-
-    _socketService.onError = (msg) {
-      debugPrint('[HEALTH MONITOR] Error: $msg');
-      if (!isClosed) emit(HealthMonitorStatus.error);
-      _scheduleReconnect();
-    };
-
-    // Socket OS ke wajah se drop ho jaaye to status update karo
-    _socketService.onSocketDisconnected = () {
-      debugPrint('[HEALTH MONITOR] Socket dropped unexpectedly');
-      _stopMetricTimer();
-      if (!isClosed && state == HealthMonitorStatus.monitoring) {
-        emit(HealthMonitorStatus.error);
-        if (_bleCubit.state.isConnected) _scheduleReconnect();
-      }
-    };
-
-    _socketService.connect(baseUrl, token);
   }
 
   void _scheduleReconnect() {
-    _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 5), () {
-      if (!isClosed && _bleCubit.state.isConnected && !_socketService.isConnected) {
-        debugPrint('[HEALTH MONITOR] Reconnecting...');
-        _connectAndStart();
-      }
-    });
+    _reconnect.schedule(
+      onAttempt: (attempt) {
+        if (isClosed) return;
+        debugPrint('[HEALTH CUBIT] Reconnect attempt #$attempt');
+        emit(state.copyWith(reconnectAttempt: attempt));
+        _restartMonitor();
+      },
+      onExhausted: () {
+        if (isClosed) return;
+        debugPrint('[HEALTH CUBIT] Reconnect budget exhausted');
+        emit(state.copyWith(isReconnectExhausted: true));
+      },
+    );
   }
 
-  // ── Metric timer ────────────────────────────────────────────────────────────
-  void _startMetricTimer() {
-    _metricTimer?.cancel();
-    _metricTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_heartRate <= 0) return;
-      _socketService.submitHealthMetric(
-        heartRate: _heartRate,
-        spo2: _spo2,
-        stressLevel: _stressLevel,
-        hrv: _hrv,
-      );
-    });
+  // User ne "Retry" dabaya — budget reset + immediate attempt.
+  void retryConnectionManually() {
+    if (isClosed) return;
+    _reconnect.reset();
+    emit(state.copyWith(
+      status: HealthMonitorStatus.reconnecting,
+      isReconnectExhausted: false,
+      reconnectAttempt: 0,
+    ));
+    _restartMonitor();
   }
 
-  void _stopMetricTimer() {
-    _metricTimer?.cancel();
-    _metricTimer = null;
-  }
-
-  void _stopAndDisconnect() {
-    _stopMetricTimer();
-    _reconnectTimer?.cancel();
-    _socketService.notifyDeviceDisconnected();
-    Future.delayed(const Duration(seconds: 3), () {
-      if (_socketService.isConnected) _socketService.disconnect();
-      if (!isClosed) emit(HealthMonitorStatus.idle);
-    });
+  void _restartMonitor() {
+    final token = _prefs.getString(PrefKeys.userToken) ?? '';
+    final baseUrl = dotenv.env['BASE_URL'] ?? '';
+    if (token.isEmpty || baseUrl.isEmpty) return;
+    AthleteForegroundService.startHealthMonitor(token, baseUrl);
   }
 
   @override
   Future<void> close() {
-    WidgetsBinding.instance.removeObserver(this);
-    _bleSubscription?.cancel();
-    _bleDisconnectDebounce?.cancel();
-    _stopMetricTimer();
-    _reconnectTimer?.cancel();
-    if (_socketService.isConnected) {
-      _socketService.notifyDeviceDisconnected();
-      _socketService.disconnect();
-    }
+    _reconnect.dispose();
+    _sub?.cancel();
     return super.close();
   }
 }
