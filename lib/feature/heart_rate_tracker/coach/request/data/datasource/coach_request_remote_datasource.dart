@@ -33,7 +33,7 @@ class CoachRequestRemoteDataSourceImpl implements CoachRequestRemoteDataSource {
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
         try {
           final params = <String, dynamic>{'page': page};
@@ -74,7 +74,7 @@ class CoachRequestRemoteDataSourceImpl implements CoachRequestRemoteDataSource {
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
         try {
           final response = await _dio.post(

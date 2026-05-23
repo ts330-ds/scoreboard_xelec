@@ -9,6 +9,16 @@ import '../cubit/athlete_detail_cubit.dart';
 import '../cubit/athlete_detail_state.dart';
 import '../cubit/athlete_health_metrics_cubit.dart';
 import '../cubit/athlete_health_metrics_state.dart';
+import '../cubit/athlete_hour_raw_cubit.dart';
+import '../cubit/athlete_hour_raw_state.dart';
+import '../cubit/completed_tasks_cubit.dart';
+import '../cubit/completed_tasks_state.dart';
+import '../../domain/entity/completed_task_entity.dart';
+import '../../../live_now/presentation/screen/coach_task_result_screen.dart';
+
+const _hrColor = Color(0xFFEF5350);
+const _sleepColor = Color(0xFF7B1FA2);
+const _rrColor = Color(0xFF26A69A);
 
 class AthleteDetailMobile extends StatelessWidget {
   final MyAthleteEntity preview;
@@ -19,64 +29,559 @@ class AthleteDetailMobile extends StatelessWidget {
     return BlocBuilder<AthleteDetailCubit, AthleteDetailState>(
       builder: (context, detailState) {
         final athlete = detailState.athlete ?? preview;
-        return Scaffold(
-          backgroundColor: AppColors.bg,
-          body: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              _HeroAppBar(athlete: athlete),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (detailState.status == AthleteDetailStatus.loading)
-                        _LoadingBanner(),
-
-                      _QuickStatsRow(athlete: athlete),
-                      const SizedBox(height: 24),
-
-                      // ── Health Metrics
-                      _SectionHeader(
-                          icon: Icons.monitor_heart_outlined,
-                          title: 'Health Metrics'),
-                      const SizedBox(height: 12),
-                      _HealthMetricsCard(athleteId: athlete.id),
-                      const SizedBox(height: 24),
-
-                      // ── Personal Info
-                      _SectionHeader(
-                          icon: Icons.person_outline, title: 'Personal Info'),
-                      const SizedBox(height: 12),
-                      _InfoCard(items: [
-                        _InfoRow('Gender', athlete.gender),
-                        _InfoRow('Date of Birth', athlete.dob),
-                        _InfoRow('Phone', athlete.phone),
-                        _InfoRow('Status', athlete.status),
-                        _InfoRow('Member Since', athlete.createdAt),
-                      ]),
-                      const SizedBox(height: 24),
-
-                      const SizedBox(height: 12),
+        return DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            backgroundColor: AppColors.bg,
+            body: Column(
+              children: [
+                _HeroHeader(athlete: athlete),
+                Material(
+                  color: AppColors.surface,
+                  child: TabBar(
+                    labelColor: AppColors.primary,
+                    unselectedLabelColor: AppColors.subtext,
+                    indicatorColor: AppColors.primary,
+                    indicatorWeight: 2.5,
+                    labelStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700),
+                    unselectedLabelStyle: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                    tabs: const [
+                      Tab(
+                        height: 44,
+                        icon: null,
+                        iconMargin: EdgeInsets.zero,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.task_alt, size: 16),
+                            SizedBox(width: 6),
+                            Text('Completed Tasks'),
+                          ],
+                        ),
+                      ),
+                      Tab(
+                        height: 44,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.monitor_heart_outlined, size: 16),
+                            SizedBox(width: 6),
+                            Text('Health Metrics'),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
-              ),
-            ],
+                const Divider(height: 1, color: AppColors.border),
+                Expanded(
+                  child: TabBarView(
+                    physics: const BouncingScrollPhysics(),
+                    children: [
+                      _CompletedTasksTab(
+                        athleteId: athlete.id,
+                        athleteFallbackName: athlete.name,
+                      ),
+                      _HealthMetricsTab(
+                        athlete: athlete,
+                        detailLoading: detailState.status ==
+                            AthleteDetailStatus.loading,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
-
 }
 
-// ── Hero SliverAppBar ─────────────────────────────────────────────────────────
+// ── Health Metrics Tab (existing content moved here) ─────────────────────────
 
-class _HeroAppBar extends StatelessWidget {
+class _HealthMetricsTab extends StatelessWidget {
   final MyAthleteEntity athlete;
-  const _HeroAppBar({required this.athlete});
+  final bool detailLoading;
+  const _HealthMetricsTab(
+      {required this.athlete, required this.detailLoading});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      physics: const BouncingScrollPhysics(),
+      children: [
+        if (detailLoading) const _LoadingBanner(),
+        _DateRangePill(athleteId: athlete.id),
+        const SizedBox(height: 16),
+        _HealthSection(athleteId: athlete.id),
+        const SizedBox(height: 24),
+        const _SectionHeader(
+            icon: Icons.person_outline, title: 'Personal Info'),
+        const SizedBox(height: 12),
+        _InfoCard(items: [
+          _InfoRow('Gender', athlete.gender),
+          _InfoRow('Date of Birth', athlete.dob),
+          _InfoRow('Phone', athlete.phone),
+          _InfoRow('Status', athlete.status),
+          _InfoRow('Member Since', athlete.createdAt),
+        ]),
+      ],
+    );
+  }
+}
+
+// ── Completed Tasks Tab ──────────────────────────────────────────────────────
+
+class _CompletedTasksTab extends StatelessWidget {
+  final int athleteId;
+  final String athleteFallbackName;
+  const _CompletedTasksTab(
+      {required this.athleteId, required this.athleteFallbackName});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<CompletedTasksCubit, CompletedTasksState>(
+      builder: (context, state) {
+        switch (state.status) {
+          case CompletedTasksStatus.initial:
+          case CompletedTasksStatus.loading:
+            return const Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            );
+          case CompletedTasksStatus.error:
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: _ErrorView(
+                message: state.errorMessage ?? 'Failed to load tasks',
+                onRetry: () =>
+                    context.read<CompletedTasksCubit>().fetch(athleteId),
+              ),
+            );
+          case CompletedTasksStatus.loaded:
+            if (state.tasks.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.all(20),
+                child: _EmptyHint(
+                    icon: Icons.task_alt,
+                    text: 'No completed tasks yet'),
+              );
+            }
+            return RefreshIndicator(
+              color: AppColors.primary,
+              onRefresh: () =>
+                  context.read<CompletedTasksCubit>().fetch(athleteId),
+              child: ListView.separated(
+                physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics()),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                itemCount: state.tasks.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (_, i) => _CompletedTaskCard(
+                  task: state.tasks[i],
+                  athleteFallbackName: athleteFallbackName,
+                ),
+              ),
+            );
+        }
+      },
+    );
+  }
+}
+
+class _CompletedTaskCard extends StatelessWidget {
+  final CompletedTaskEntity task;
+  final String athleteFallbackName;
+  const _CompletedTaskCard(
+      {required this.task, required this.athleteFallbackName});
+
+  void _openResult(BuildContext context) {
+    final id = task.id;
+    if (id == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CoachTaskResultScreen(
+          taskId: id,
+          athleteName: task.athleteName ?? athleteFallbackName,
+          taskName: task.name ?? 'Task #$id',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = task.name ?? 'Task #${task.id ?? '-'}';
+    final duration = task.durationMinutes;
+    final displayDate = task.displayDate;
+    final fb = task.feedback;
+
+    final byLabel = _assignedByLabel(task);
+    final hasFeedback = fb != null;
+
+    return Material(
+      color: AppColors.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: task.id == null ? null : () => _openResult(context),
+        child: Ink(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.check_circle,
+                          size: 16, color: AppColors.primary),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: AppColors.text,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700)),
+                          if (displayDate != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              _fmtRelative(displayDate),
+                              style: const TextStyle(
+                                  color: AppColors.subtext,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (task.id != null)
+                      Text('#${task.id}',
+                          style: const TextStyle(
+                              color: AppColors.textHint,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    if (duration != null)
+                      _TaskChip(
+                          icon: Icons.timer_outlined,
+                          text: _fmtMinutes(duration),
+                          color: AppColors.primary),
+                    if (byLabel != null)
+                      _TaskChip(
+                          icon: Icons.person_outline,
+                          text: byLabel,
+                          color: const Color(0xFF5C6BC0)),
+                    if (!hasFeedback)
+                      _TaskChip(
+                          icon: Icons.hourglass_empty,
+                          text: 'No feedback',
+                          color: AppColors.subtext),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // ── Feedback block (if present)
+          if (hasFeedback) _FeedbackBlock(feedback: fb),
+        ],
+      ),
+        ),
+      ),
+    );
+  }
+
+  String? _assignedByLabel(CompletedTaskEntity t) {
+    final by = t.assignedBy?.toLowerCase();
+    if (by == null) return null;
+    if (by == 'self') return 'Self-assigned';
+    final name = t.assignedByName;
+    if (name != null) return 'by $name';
+    return 'by ${t.assignedBy}';
+  }
+}
+
+// ── Feedback Block ───────────────────────────────────────────────────────────
+
+class _FeedbackBlock extends StatelessWidget {
+  final CompletedTaskFeedback feedback;
+  const _FeedbackBlock({required this.feedback});
+
+  @override
+  Widget build(BuildContext context) {
+    final rpe = feedback.rpe;
+    final session = feedback.sessionDurationMinutes;
+    final note = feedback.note;
+    final rpeColor = _rpeColor(rpe);
+    final load = (rpe != null && session != null) ? rpe * session : null;
+
+    return Container(
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(14)),
+        border: Border(top: BorderSide(color: AppColors.borderLight)),
+      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.reviews_outlined,
+                  size: 13, color: AppColors.subtext),
+              const SizedBox(width: 5),
+              const Text('Athlete Feedback',
+                  style: TextStyle(
+                      color: AppColors.subtext,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.4)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (rpe != null)
+                Expanded(
+                  flex: 0,
+                  child: _RpeBadge(rpe: rpe, color: rpeColor),
+                ),
+              if (rpe != null) const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (load != null)
+                      _FbStat(
+                        icon: Icons.fitness_center,
+                        label: 'Load (RPE x Duration)',
+                        value: '$load',
+                      ),
+                    if (load != null && session != null)
+                      const SizedBox(height: 6),
+                    if (session != null)
+                      _FbStat(
+                        icon: Icons.timelapse,
+                        label: 'Session',
+                        value: _fmtMinutes(session),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (note != null && note.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.borderLight),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.format_quote,
+                      size: 14, color: AppColors.subtext),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(note,
+                        style: const TextStyle(
+                            color: AppColors.text,
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            height: 1.35)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Color _rpeColor(int? rpe) {
+    if (rpe == null) return AppColors.subtext;
+    if (rpe <= 3) return const Color(0xFF66BB6A); // easy — green
+    if (rpe <= 6) return const Color(0xFFFFA726); // moderate — amber
+    if (rpe <= 8) return const Color(0xFFEF5350); // hard — red
+    return const Color(0xFFB71C1C); // max — deep red
+  }
+}
+
+class _RpeBadge extends StatelessWidget {
+  final int rpe;
+  final Color color;
+  const _RpeBadge({required this.rpe, required this.color});
+
+  String get _label {
+    if (rpe <= 3) return 'Easy';
+    if (rpe <= 6) return 'Moderate';
+    if (rpe <= 8) return 'Hard';
+    return 'Max';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 72,
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        children: [
+          const Text('Rating',
+              style: TextStyle(
+                  color: AppColors.subtext,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5)),
+          const SizedBox(height: 2),
+          Text('$rpe',
+              style: TextStyle(
+                  color: color,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                  height: 1)),
+          const Text('/ 10',
+              style: TextStyle(
+                  color: AppColors.subtext,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(_label,
+              style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+class _FbStat extends StatelessWidget {
+  final IconData icon;
+  final String label, value;
+  const _FbStat(
+      {required this.icon, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 13, color: AppColors.subtext),
+        const SizedBox(width: 5),
+        Text('$label:',
+            style: const TextStyle(
+                color: AppColors.subtext,
+                fontSize: 11,
+                fontWeight: FontWeight.w600)),
+        const SizedBox(width: 4),
+        Text(value,
+            style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 14,
+                fontWeight: FontWeight.w700)),
+      ],
+    );
+  }
+}
+
+class _TaskChip extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+  const _TaskChip(
+      {required this.icon, required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(text,
+              style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+String _fmtMinutes(int minutes) {
+  if (minutes < 60) return '$minutes min';
+  final h = minutes ~/ 60;
+  final m = minutes % 60;
+  if (h < 24) return m == 0 ? '${h}h' : '${h}h ${m}m';
+  final d = h ~/ 24;
+  final hh = h % 24;
+  return hh == 0 ? '${d}d' : '${d}d ${hh}h';
+}
+
+String _fmtRelative(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 1) return 'just now';
+  if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+  if (diff.inDays < 1) return '${diff.inHours}h ago';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  return _fmtDate(dt.toIso8601String());
+}
+
+// ── Hero ─────────────────────────────────────────────────────────────────────
+
+class _HeroHeader extends StatelessWidget {
+  final MyAthleteEntity athlete;
+  const _HeroHeader({required this.athlete});
 
   @override
   Widget build(BuildContext context) {
@@ -89,210 +594,159 @@ class _HeroAppBar extends StatelessWidget {
         .join()
         .toUpperCase();
 
-    return SliverAppBar(
-      expandedHeight: 220,
-      pinned: true,
-      backgroundColor: AppColors.primary,
-      foregroundColor: Colors.white,
-      elevation: 0,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF0D47A1), Color(0xFF1976D2)],
-            ),
-          ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 48, 20, 20),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0D47A1), Color(0xFF1976D2)],
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  const SizedBox(width: 12),
                   CircleAvatar(
-                    radius: 38,
-                    backgroundColor: Colors.white.withValues(alpha: 0.2),
+                    radius: 32,
+                    backgroundColor: Colors.white.withValues(alpha: 0.18),
                     child: Text(initials,
                         style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 30,
+                            fontSize: 22,
                             fontWeight: FontWeight.bold)),
                   ),
-                  const SizedBox(height: 12),
-                  Text(athlete.name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
-                  Text(athlete.email,
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 13)),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(athlete.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(athlete.email,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.75),
+                                fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                 ],
               ),
-            ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    if (athlete.sportName != null)
+                      _heroChip(Icons.sports, athlete.sportName!),
+                    if (athlete.gender != null)
+                      _heroChip(Icons.person, athlete.gender!),
+                    if (athlete.status != null)
+                      _heroChip(Icons.circle, athlete.status!),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
-}
 
-// ── Quick Stats Chips ─────────────────────────────────────────────────────────
-
-class _QuickStatsRow extends StatelessWidget {
-  final MyAthleteEntity athlete;
-  const _QuickStatsRow({required this.athlete});
-
-  @override
-  Widget build(BuildContext context) {
-    final chips = <_ChipData>[];
-    if (athlete.sportName != null)
-      chips.add(_ChipData(Icons.sports, athlete.sportName!, AppColors.primary));
-    if (athlete.gender != null)
-      chips.add(_ChipData(Icons.person, athlete.gender!, AppColors.vitalBP));
-    if (athlete.status != null)
-      chips.add(_ChipData(
-        Icons.circle,
-        athlete.status!,
-        athlete.status?.toLowerCase() == 'active'
-            ? AppColors.success
-            : AppColors.subtext,
-      ));
-
-    if (chips.isEmpty) return const SizedBox.shrink();
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: chips
-          .map((c) => Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: c.color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: c.color.withValues(alpha: 0.25)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(c.icon, size: 13, color: c.color),
-                    const SizedBox(width: 5),
-                    Text(c.label,
-                        style: TextStyle(
-                            color: c.color,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600)),
-                  ],
-                ),
-              ))
-          .toList(),
-    );
-  }
-}
-
-class _ChipData {
-  final IconData icon;
-  final String label;
-  final Color color;
-  const _ChipData(this.icon, this.label, this.color);
-}
-
-// ── Section Header ────────────────────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  const _SectionHeader({required this.icon, required this.title});
-
-  @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          Icon(icon, size: 16, color: AppColors.primary),
-          const SizedBox(width: 6),
-          Text(title,
-              style: const TextStyle(
-                  color: AppColors.text,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.2)),
-        ],
+  Widget _heroChip(IconData icon, String label) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 11, color: Colors.white),
+            const SizedBox(width: 4),
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600)),
+          ],
+        ),
       );
 }
 
-// ── Health Metrics Card ───────────────────────────────────────────────────────
+// ── Date Range Pill ──────────────────────────────────────────────────────────
 
-class _HealthMetricsCard extends StatelessWidget {
+class _DateRangePill extends StatelessWidget {
   final int athleteId;
-  const _HealthMetricsCard({required this.athleteId});
+  const _DateRangePill({required this.athleteId});
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<AthleteHealthMetricsCubit, AthleteHealthMetricsState>(
       builder: (context, state) {
+        final from = state.fromDate;
+        final to = state.toDate;
+        final label = (from == null || to == null)
+            ? 'Select date range'
+            : '${_d(from)}  →  ${_d(to)}';
+
         return Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
           decoration: BoxDecoration(
             color: AppColors.surface,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.border),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.05),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              // ── Date picker header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                child: Row(
-                  children: [
-                    const Icon(Icons.date_range_outlined,
-                        size: 16, color: AppColors.subtext),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _dateLabel(state),
-                        style: const TextStyle(
-                            color: AppColors.subtext, fontSize: 13),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => _pickRange(context, state, athleteId),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryLight,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.tune, size: 13, color: AppColors.primary),
-                            SizedBox(width: 4),
-                            Text('Change',
-                                style: TextStyle(
-                                    color: AppColors.primary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+              const Icon(Icons.date_range_outlined,
+                  size: 16, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(label,
+                    style: const TextStyle(
+                        color: AppColors.text,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+              ),
+              TextButton.icon(
+                onPressed: () => _pickRange(context, state),
+                icon: const Icon(Icons.tune, size: 14),
+                label: const Text('Change'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(0, 32),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w700),
                 ),
               ),
-              const Divider(height: 1, color: AppColors.border),
-
-              _HealthBody(state: state, athleteId: athleteId),
             ],
           ),
         );
@@ -300,21 +754,11 @@ class _HealthMetricsCard extends StatelessWidget {
     );
   }
 
-  String _dateLabel(AthleteHealthMetricsState state) {
-    final from = state.fromDate;
-    final to = state.toDate;
-    if (from == null || to == null) return 'Select a date range';
-    return '${_d(from)}  →  ${_d(to)}';
-  }
-
   String _d(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
   Future<void> _pickRange(
-    BuildContext context,
-    AthleteHealthMetricsState state,
-    int athleteId,
-  ) async {
+      BuildContext context, AthleteHealthMetricsState state) async {
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
@@ -339,201 +783,222 @@ class _HealthMetricsCard extends StatelessWidget {
   }
 }
 
-// ── Health Body ───────────────────────────────────────────────────────────────
+// ── Health Section ───────────────────────────────────────────────────────────
 
-class _HealthBody extends StatelessWidget {
-  final AthleteHealthMetricsState state;
+class _HealthSection extends StatelessWidget {
   final int athleteId;
-  const _HealthBody({required this.state, required this.athleteId});
+  const _HealthSection({required this.athleteId});
 
   @override
   Widget build(BuildContext context) {
-    switch (state.status) {
-      case AthleteHealthMetricsStatus.loading:
-        return const Padding(
-          padding: EdgeInsets.all(40),
-          child: Center(
-            child: CircularProgressIndicator(color: AppColors.primary),
-          ),
-        );
-
-      case AthleteHealthMetricsStatus.error:
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.errorBg,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.error_outline,
-                    color: AppColors.error, size: 32),
-              ),
-              const SizedBox(height: 12),
-              Text(state.errorMessage ?? 'Load nahi hua',
-                  style: const TextStyle(
-                      color: AppColors.subtext, fontSize: 13),
-                  textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              TextButton.icon(
-                onPressed: () {
-                  if (state.fromDate != null && state.toDate != null) {
-                    context.read<AthleteHealthMetricsCubit>().fetchMetrics(
-                          athleteId,
-                          fromDate: state.fromDate!,
-                          toDate: state.toDate!,
-                        );
-                  }
-                },
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Retry'),
-                style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-              ),
-            ],
-          ),
-        );
-
-      case AthleteHealthMetricsStatus.loaded:
-        final dailyList = (state.metrics?.raw['data'] as List?) ?? [];
-        if (dailyList.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(32),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.bar_chart_rounded,
-                      color: AppColors.subtext, size: 40),
-                  SizedBox(height: 12),
-                  Text('Is period mein koi data nahi mila',
-                      style:
-                          TextStyle(color: AppColors.subtext, fontSize: 13),
-                      textAlign: TextAlign.center),
-                ],
-              ),
-            ),
-          );
-        }
-        final days =
-            dailyList.map((d) => d as Map<String, dynamic>).toList();
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Heart Rate line chart (top, prominent)
-              if (_hasHR(days)) ...[
-                _ChartHeader(
-                    icon: Icons.favorite_rounded,
-                    title: 'Heart Rate Trend',
-                    color: const Color(0xFFEF5350)),
-                const SizedBox(height: 10),
-                _HRLineChart(days: days),
-                const SizedBox(height: 20),
-              ],
-
-              // ── Stress line chart
-              if (_hasStress(days)) ...[
-                _ChartHeader(
-                    icon: Icons.psychology_outlined,
-                    title: 'Stress Trend',
-                    color: AppColors.vitalStress),
-                const SizedBox(height: 10),
-                _StressLineChart(days: days),
-                const SizedBox(height: 20),
-              ],
-
-              // ── Daily breakdown
-              _ChartHeader(
-                  icon: Icons.calendar_today_outlined,
-                  title: 'Daily Breakdown',
-                  color: AppColors.primary),
-              const SizedBox(height: 10),
-              for (var i = 0; i < days.length; i++)
-                _DailyCard(day: days[i], initiallyExpanded: i == 0),
-            ],
-          ),
-        );
-
-      case AthleteHealthMetricsStatus.initial:
-        return const Padding(
-          padding: EdgeInsets.all(32),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+    return BlocBuilder<AthleteHealthMetricsCubit, AthleteHealthMetricsState>(
+      builder: (context, state) {
+        switch (state.status) {
+          case AthleteHealthMetricsStatus.initial:
+            return _EmptyHint(
+                icon: Icons.date_range_outlined,
+                text: 'Pick a date range to view metrics');
+          case AthleteHealthMetricsStatus.loading:
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 60),
+              child:
+                  Center(child: CircularProgressIndicator(color: AppColors.primary)),
+            );
+          case AthleteHealthMetricsStatus.error:
+            return _ErrorView(
+              message: state.errorMessage ?? 'Failed to load',
+              onRetry: () {
+                if (state.fromDate != null && state.toDate != null) {
+                  context.read<AthleteHealthMetricsCubit>().fetchMetrics(
+                        athleteId,
+                        fromDate: state.fromDate!,
+                        toDate: state.toDate!,
+                      );
+                }
+              },
+            );
+          case AthleteHealthMetricsStatus.loaded:
+            final days = ((state.metrics?.raw['data'] as List?) ?? [])
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList();
+            if (days.isEmpty) {
+              return _EmptyHint(
+                  icon: Icons.bar_chart_rounded,
+                  text: 'No data found for this period');
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.date_range_outlined,
-                    color: AppColors.subtext, size: 40),
-                SizedBox(height: 12),
-                Text('Upar se date range select karein',
-                    style:
-                        TextStyle(color: AppColors.subtext, fontSize: 13),
-                    textAlign: TextAlign.center),
+                _OverviewStats(days: days),
+                const SizedBox(height: 16),
+                if (_hasHR(days)) ...[
+                  _SectionHeader(
+                      icon: Icons.favorite_rounded, title: 'Heart Rate Trend'),
+                  const SizedBox(height: 10),
+                  _HRTrendCard(days: days),
+                  const SizedBox(height: 22),
+                ],
+                _SectionHeader(
+                    icon: Icons.calendar_today_outlined,
+                    title: 'Daily Breakdown'),
+                const SizedBox(height: 10),
+                for (var i = 0; i < days.length; i++)
+                  _DailyCard(
+                      day: days[i],
+                      athleteId: athleteId,
+                      initiallyExpanded: i == 0),
               ],
-            ),
-          ),
-        );
-    }
+            );
+        }
+      },
+    );
   }
-
-  bool _hasHR(List<Map<String, dynamic>> days) => days.any((d) {
-        final stats = d['aggregated_stats'] as Map<String, dynamic>? ?? {};
-        return stats['heart_rate'] is Map;
-      });
-
-  bool _hasStress(List<Map<String, dynamic>> days) => days.any((d) {
-        final stats = d['aggregated_stats'] as Map<String, dynamic>? ?? {};
-        final v = stats['stress'];
-        return v is num && v > 0;
-      });
 }
 
-// ── Chart Header ──────────────────────────────────────────────────────────────
+// ── Overview Stats ───────────────────────────────────────────────────────────
 
-class _ChartHeader extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final Color color;
-  const _ChartHeader(
-      {required this.icon, required this.title, required this.color});
+class _OverviewStats extends StatelessWidget {
+  final List<Map<String, dynamic>> days;
+  const _OverviewStats({required this.days});
 
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context) {
+    int totalReadings = 0;
+    final hrVals = <double>[];
+    int sleepCount = 0;
+
+    for (final d in days) {
+      final health = d['health'];
+      if (health is Map<String, dynamic>) {
+        final t = health['total_readings'];
+        if (t is num) totalReadings += t.toInt();
+        final stats = health['aggregated_stats'];
+        if (stats is Map<String, dynamic>) {
+          final hr = stats['heart_rate'];
+          if (hr is Map) {
+            final avg = (hr['avg'] as num?)?.toDouble();
+            if (avg != null) hrVals.add(avg);
+          }
+        }
+      }
+      if (d['sleep'] != null) sleepCount++;
+    }
+
+    final overallHR = hrVals.isEmpty
+        ? null
+        : hrVals.reduce((a, b) => a + b) / hrVals.length;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
         children: [
-          Icon(icon, size: 15, color: color),
-          const SizedBox(width: 6),
-          Text(title,
-              style: TextStyle(
-                  color: color,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.2)),
+          _OverviewTile(
+            icon: Icons.calendar_today_outlined,
+            label: 'Days',
+            value: '${days.length}',
+            color: AppColors.primary,
+          ),
+          _divider(),
+          _OverviewTile(
+            icon: Icons.favorite,
+            label: 'Avg HR',
+            value: overallHR == null
+                ? '--'
+                : overallHR.toStringAsFixed(0),
+            suffix: overallHR == null ? null : 'bpm',
+            color: _hrColor,
+          ),
+        
         ],
+      ),
+    );
+  }
+
+  Widget _divider() => Container(
+        width: 1,
+        height: 36,
+        color: AppColors.borderLight,
       );
 }
 
-// ── Heart Rate Line Chart ─────────────────────────────────────────────────────
-
-class _HRLineChart extends StatelessWidget {
-  final List<Map<String, dynamic>> days;
-  const _HRLineChart({required this.days});
+class _OverviewTile extends StatelessWidget {
+  final IconData icon;
+  final String label, value;
+  final String? suffix;
+  final Color color;
+  const _OverviewTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    this.suffix,
+  });
 
   @override
   Widget build(BuildContext context) {
-    const color = Color(0xFFEF5350);
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(height: 4),
+          RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: value,
+                  style: TextStyle(
+                      color: color,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      height: 1),
+                ),
+                if (suffix != null)
+                  TextSpan(
+                    text: ' $suffix',
+                    style: TextStyle(
+                        color: color.withValues(alpha: 0.7),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(label,
+              style: const TextStyle(
+                  color: AppColors.subtext,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+}
 
-    final entries = <_DayEntry>[];
+// ── Heart Rate Trend Card ────────────────────────────────────────────────────
+
+class _HRTrendCard extends StatelessWidget {
+  final List<Map<String, dynamic>> days;
+  const _HRTrendCard({required this.days});
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = <_HRDay>[];
     for (final d in days) {
-      final stats = d['aggregated_stats'] as Map<String, dynamic>? ?? {};
+      final stats = _statsOfDay(d);
       final hr = stats['heart_rate'];
       if (hr is Map<String, dynamic>) {
         final avg = (hr['avg'] as num?)?.toDouble();
         final min = (hr['min'] as num?)?.toDouble();
         final max = (hr['max'] as num?)?.toDouble();
         if (avg != null) {
-          entries.add(_DayEntry(
+          entries.add(_HRDay(
             dateStr: d['date'] as String? ?? '',
             avg: avg,
             min: min ?? avg,
@@ -544,377 +1009,33 @@ class _HRLineChart extends StatelessWidget {
     }
     if (entries.isEmpty) return const SizedBox.shrink();
 
-    final avgSpots = entries
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value.avg))
-        .toList();
-    final maxSpots = entries
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value.max))
-        .toList();
-    final minSpots = entries
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value.min))
-        .toList();
+    final avgSpots = <FlSpot>[];
+    final maxSpots = <FlSpot>[];
+    final minSpots = <FlSpot>[];
+    for (var i = 0; i < entries.length; i++) {
+      avgSpots.add(FlSpot(i.toDouble(), entries[i].avg));
+      maxSpots.add(FlSpot(i.toDouble(), entries[i].max));
+      minSpots.add(FlSpot(i.toDouble(), entries[i].min));
+    }
 
     final allVals = entries.expand((e) => [e.min, e.max]);
-    final maxY = (allVals.reduce(math.max) + 15).roundToDouble();
-    final minY = (allVals.reduce(math.min) - 15).clamp(0.0, double.infinity);
-
-    final overallAvg = entries.map((e) => e.avg).reduce((a, b) => a + b) /
-        entries.length;
-    final overallMin = entries.map((e) => e.min).reduce(math.min);
-    final overallMax = entries.map((e) => e.max).reduce(math.max);
-
-    return _VitalChartCard(
-      color: color,
-      avgLabel: '${overallAvg.toStringAsFixed(0)} bpm avg',
-      statsRow: '↓ ${overallMin.toStringAsFixed(0)}   avg ${overallAvg.toStringAsFixed(0)}   ↑ ${overallMax.toStringAsFixed(0)}',
-      unit: 'bpm',
-      chart: _buildChart(avgSpots, maxSpots, minSpots, minY, maxY, color,
-          entries.map((e) => e.dateStr).toList()),
-    );
-  }
-
-  Widget _buildChart(
-    List<FlSpot> avg,
-    List<FlSpot> max,
-    List<FlSpot> min,
-    double minY,
-    double maxY,
-    Color color,
-    List<String> dates,
-  ) {
-    return SizedBox(
-      height: 160,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(0, 8, 16, 8),
-        child: LineChart(
-          LineChartData(
-            minY: minY,
-            maxY: maxY,
-            clipData: const FlClipData.all(),
-            gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              horizontalInterval: 20,
-              getDrawingHorizontalLine: (_) =>
-                  FlLine(color: AppColors.borderLight, strokeWidth: 1),
-            ),
-            borderData: FlBorderData(show: false),
-            titlesData: FlTitlesData(
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 38,
-                  interval: 20,
-                  getTitlesWidget: (v, _) => Text('${v.toInt()}',
-                      style: const TextStyle(
-                          color: AppColors.subtext, fontSize: 10)),
-                ),
-              ),
-              rightTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false)),
-              topTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false)),
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 34,
-                  interval: dates.length > 10
-                      ? (dates.length / 6).ceilToDouble()
-                      : 1,
-                  getTitlesWidget: (v, _) {
-                    final i = v.toInt();
-                    if (i < 0 || i >= dates.length || i.toDouble() != v) {
-                      return const SizedBox.shrink();
-                    }
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        _shortDate(dates[i]),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            color: AppColors.subtext,
-                            fontSize: 9,
-                            height: 1.2),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            lineBarsData: [
-              // max (faded)
-              LineChartBarData(
-                spots: max,
-                isCurved: true,
-                curveSmoothness: 0.3,
-                color: color.withValues(alpha: 0.25),
-                barWidth: 1.5,
-                dotData: const FlDotData(show: false),
-                dashArray: [4, 4],
-              ),
-              // avg (solid, prominent)
-              LineChartBarData(
-                spots: avg,
-                isCurved: true,
-                curveSmoothness: 0.35,
-                color: color,
-                barWidth: 2.5,
-                dotData: FlDotData(
-                  show: true,
-                  getDotPainter: (spot, _, __, index) => FlDotCirclePainter(
-                    radius: index == avg.length - 1 ? 5 : 2.5,
-                    color: color,
-                    strokeWidth: 2,
-                    strokeColor: Colors.white,
-                  ),
-                ),
-                belowBarData: BarAreaData(
-                  show: true,
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      color.withValues(alpha: 0.18),
-                      color.withValues(alpha: 0.0),
-                    ],
-                  ),
-                ),
-              ),
-              // min (faded)
-              LineChartBarData(
-                spots: min,
-                isCurved: true,
-                curveSmoothness: 0.3,
-                color: color.withValues(alpha: 0.25),
-                barWidth: 1.5,
-                dotData: const FlDotData(show: false),
-                dashArray: [4, 4],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _shortDate(String raw) {
-    try {
-      final d = DateTime.parse(raw).toLocal();
-      const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      // 2-line label: "Wed\n8 May"
-      return '${wd[d.weekday - 1]}\n${d.day} ${mo[d.month - 1]}';
-    } catch (_) {
-      return '';
-    }
-  }
-}
-
-// ── Stress Line Chart ─────────────────────────────────────────────────────────
-
-class _StressLineChart extends StatelessWidget {
-  final List<Map<String, dynamic>> days;
-  const _StressLineChart({required this.days});
-
-  @override
-  Widget build(BuildContext context) {
-    const color = Color(0xFF26A69A);
-
-    final entries = <_SimpleEntry>[];
-    for (final d in days) {
-      final stats = d['aggregated_stats'] as Map<String, dynamic>? ?? {};
-      final v = stats['stress'];
-      if (v is num && v > 0) {
-        entries.add(_SimpleEntry(
-          dateStr: d['date'] as String? ?? '',
-          avg: v.toDouble(),
-          min: v.toDouble(),
-          max: v.toDouble(),
-        ));
-      }
-    }
-    if (entries.isEmpty) return const SizedBox.shrink();
-
-    return _SimpleLineChartCard(entries: entries, color: color, unit: '');
-  }
-}
-
-// ── Reusable simple line chart card ──────────────────────────────────────────
-
-class _SimpleLineChartCard extends StatelessWidget {
-  final List<_SimpleEntry> entries;
-  final Color color;
-  final String unit;
-  const _SimpleLineChartCard(
-      {required this.entries, required this.color, required this.unit});
-
-  @override
-  Widget build(BuildContext context) {
-    final spots = entries
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value.avg))
-        .toList();
-
-    final vals = entries.map((e) => e.avg);
-    final maxV = vals.reduce(math.max);
-    final minV = vals.reduce(math.min);
-    final range = maxV - minV;
-    final pad = range < 5 ? 5.0 : range * 0.25;
-    final maxY = maxV + pad;
-    final minY = (minV - pad).clamp(0.0, double.infinity);
+    final maxY = (allVals.reduce(math.max) + 12).roundToDouble();
+    final minY = (allVals.reduce(math.min) - 12).clamp(0.0, double.infinity);
 
     final overallAvg =
         entries.map((e) => e.avg).reduce((a, b) => a + b) / entries.length;
     final overallMin = entries.map((e) => e.min).reduce(math.min);
     final overallMax = entries.map((e) => e.max).reduce(math.max);
 
-    return _VitalChartCard(
-      color: color,
-      avgLabel:
-          '${overallAvg.toStringAsFixed(1)}$unit avg',
-      statsRow:
-          '↓ ${overallMin.toStringAsFixed(1)}$unit   avg ${overallAvg.toStringAsFixed(1)}$unit   ↑ ${overallMax.toStringAsFixed(1)}$unit',
-      unit: unit,
-      chart: SizedBox(
-        height: 120,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 8, 16, 8),
-          child: LineChart(
-            LineChartData(
-              minY: minY,
-              maxY: maxY,
-              clipData: const FlClipData.all(),
-              gridData: FlGridData(
-                show: true,
-                drawVerticalLine: false,
-                getDrawingHorizontalLine: (_) =>
-                    FlLine(color: AppColors.borderLight, strokeWidth: 1),
-              ),
-              borderData: FlBorderData(show: false),
-              titlesData: FlTitlesData(
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 38,
-                    getTitlesWidget: (v, _) => Text(
-                      v.toStringAsFixed(0),
-                      style: const TextStyle(
-                          color: AppColors.subtext, fontSize: 10),
-                    ),
-                  ),
-                ),
-                rightTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false)),
-                topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false)),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 34,
-                    interval: entries.length > 10
-                        ? (entries.length / 6).ceilToDouble()
-                        : 1,
-                    getTitlesWidget: (v, _) {
-                      final i = v.toInt();
-                      if (i < 0 || i >= entries.length || i.toDouble() != v) {
-                        return const SizedBox.shrink();
-                      }
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          _shortDate(entries[i].dateStr),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                              color: AppColors.subtext,
-                              fontSize: 9,
-                              height: 1.2),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: spots,
-                  isCurved: true,
-                  curveSmoothness: 0.35,
-                  color: color,
-                  barWidth: 2.5,
-                  dotData: FlDotData(
-                    show: true,
-                    getDotPainter: (spot, _, __, index) => FlDotCirclePainter(
-                      radius: index == spots.length - 1 ? 5 : 2.5,
-                      color: color,
-                      strokeWidth: 2,
-                      strokeColor: Colors.white,
-                    ),
-                  ),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        color.withValues(alpha: 0.18),
-                        color.withValues(alpha: 0.0),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _shortDate(String raw) {
-    try {
-      final d = DateTime.parse(raw);
-      const m = ['J','F','M','A','M','J','J','A','S','O','N','D'];
-      return '${d.day}${m[d.month - 1]}';
-    } catch (_) {
-      return '';
-    }
-  }
-}
-
-// ── Vital Chart Card (container used by all charts) ───────────────────────────
-
-class _VitalChartCard extends StatelessWidget {
-  final Color color;
-  final String avgLabel;
-  final String statsRow;
-  final String unit;
-  final Widget chart;
-  const _VitalChartCard({
-    required this.color,
-    required this.avgLabel,
-    required this.statsRow,
-    required this.unit,
-    required this.chart,
-  });
-
-  @override
-  Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.06),
-            blurRadius: 12,
+            color: _hrColor.withValues(alpha: 0.06),
+            blurRadius: 14,
             offset: const Offset(0, 4),
           ),
         ],
@@ -923,111 +1044,311 @@ class _VitalChartCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(avgLabel,
-                    style: TextStyle(
-                        color: color,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800)),
+                RichText(
+                  text: TextSpan(children: [
+                    TextSpan(
+                      text: overallAvg.toStringAsFixed(0),
+                      style: const TextStyle(
+                          color: _hrColor,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          height: 1),
+                    ),
+                    const TextSpan(
+                      text: '  bpm avg',
+                      style: TextStyle(
+                          color: _hrColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ]),
+                ),
                 const Spacer(),
-                Text(statsRow,
-                    style: const TextStyle(
-                        color: AppColors.textHint, fontSize: 10)),
+                _RangePill(
+                  min: overallMin,
+                  max: overallMax,
+                  color: _hrColor,
+                ),
               ],
             ),
           ),
-          chart,
+          SizedBox(
+            height: 180,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(4, 10, 16, 12),
+              child: LineChart(
+                LineChartData(
+                  minY: minY,
+                  maxY: maxY,
+                  clipData: const FlClipData.all(),
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: 20,
+                    getDrawingHorizontalLine: (_) =>
+                        FlLine(color: AppColors.borderLight, strokeWidth: 1),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 36,
+                        interval: 20,
+                        getTitlesWidget: (v, _) => Text('${v.toInt()}',
+                            style: const TextStyle(
+                                color: AppColors.subtext, fontSize: 10)),
+                      ),
+                    ),
+                    rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 32,
+                        interval: entries.length > 10
+                            ? (entries.length / 6).ceilToDouble()
+                            : 1,
+                        getTitlesWidget: (v, _) {
+                          final i = v.toInt();
+                          if (i < 0 ||
+                              i >= entries.length ||
+                              i.toDouble() != v) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              _shortDate(entries[i].dateStr),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  color: AppColors.subtext,
+                                  fontSize: 9,
+                                  height: 1.2),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: maxSpots,
+                      isCurved: true,
+                      curveSmoothness: 0.3,
+                      color: _hrColor.withValues(alpha: 0.25),
+                      barWidth: 1.5,
+                      dotData: const FlDotData(show: false),
+                      dashArray: [4, 4],
+                    ),
+                    LineChartBarData(
+                      spots: avgSpots,
+                      isCurved: true,
+                      curveSmoothness: 0.35,
+                      color: _hrColor,
+                      barWidth: 2.6,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (s, _, __, index) => FlDotCirclePainter(
+                          radius: index == avgSpots.length - 1 ? 5 : 2.6,
+                          color: _hrColor,
+                          strokeWidth: 2,
+                          strokeColor: Colors.white,
+                        ),
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            _hrColor.withValues(alpha: 0.18),
+                            _hrColor.withValues(alpha: 0.0),
+                          ],
+                        ),
+                      ),
+                    ),
+                    LineChartBarData(
+                      spots: minSpots,
+                      isCurved: true,
+                      curveSmoothness: 0.3,
+                      color: _hrColor.withValues(alpha: 0.25),
+                      barWidth: 1.5,
+                      dotData: const FlDotData(show: false),
+                      dashArray: [4, 4],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              children: [
+                _Legend(color: _hrColor, label: 'Avg', solid: true),
+                const SizedBox(width: 14),
+                _Legend(
+                    color: _hrColor.withValues(alpha: 0.6),
+                    label: 'Min / Max',
+                    solid: false),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  String _shortDate(String raw) {
+    try {
+      final d = DateTime.parse(raw).toLocal();
+      const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const mo = [
+        'Jan','Feb','Mar','Apr','May','Jun',
+        'Jul','Aug','Sep','Oct','Nov','Dec'
+      ];
+      return '${wd[d.weekday - 1]}\n${d.day} ${mo[d.month - 1]}';
+    } catch (_) {
+      return '';
+    }
+  }
+}
+
+class _Legend extends StatelessWidget {
+  final Color color;
+  final String label;
+  final bool solid;
+  const _Legend(
+      {required this.color, required this.label, required this.solid});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 3,
+          decoration: BoxDecoration(
+            color: solid ? color : null,
+            border: solid
+                ? null
+                : Border(
+                    top: BorderSide(color: color, width: 2, style: BorderStyle.solid),
+                  ),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(label,
+            style: TextStyle(
+                color: color,
+                fontSize: 10,
+                fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+}
+
+class _RangePill extends StatelessWidget {
+  final double min, max;
+  final Color color;
+  const _RangePill(
+      {required this.min, required this.max, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        '↓ ${min.toStringAsFixed(0)}   ↑ ${max.toStringAsFixed(0)}',
+        style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.3),
       ),
     );
   }
 }
 
-// ── Daily Card ────────────────────────────────────────────────────────────────
+// ── Daily Card ───────────────────────────────────────────────────────────────
 
 class _DailyCard extends StatefulWidget {
   final Map<String, dynamic> day;
+  final int athleteId;
   final bool initiallyExpanded;
-  const _DailyCard({required this.day, this.initiallyExpanded = false});
+  const _DailyCard({
+    required this.day,
+    required this.athleteId,
+    this.initiallyExpanded = false,
+  });
 
   @override
   State<_DailyCard> createState() => _DailyCardState();
 }
 
-class _DailyCardState extends State<_DailyCard>
-    with SingleTickerProviderStateMixin {
+class _DailyCardState extends State<_DailyCard> {
   late bool _expanded = widget.initiallyExpanded;
 
   @override
   Widget build(BuildContext context) {
     final day = widget.day;
     final dateStr = day['date'] as String? ?? '';
-    final stats = day['aggregated_stats'] as Map<String, dynamic>? ?? {};
+    final health = day['health'] is Map<String, dynamic>
+        ? day['health'] as Map<String, dynamic>
+        : null;
+    final stats = _statsOfDay(day);
+    final totalReadings = (health?['total_readings'] as num?)?.toInt() ?? 0;
+    final hours = (health?['hours'] as List?) ?? const [];
 
-    double? toDouble(dynamic v) =>
-        v == null ? null : v is num ? v.toDouble() : double.tryParse(v.toString());
-    int? toInt(dynamic v) =>
-        v == null ? null : v is num ? v.toInt() : int.tryParse(v.toString());
+    final hr = stats['heart_rate'] is Map<String, dynamic>
+        ? stats['heart_rate'] as Map<String, dynamic>
+        : null;
 
-    Map<String, dynamic>? asMap(String key) {
-      final v = stats[key];
-      return v is Map<String, dynamic> ? v : null;
-    }
+    final hrAvg = (hr?['avg'] as num?)?.toDouble();
+    final hrMin = (hr?['min'] as num?)?.toDouble();
+    final hrMax = (hr?['max'] as num?)?.toDouble();
 
-    final heartRate = asMap('heart_rate');
-    final spo2 = asMap('spo2');
-    final bodyTemp = asMap('body_temp');
-    final hrv = asMap('hrv');
-    final sleep = asMap('sleep');
-    final steps = toInt(stats['steps']);
-    final calories = toDouble(stats['calories']);
-    final stress = toInt(stats['stress']);
-    final sleepMinutes =
-        stats['sleep'] is num ? (stats['sleep'] as num).toInt() : null;
+    final sleep = day['sleep'] is Map<String, dynamic>
+        ? day['sleep'] as Map<String, dynamic>
+        : null;
+    final rr = day['rr_intervals'] is Map<String, dynamic>
+        ? day['rr_intervals'] as Map<String, dynamic>
+        : null;
 
-    final hasAny = heartRate != null ||
-        spo2 != null ||
-        bodyTemp != null ||
-        hrv != null ||
-        sleep != null ||
-        sleepMinutes != null ||
-        steps != null ||
-        calories != null ||
-        stress != null;
-
-    final hrAvg = heartRate != null ? toDouble(heartRate['avg']) : null;
-    final hrMin = heartRate != null ? toDouble(heartRate['min']) : null;
-    final hrMax = heartRate != null ? toDouble(heartRate['max']) : null;
+    final hasBody =
+        hr != null || sleep != null || rr != null || hours.isNotEmpty;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderLight),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Tappable header: date + at-a-glance HR + expand chevron
           InkWell(
-            onTap: hasAny ? () => setState(() => _expanded = !_expanded) : null,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight,
-                borderRadius: BorderRadius.vertical(
-                  top: const Radius.circular(16),
-                  bottom: _expanded || !hasAny
-                      ? Radius.zero
-                      : const Radius.circular(16),
-                ),
-              ),
+            onTap: hasBody ? () => setState(() => _expanded = !_expanded) : null,
+            borderRadius: BorderRadius.vertical(
+              top: const Radius.circular(16),
+              bottom: _expanded ? Radius.zero : const Radius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1038,71 +1359,58 @@ class _DailyCardState extends State<_DailyCard>
                       const SizedBox(width: 6),
                       Text(_fmtDate(dateStr),
                           style: const TextStyle(
-                              color: AppColors.primary,
+                              color: AppColors.text,
                               fontSize: 13,
                               fontWeight: FontWeight.w700)),
+                      const SizedBox(width: 8),
+                      if (totalReadings > 0)
+                        Text('• ${_fmtNum(totalReadings)} rdg',
+                            style: const TextStyle(
+                                color: AppColors.subtext,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500)),
                       const Spacer(),
-                      if (hrAvg != null && hrAvg > 0)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color:
-                                const Color(0xFFEF5350).withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.favorite,
-                                  size: 11, color: Color(0xFFEF5350)),
-                              const SizedBox(width: 4),
-                              Text('${hrAvg.toStringAsFixed(0)} bpm',
-                                  style: const TextStyle(
-                                      color: Color(0xFFEF5350),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700)),
-                            ],
-                          ),
+                      if (hrAvg != null)
+                        _PillBadge(
+                          icon: Icons.favorite,
+                          text: '${hrAvg.toStringAsFixed(0)} bpm',
+                          color: _hrColor,
                         ),
-                      if (hasAny) ...[
-                        const SizedBox(width: 6),
+                      if (hasBody) ...[
+                        const SizedBox(width: 4),
                         AnimatedRotation(
                           turns: _expanded ? 0.5 : 0,
                           duration: const Duration(milliseconds: 200),
                           child: const Icon(Icons.keyboard_arrow_down,
-                              size: 18, color: AppColors.primary),
+                              size: 20, color: AppColors.subtext),
                         ),
                       ],
                     ],
                   ),
-                  if (hrAvg != null && hrMin != null && hrMax != null && hrMax > hrMin) ...[
-                    const SizedBox(height: 8),
+                  if (hrAvg != null &&
+                      hrMin != null &&
+                      hrMax != null &&
+                      hrMax > hrMin) ...[
+                    const SizedBox(height: 10),
                     _HrRangeBar(min: hrMin, avg: hrAvg, max: hrMax),
                   ],
                 ],
               ),
             ),
           ),
-
-          // Expandable body
           AnimatedSize(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
             child: !_expanded
                 ? const SizedBox(width: double.infinity)
-                : _ExpandedBody(
-                    heartRate: heartRate,
-                    spo2: spo2,
-                    bodyTemp: bodyTemp,
-                    hrv: hrv,
+                : _DailyExpanded(
+                    hr: hr,
                     sleep: sleep,
-                    steps: steps,
-                    calories: calories,
-                    stress: stress,
-                    sleepMinutes: sleepMinutes,
-                    hasAny: hasAny,
+                    rr: rr,
+                    hours: hours,
+                    athleteId: widget.athleteId,
+                    dateStr: dateStr,
                   ),
           ),
         ],
@@ -1111,7 +1419,38 @@ class _DailyCardState extends State<_DailyCard>
   }
 }
 
-// ── Inline HR range bar shown in collapsed header ────────────────────────────
+class _PillBadge extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final Color color;
+  const _PillBadge(
+      {required this.icon, required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(text,
+              style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700)),
+        ],
+      ),
+    );
+  }
+}
+
+// ── HR range bar ─────────────────────────────────────────────────────────────
 
 class _HrRangeBar extends StatelessWidget {
   final double min, avg, max;
@@ -1119,12 +1458,10 @@ class _HrRangeBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Bar's domain pinned to [min, max] for the day. Avg marker position
-    // shows where the average falls within that range.
     final span = max - min;
     final pct = span > 0 ? ((avg - min) / span).clamp(0.0, 1.0) : 0.5;
     const trackColor = Color(0xFFFCD9D9);
-    const fillColor = Color(0xFFEF5350);
+    const fillColor = _hrColor;
 
     return LayoutBuilder(
       builder: (context, c) {
@@ -1132,10 +1469,12 @@ class _HrRangeBar extends StatelessWidget {
         return Row(
           children: [
             SizedBox(
-              width: 32,
+              width: 30,
               child: Text(min.toStringAsFixed(0),
                   style: const TextStyle(
-                      color: AppColors.subtext, fontSize: 10)),
+                      color: AppColors.subtext,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600)),
             ),
             Expanded(
               child: Stack(
@@ -1150,7 +1489,7 @@ class _HrRangeBar extends StatelessWidget {
                     ),
                   ),
                   Positioned(
-                    left: ((w - 64) * pct).clamp(0.0, w - 64) - 5,
+                    left: ((w - 60) * pct).clamp(0.0, w - 60) - 5,
                     top: 0,
                     child: Container(
                       width: 10,
@@ -1166,11 +1505,13 @@ class _HrRangeBar extends StatelessWidget {
               ),
             ),
             SizedBox(
-              width: 32,
+              width: 30,
               child: Text(max.toStringAsFixed(0),
                   textAlign: TextAlign.right,
                   style: const TextStyle(
-                      color: AppColors.subtext, fontSize: 10)),
+                      color: AppColors.subtext,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600)),
             ),
           ],
         );
@@ -1179,171 +1520,79 @@ class _HrRangeBar extends StatelessWidget {
   }
 }
 
-// ── Expanded body of daily card ──────────────────────────────────────────────
+// ── Daily expanded body ──────────────────────────────────────────────────────
 
-class _ExpandedBody extends StatelessWidget {
-  final Map<String, dynamic>? heartRate, spo2, bodyTemp, hrv, sleep;
-  final int? steps, stress, sleepMinutes;
-  final double? calories;
-  final bool hasAny;
+class _DailyExpanded extends StatelessWidget {
+  final Map<String, dynamic>? hr, sleep, rr;
+  final List hours;
+  final int athleteId;
+  final String dateStr;
 
-  const _ExpandedBody({
-    required this.heartRate,
-    required this.spo2,
-    required this.bodyTemp,
-    required this.hrv,
+  const _DailyExpanded({
+    required this.hr,
     required this.sleep,
-    required this.steps,
-    required this.calories,
-    required this.stress,
-    required this.sleepMinutes,
-    required this.hasAny,
+    required this.rr,
+    required this.hours,
+    required this.athleteId,
+    required this.dateStr,
   });
-
-  double? _toDouble(dynamic v) =>
-      v == null ? null : v is num ? v.toDouble() : double.tryParse(v.toString());
 
   @override
   Widget build(BuildContext context) {
-    final heartRate = this.heartRate;
-    final spo2 = this.spo2;
-    final bodyTemp = this.bodyTemp;
-    final hrv = this.hrv;
-    final sleep = this.sleep;
-    final steps = this.steps;
-    final calories = this.calories;
-    final stress = this.stress;
-    final sleepMinutes = this.sleepMinutes;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (!hasAny)
-            const Padding(
-              padding: EdgeInsets.all(14),
-              child: Text('Koi vital data nahi mila',
-                  style:
-                      TextStyle(color: AppColors.subtext, fontSize: 12)),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final tileW = (constraints.maxWidth - 10) / 2;
-                  return Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      if (heartRate != null)
-                        _VitalTile(
-                          width: tileW,
-                          icon: Icons.favorite,
-                          label: 'Heart Rate',
-                          avg: _toDouble(heartRate['avg']) ?? 0,
-                          min: _toDouble(heartRate['min']) ?? 0,
-                          max: _toDouble(heartRate['max']) ?? 0,
-                          unit: 'bpm',
-                          color: const Color(0xFFEF5350),
-                        ),
-                      if (spo2 != null)
-                        _VitalTile(
-                          width: tileW,
-                          icon: Icons.bloodtype,
-                          label: 'SpO2',
-                          avg: _toDouble(spo2['avg']) ?? 0,
-                          min: _toDouble(spo2['min']) ?? 0,
-                          max: _toDouble(spo2['max']) ?? 0,
-                          unit: '%',
-                          color: const Color(0xFF5C6BC0),
-                        ),
-                      if (bodyTemp != null)
-                        _VitalTile(
-                          width: tileW,
-                          icon: Icons.thermostat,
-                          label: 'Body Temp',
-                          avg: _toDouble(bodyTemp['avg']) ?? 0,
-                          min: _toDouble(bodyTemp['min']) ?? 0,
-                          max: _toDouble(bodyTemp['max']) ?? 0,
-                          unit: '°C',
-                          color: const Color(0xFFD97706),
-                        ),
-                      if (hrv != null)
-                        _VitalTile(
-                          width: tileW,
-                          icon: Icons.monitor_heart_outlined,
-                          label: 'HRV',
-                          avg: _toDouble(hrv['avg']) ?? 0,
-                          min: _toDouble(hrv['min']) ?? 0,
-                          max: _toDouble(hrv['max']) ?? 0,
-                          unit: 'ms',
-                          color: AppColors.primary,
-                        ),
-                      if (steps != null)
-                        _SimpleTile(
-                          width: tileW,
-                          icon: Icons.directions_walk,
-                          label: 'Steps',
-                          value: '$steps',
-                          color: AppColors.primary,
-                        ),
-                      if (calories != null)
-                        _SimpleTile(
-                          width: tileW,
-                          icon: Icons.local_fire_department,
-                          label: 'Calories',
-                          value: calories.toStringAsFixed(0),
-                          color: const Color(0xFFE65100),
-                        ),
-                      if (stress != null)
-                        _SimpleTile(
-                          width: tileW,
-                          icon: Icons.psychology,
-                          label: 'Stress',
-                          value: '$stress',
-                          color: const Color(0xFF26A69A),
-                        ),
-                      if (sleep != null)
-                        _SleepTile(width: tileW, sleep: sleep),
-                      if (sleepMinutes != null && sleep == null)
-                        _SimpleTile(
-                          width: tileW,
-                          icon: Icons.bedtime_outlined,
-                          label: 'Sleep',
-                          value: _fmtSleep(sleepMinutes),
-                          color: const Color(0xFF7B1FA2),
-                        ),
-                    ],
-                  );
-                },
-              ),
+        const Divider(height: 1, color: AppColors.borderLight),
+        if (hr != null)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: _VitalTile(
+              width: double.infinity,
+              icon: Icons.favorite,
+              label: 'Heart Rate',
+              avg: (hr!['avg'] as num?)?.toDouble() ?? 0,
+              min: (hr!['min'] as num?)?.toDouble() ?? 0,
+              max: (hr!['max'] as num?)?.toDouble() ?? 0,
+              unit: 'bpm',
+              color: _hrColor,
             ),
-        ],
+          ),
+        if (hours.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: _HourlyBreakdown(
+                hours: hours, athleteId: athleteId, dateStr: dateStr),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: _StatusBox(
+                  icon: Icons.bedtime_outlined,
+                  label: 'Sleep',
+                  present: sleep != null,
+                  color: _sleepColor,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _StatusBox(
+                  icon: Icons.show_chart,
+                  label: 'RR Intervals',
+                  present: rr != null,
+                  color: _rrColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
 
-String _fmtDate(String raw) {
-  try {
-    final d = DateTime.parse(raw);
-    const m = [
-      'Jan','Feb','Mar','Apr','May','Jun',
-      'Jul','Aug','Sep','Oct','Nov','Dec'
-    ];
-    return '${d.day} ${m[d.month - 1]} ${d.year}';
-  } catch (_) {
-    return raw;
-  }
-}
-
-String _fmtSleep(int minutes) {
-  final h = minutes ~/ 60;
-  final m = minutes % 60;
-  if (h == 0) return '${m}m';
-  if (m == 0) return '${h}h';
-  return '${h}h ${m}m';
-}
-
-// ── Vital Tile ────────────────────────────────────────────────────────────────
+// ── Vital Tile ───────────────────────────────────────────────────────────────
 
 class _VitalTile extends StatelessWidget {
   final double width;
@@ -1385,7 +1634,7 @@ class _VitalTile extends StatelessWidget {
                   style: TextStyle(
                       color: color,
                       fontSize: 10,
-                      fontWeight: FontWeight.w600),
+                      fontWeight: FontWeight.w700),
                   overflow: TextOverflow.ellipsis),
             ),
           ]),
@@ -1393,159 +1642,34 @@ class _VitalTile extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(avg.toStringAsFixed(1),
+              Text(avg.toStringAsFixed(0),
                   style: TextStyle(
                       color: color,
-                      fontSize: 22,
+                      fontSize: 24,
                       fontWeight: FontWeight.w800,
                       height: 1)),
-              const SizedBox(width: 3),
+              const SizedBox(width: 4),
               Padding(
                 padding: const EdgeInsets.only(bottom: 3),
                 child: Text(unit,
                     style: TextStyle(
                         color: color.withValues(alpha: 0.7),
-                        fontSize: 10)),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600)),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Row(children: [
-            _MiniChip(
-                text: '↓ ${min.toStringAsFixed(0)}', color: color),
+            _MiniChip(text: '↓ ${min.toStringAsFixed(0)}', color: color),
             const SizedBox(width: 4),
-            _MiniChip(
-                text: '↑ ${max.toStringAsFixed(0)}', color: color),
+            _MiniChip(text: '↑ ${max.toStringAsFixed(0)}', color: color),
           ]),
         ],
       ),
     );
   }
 }
-
-// ── Simple Tile ───────────────────────────────────────────────────────────────
-
-class _SimpleTile extends StatelessWidget {
-  final double width;
-  final IconData icon;
-  final String label, value;
-  final Color color;
-
-  const _SimpleTile({
-    required this.width,
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Icon(icon, size: 13, color: color),
-            const SizedBox(width: 5),
-            Text(label,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600)),
-          ]),
-          const SizedBox(height: 8),
-          Text(value,
-              style: TextStyle(
-                  color: color,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  height: 1)),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Sleep Tile ────────────────────────────────────────────────────────────────
-
-class _SleepTile extends StatelessWidget {
-  final double width;
-  final Map<String, dynamic> sleep;
-  const _SleepTile({required this.width, required this.sleep});
-
-  String _fmtMin(num? minutes) {
-    if (minutes == null) return '--';
-    final h = minutes.toInt() ~/ 60;
-    final m = minutes.toInt() % 60;
-    if (h == 0) return '${m}m';
-    if (m == 0) return '${h}h';
-    return '${h}h ${m}m';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const color = Color(0xFF7B1FA2);
-    final total = sleep['total_duration_minutes'] as num? ??
-        sleep['total_sleep_minutes'] as num? ??
-        sleep['duration_minutes'] as num? ??
-        sleep['total'] as num?;
-    final deep =
-        sleep['deep_sleep_minutes'] as num? ?? sleep['deep'] as num?;
-    final light =
-        sleep['light_sleep_minutes'] as num? ?? sleep['light'] as num?;
-
-    return Container(
-      width: width,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Icon(Icons.bedtime_outlined, size: 13, color: color),
-            const SizedBox(width: 5),
-            const Text('Sleep',
-                style: TextStyle(
-                    color: color,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600)),
-          ]),
-          const SizedBox(height: 8),
-          Text(_fmtMin(total),
-              style: const TextStyle(
-                  color: color,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  height: 1)),
-          if (deep != null || light != null) ...[
-            const SizedBox(height: 6),
-            Row(children: [
-              if (deep != null)
-                _MiniChip(text: 'Deep ${_fmtMin(deep)}', color: color),
-              if (deep != null && light != null) const SizedBox(width: 4),
-              if (light != null)
-                _MiniChip(text: 'Light ${_fmtMin(light)}', color: color),
-            ]),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ── Mini Chip ─────────────────────────────────────────────────────────────────
 
 class _MiniChip extends StatelessWidget {
   final String text;
@@ -1555,21 +1679,597 @@ class _MiniChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.13),
         borderRadius: BorderRadius.circular(5),
       ),
       child: Text(text,
           style: TextStyle(
-              color: color.withValues(alpha: 0.8),
+              color: color.withValues(alpha: 0.85),
               fontSize: 9,
-              fontWeight: FontWeight.w600)),
+              fontWeight: FontWeight.w700)),
     );
   }
 }
 
-// ── Info Card ─────────────────────────────────────────────────────────────────
+class _StatusBox extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool present;
+  final Color color;
+  const _StatusBox({
+    required this.icon,
+    required this.label,
+    required this.present,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = present ? color : AppColors.subtext;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: present ? color.withValues(alpha: 0.07) : AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: present
+                ? color.withValues(alpha: 0.2)
+                : AppColors.borderLight),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: c),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    color: c,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700)),
+          ),
+          Text(present ? 'Available' : 'No data',
+              style: TextStyle(
+                  color: c.withValues(alpha: 0.8),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Hourly Breakdown ─────────────────────────────────────────────────────────
+
+class _HourlyBreakdown extends StatelessWidget {
+  final List hours;
+  final int athleteId;
+  final String dateStr;
+  const _HourlyBreakdown({
+    required this.hours,
+    required this.athleteId,
+    required this.dateStr,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = <_HourEntry>[];
+    for (final h in hours) {
+      if (h is! Map<String, dynamic>) continue;
+      final hour = (h['hour'] as num?)?.toInt();
+      if (hour == null) continue;
+      final stats = h['aggregated_stats'] as Map<String, dynamic>? ?? {};
+      final hr = stats['heart_rate'];
+      double? avg;
+      if (hr is Map<String, dynamic>) {
+        avg = (hr['avg'] as num?)?.toDouble();
+      }
+      entries.add(_HourEntry(hour: hour, hrAvg: avg));
+    }
+    entries.sort((a, b) => a.hour.compareTo(b.hour));
+    if (entries.isEmpty) return const SizedBox.shrink();
+
+    final hrVals = entries.where((e) => e.hrAvg != null).map((e) => e.hrAvg!);
+    final maxHR = hrVals.isEmpty ? 0.0 : hrVals.reduce(math.max);
+    final minHR = hrVals.isEmpty ? 0.0 : hrVals.reduce(math.min);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.access_time_outlined,
+                  size: 13, color: _hrColor),
+              const SizedBox(width: 5),
+              const Text('Hourly Heart Rate',
+                  style: TextStyle(
+                      color: _hrColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700)),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.touch_app,
+                        size: 10, color: AppColors.primary),
+                    SizedBox(width: 3),
+                    Text('Tap to zoom',
+                        style: TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 110,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: entries.map((e) {
+                final pct = (maxHR > 0 && e.hrAvg != null)
+                    ? (e.hrAvg! / maxHR).clamp(0.0, 1.0)
+                    : 0.0;
+                final isHigh = e.hrAvg != null &&
+                    maxHR > minHR &&
+                    e.hrAvg! >= minHR + (maxHR - minHR) * 0.85;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(4),
+                      onTap: () => _openZoom(context, e.hour),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (e.hrAvg != null)
+                            Text(e.hrAvg!.toStringAsFixed(0),
+                                style: TextStyle(
+                                    color: isHigh
+                                        ? _hrColor
+                                        : _hrColor.withValues(alpha: 0.65),
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 2),
+                          Container(
+                            height: (74 * pct).clamp(2.0, 74.0),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: isHigh
+                                    ? [
+                                        _hrColor,
+                                        _hrColor.withValues(alpha: 0.5),
+                                      ]
+                                    : [
+                                        _hrColor.withValues(alpha: 0.7),
+                                        _hrColor.withValues(alpha: 0.2),
+                                      ],
+                              ),
+                              borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(3)),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(e.hour.toString().padLeft(2, '0'),
+                              style: const TextStyle(
+                                  color: AppColors.subtext,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openZoom(BuildContext context, int hour) {
+    final date = DateTime.tryParse(dateStr);
+    if (date == null) return;
+    context
+        .read<AthleteHourRawCubit>()
+        .fetchHour(athleteId: athleteId, date: date, hour: hour);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: context.read<AthleteHourRawCubit>(),
+        child: _HourRawSheet(
+            dateStr: dateStr, hour: hour, athleteId: athleteId),
+      ),
+    );
+  }
+}
+
+class _HourEntry {
+  final int hour;
+  final double? hrAvg;
+  const _HourEntry({required this.hour, required this.hrAvg});
+}
+
+// ── Hour Raw Bottom Sheet (zoom-on-demand) ───────────────────────────────────
+
+class _HourRawSheet extends StatelessWidget {
+  final String dateStr;
+  final int hour;
+  final int athleteId;
+  const _HourRawSheet({
+    required this.dateStr,
+    required this.hour,
+    required this.athleteId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.78,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      builder: (ctx, scrollCtrl) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.bg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: _hrColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.zoom_in,
+                        size: 18, color: _hrColor),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_fmtDate(dateStr),
+                            style: const TextStyle(
+                                color: AppColors.text,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700)),
+                        Text(
+                          '${hour.toString().padLeft(2, '0')}:00 – ${hour.toString().padLeft(2, '0')}:59',
+                          style: const TextStyle(
+                              color: AppColors.subtext,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close, size: 20),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: AppColors.border),
+            Expanded(
+              child: BlocBuilder<AthleteHourRawCubit, AthleteHourRawState>(
+                builder: (context, state) {
+                  switch (state.status) {
+                    case AthleteHourRawStatus.loading:
+                    case AthleteHourRawStatus.initial:
+                      return const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.primary),
+                      );
+                    case AthleteHourRawStatus.error:
+                      return _ErrorView(
+                        message: state.errorMessage ?? 'Failed to load',
+                        onRetry: () {
+                          final d = DateTime.tryParse(dateStr);
+                          if (d != null) {
+                            context.read<AthleteHourRawCubit>().fetchHour(
+                                athleteId: athleteId, date: d, hour: hour);
+                          }
+                        },
+                      );
+                    case AthleteHourRawStatus.loaded:
+                      final raw = state.data?.healthRaw ?? const [];
+                      if (raw.isEmpty) {
+                        return const _EmptyHint(
+                            icon: Icons.inbox_outlined,
+                            text: 'No raw readings for this hour');
+                      }
+                      return _HourRawBody(
+                          raw: raw, scrollController: scrollCtrl);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HourRawBody extends StatelessWidget {
+  final List<Map<String, dynamic>> raw;
+  final ScrollController scrollController;
+  const _HourRawBody({required this.raw, required this.scrollController});
+
+  @override
+  Widget build(BuildContext context) {
+    final hrSpots = <FlSpot>[];
+    double? hrMin, hrMax;
+    int? firstEpoch;
+
+    for (final r in raw) {
+      final ts = r['recorded_at'];
+      DateTime? dt;
+      if (ts is String) dt = DateTime.tryParse(ts);
+      if (dt == null) continue;
+      firstEpoch ??= dt.millisecondsSinceEpoch;
+      final x = (dt.millisecondsSinceEpoch - firstEpoch) / 1000.0;
+      final hr = _toDouble(r['heart_rate']);
+      if (hr != null) {
+        hrSpots.add(FlSpot(x, hr));
+        hrMin = hrMin == null ? hr : math.min(hrMin, hr);
+        hrMax = hrMax == null ? hr : math.max(hrMax, hr);
+      }
+    }
+
+    final hrAvg = hrSpots.isEmpty
+        ? null
+        : hrSpots.map((s) => s.y).reduce((a, b) => a + b) / hrSpots.length;
+
+    return ListView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _SheetStat(
+                  label: 'Readings',
+                  value: _fmtNum(raw.length),
+                  color: AppColors.primary),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _SheetStat(
+                  label: 'HR avg',
+                  value: hrAvg?.toStringAsFixed(0) ?? '--',
+                  color: _hrColor),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _SheetStat(
+                label: 'HR range',
+                value:
+                    '${hrMin?.toStringAsFixed(0) ?? '--'}–${hrMax?.toStringAsFixed(0) ?? '--'}',
+                color: _hrColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (hrSpots.isNotEmpty) ...[
+          _SectionHeader(
+              icon: Icons.favorite, title: 'Heart Rate (second-by-second)'),
+          const SizedBox(height: 8),
+          _RawLineChart(
+            spots: hrSpots,
+            color: _hrColor,
+            minY: ((hrMin ?? 0) - 5).clamp(0, double.infinity).toDouble(),
+            maxY: (hrMax ?? 0) + 5,
+            unit: 'bpm',
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _SheetStat extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  const _SheetStat(
+      {required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(value,
+              style: TextStyle(
+                  color: color,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800)),
+          const SizedBox(height: 2),
+          Text(label,
+              style: const TextStyle(
+                  color: AppColors.subtext,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
+  }
+}
+
+class _RawLineChart extends StatelessWidget {
+  final List<FlSpot> spots;
+  final Color color;
+  final double minY, maxY;
+  final String unit;
+  const _RawLineChart({
+    required this.spots,
+    required this.color,
+    required this.minY,
+    required this.maxY,
+    required this.unit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final maxX = spots.isEmpty ? 1.0 : spots.last.x;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 12, 16, 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: SizedBox(
+        height: 200,
+        child: LineChart(
+          LineChartData(
+            minY: minY,
+            maxY: maxY,
+            minX: 0,
+            maxX: maxX,
+            clipData: const FlClipData.all(),
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: false,
+              getDrawingHorizontalLine: (_) =>
+                  FlLine(color: AppColors.borderLight, strokeWidth: 1),
+            ),
+            borderData: FlBorderData(show: false),
+            titlesData: FlTitlesData(
+              leftTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 36,
+                  getTitlesWidget: (v, _) => Text(v.toStringAsFixed(0),
+                      style: const TextStyle(
+                          color: AppColors.subtext, fontSize: 10)),
+                ),
+              ),
+              rightTitles:
+                  const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              topTitles:
+                  const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              bottomTitles: AxisTitles(
+                sideTitles: SideTitles(
+                  showTitles: true,
+                  reservedSize: 26,
+                  interval: maxX > 0 ? (maxX / 6).ceilToDouble() : 1,
+                  getTitlesWidget: (v, _) {
+                    final sec = v.toInt();
+                    final mm = (sec ~/ 60).toString().padLeft(2, '0');
+                    final ss = (sec % 60).toString().padLeft(2, '0');
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text('$mm:$ss',
+                          style: const TextStyle(
+                              color: AppColors.subtext, fontSize: 9)),
+                    );
+                  },
+                ),
+              ),
+            ),
+            lineTouchData: LineTouchData(
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipItems: (touched) => touched
+                    .map((s) => LineTooltipItem(
+                          '${s.y.toStringAsFixed(0)} $unit',
+                          TextStyle(
+                              color: color, fontWeight: FontWeight.w700),
+                        ))
+                    .toList(),
+              ),
+            ),
+            lineBarsData: [
+              LineChartBarData(
+                spots: spots,
+                isCurved: false,
+                color: color,
+                barWidth: 1.6,
+                dotData: const FlDotData(show: false),
+                belowBarData: BarAreaData(
+                  show: true,
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      color.withValues(alpha: 0.2),
+                      color.withValues(alpha: 0.0),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Section header / shared bits ─────────────────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  const _SectionHeader({required this.icon, required this.title});
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Text(title,
+              style: const TextStyle(
+                  color: AppColors.text,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2)),
+        ],
+      );
+}
 
 class _InfoCard extends StatelessWidget {
   final List<_InfoRow> items;
@@ -1591,22 +2291,22 @@ class _InfoCard extends StatelessWidget {
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 13),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
                 child: Row(
                   children: [
                     SizedBox(
                       width: 120,
                       child: Text(visible[i].label,
                           style: const TextStyle(
-                              color: AppColors.subtext, fontSize: 13)),
+                              color: AppColors.subtext, fontSize: 12)),
                     ),
                     Expanded(
                       child: Text(visible[i].value!,
                           style: const TextStyle(
                               color: AppColors.text,
                               fontSize: 13,
-                              fontWeight: FontWeight.w500)),
+                              fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
@@ -1627,14 +2327,14 @@ class _InfoRow {
   const _InfoRow(this.label, this.value);
 }
 
-// ── Loading Banner ────────────────────────────────────────────────────────────
-
 class _LoadingBanner extends StatelessWidget {
+  const _LoadingBanner();
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.primaryLight,
         borderRadius: BorderRadius.circular(12),
@@ -1642,38 +2342,142 @@ class _LoadingBanner extends StatelessWidget {
       child: const Row(
         children: [
           SizedBox(
-            width: 16,
-            height: 16,
+            width: 14,
+            height: 14,
             child: CircularProgressIndicator(
                 strokeWidth: 2, color: AppColors.primary),
           ),
           SizedBox(width: 10),
-          Text('Loading full details...',
-              style: TextStyle(color: AppColors.primary, fontSize: 13)),
+          Text('Loading full details…',
+              style: TextStyle(color: AppColors.primary, fontSize: 12)),
         ],
       ),
     );
   }
 }
 
-// ── Data models ───────────────────────────────────────────────────────────────
+class _EmptyHint extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _EmptyHint({required this.icon, required this.text});
 
-class _DayEntry {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 36, color: AppColors.subtext),
+            const SizedBox(height: 10),
+            Text(text,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    color: AppColors.subtext, fontSize: 13)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorView({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: const BoxDecoration(
+              color: AppColors.errorBg,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.error_outline,
+                color: AppColors.error, size: 28),
+          ),
+          const SizedBox(height: 10),
+          Text(message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.subtext, fontSize: 12)),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Retry'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+bool _hasHR(List<Map<String, dynamic>> days) => days.any((d) {
+      final hr = _statsOfDay(d)['heart_rate'];
+      return hr is Map && hr['avg'] != null;
+    });
+
+class _HRDay {
   final String dateStr;
   final double avg, min, max;
-  const _DayEntry(
+  const _HRDay(
       {required this.dateStr,
       required this.avg,
       required this.min,
       required this.max});
 }
 
-class _SimpleEntry {
-  final String dateStr;
-  final double avg, min, max;
-  const _SimpleEntry(
-      {required this.dateStr,
-      required this.avg,
-      required this.min,
-      required this.max});
+double? _toDouble(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v);
+  return null;
+}
+
+Map<String, dynamic> _statsOfDay(Map<String, dynamic> d) {
+  final health = d['health'];
+  if (health is Map<String, dynamic>) {
+    final s = health['aggregated_stats'];
+    if (s is Map<String, dynamic>) return s;
+  }
+  final s = d['aggregated_stats'];
+  return s is Map<String, dynamic> ? s : const {};
+}
+
+String _fmtDate(String raw) {
+  try {
+    final d = DateTime.parse(raw);
+    const m = [
+      'Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec'
+    ];
+    return '${d.day} ${m[d.month - 1]} ${d.year}';
+  } catch (_) {
+    return raw;
+  }
+}
+
+String _fmtNum(int n) {
+  if (n < 1000) return '$n';
+  if (n < 1000000) return '${(n / 1000).toStringAsFixed(n < 10000 ? 1 : 0)}k';
+  return '${(n / 1000000).toStringAsFixed(1)}M';
 }

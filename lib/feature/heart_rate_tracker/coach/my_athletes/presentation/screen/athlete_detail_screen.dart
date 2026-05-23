@@ -4,6 +4,8 @@ import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 import '../../domain/entity/my_athlete_entity.dart';
 import '../cubit/athlete_detail_cubit.dart';
 import '../cubit/athlete_health_metrics_cubit.dart';
+import '../cubit/athlete_hour_raw_cubit.dart';
+import '../cubit/completed_tasks_cubit.dart';
 import '../cubit/my_athletes_cubit.dart';
 import '../layout/athlete_detail_mobile.dart';
 
@@ -31,6 +33,10 @@ class AthleteDetailScreen extends StatelessWidget {
               fromDate: DateTime.now().subtract(const Duration(days: 6)),
               toDate: DateTime.now(),
             ),
+        ),
+        BlocProvider(create: (_) => sl<AthleteHourRawCubit>()),
+        BlocProvider(
+          create: (_) => sl<CompletedTasksCubit>()..fetch(preview.id),
         ),
         BlocProvider.value(value: listCubit),
       ],

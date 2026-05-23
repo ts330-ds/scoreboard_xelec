@@ -14,6 +14,22 @@ DateTime? _parseTs(dynamic v) {
   return DateTime.tryParse(v.toString());
 }
 
+// anchor + offsetSeconds → "HH:MM" (local)
+String _fmtClock(DateTime anchor, int offsetSeconds) {
+  final dt = anchor.add(Duration(seconds: offsetSeconds)).toLocal();
+  final h = dt.hour.toString().padLeft(2, '0');
+  final m = dt.minute.toString().padLeft(2, '0');
+  return '$h:$m';
+}
+
+String _fmtClockSec(DateTime anchor, int offsetSeconds) {
+  final dt = anchor.add(Duration(seconds: offsetSeconds)).toLocal();
+  final h = dt.hour.toString().padLeft(2, '0');
+  final m = dt.minute.toString().padLeft(2, '0');
+  final s = dt.second.toString().padLeft(2, '0');
+  return '$h:$m:$s';
+}
+
 String _fmtElapsed(int totalSeconds) {
   if (totalSeconds < 0) totalSeconds = 0;
   final h = totalSeconds ~/ 3600;
@@ -49,7 +65,7 @@ class TaskResultScreen extends StatelessWidget {
               else if (state.status == TaskResultStatus.error)
                 SliverFillRemaining(
                   child: _ErrorView(
-                    message: state.errorMessage ?? 'Result load nahi hua',
+                    message: state.errorMessage ?? 'Failed to load result',
                     onRetry: () => context.read<TaskResultCubit>().load(),
                   ),
                 )
@@ -123,24 +139,36 @@ class _AppBar extends StatelessWidget {
                           fontSize: 20,
                           fontWeight: FontWeight.w700)),
                   const SizedBox(height: 4),
-                  Row(children: [
-                    const Icon(Icons.timer_outlined,
-                        size: 13, color: Colors.white60),
-                    const SizedBox(width: 4),
-                    Text('${task.duration} min',
-                        style:
-                            const TextStyle(color: Colors.white60, fontSize: 12)),
-                    if (task.assignedByName != null &&
-                        task.assignedBy != 'self') ...[
-                      const SizedBox(width: 12),
-                      const Icon(Icons.person_outline,
-                          size: 13, color: Colors.white60),
-                      const SizedBox(width: 4),
-                      Text(task.assignedByName!,
-                          style: const TextStyle(
-                              color: Colors.white60, fontSize: 12)),
-                    ],
-                  ]),
+                  Builder(builder: (_) {
+                    final isPending =
+                        task.status?.toLowerCase() == 'pending';
+                    final durMin = int.tryParse(task.duration) ?? 0;
+                    final showDuration = !isPending && durMin > 0;
+                    final showAssignedBy = task.assignedByName != null &&
+                        task.assignedBy != 'self';
+                    if (!showDuration && !showAssignedBy) {
+                      return const SizedBox.shrink();
+                    }
+                    return Row(children: [
+                      if (showDuration) ...[
+                        const Icon(Icons.timer_outlined,
+                            size: 13, color: Colors.white60),
+                        const SizedBox(width: 4),
+                        Text('$durMin min',
+                            style: const TextStyle(
+                                color: Colors.white60, fontSize: 12)),
+                      ],
+                      if (showAssignedBy) ...[
+                        if (showDuration) const SizedBox(width: 12),
+                        const Icon(Icons.person_outline,
+                            size: 13, color: Colors.white60),
+                        const SizedBox(width: 4),
+                        Text(task.assignedByName!,
+                            style: const TextStyle(
+                                color: Colors.white60, fontSize: 12)),
+                      ],
+                    ]);
+                  }),
                 ],
               ),
             ),
@@ -217,8 +245,8 @@ class _ResultBody extends StatelessWidget {
       duration = sessionEnd.difference(sessionStart);
     }
 
-    // X-axis anchor = first raw_data ka timestamp (recorded_at / timestamp).
-    // started_at/ended_at use NAHI karte — chart sirf actual data range dikhata hai.
+    // X-axis anchor = session.started_at (preferred) — labels real clock time
+    // show karenge. Agar sessionStart na ho to first raw_data timestamp pe fallback.
     DateTime? tsOf(Map<String, dynamic> r) =>
         _parseTs(r['recorded_at'] ?? r['timestamp']);
 
@@ -233,13 +261,13 @@ class _ResultBody extends StatelessWidget {
         sortedRaw.isNotEmpty ? tsOf(sortedRaw.first) : null;
     final DateTime? lastTs =
         sortedRaw.isNotEmpty ? tsOf(sortedRaw.last) : null;
+    final DateTime? anchor = sessionStart ?? firstTs;
 
     double elapsedFor(Map<String, dynamic> r, int fallbackIdx) {
-      if (firstTs == null) return fallbackIdx.toDouble();
+      if (anchor == null) return fallbackIdx.toDouble();
       final t = tsOf(r);
       if (t == null) return fallbackIdx.toDouble();
-      final s = t.difference(firstTs).inSeconds;
-      return s < 0 ? 0.0 : s.toDouble();
+      return t.difference(anchor).inSeconds.toDouble();
     }
 
     // Build chart spots — x = elapsed seconds from FIRST raw_data timestamp
@@ -257,10 +285,14 @@ class _ResultBody extends StatelessWidget {
       hrvSpots.add(FlSpot(elapsedFor(sortedRaw[i], i), v));
     }
 
-    // X-axis ka maxX = first se last raw_data ke beech ka span
-    final double totalSeconds = (firstTs != null && lastTs != null)
+    // X-axis ka maxX = session duration (preferred), warna first→last raw span
+    final double dataSpan = (firstTs != null && lastTs != null)
         ? lastTs.difference(firstTs).inSeconds.toDouble()
         : (hrSpots.isNotEmpty ? hrSpots.last.x : 0);
+    final double sessionSpanSec =
+        duration != null ? duration.inSeconds.toDouble() : 0;
+    final double totalSeconds =
+        sessionSpanSec > 0 ? sessionSpanSec : dataSpan;
 
     return [
       // Session info
@@ -277,6 +309,7 @@ class _ResultBody extends StatelessWidget {
           max: _toD(hrStats['max']),
           readings: rawList.length,
           totalSeconds: totalSeconds,
+          anchor: anchor,
         ),
         const SizedBox(height: 14),
       ],
@@ -295,6 +328,7 @@ class _ResultBody extends StatelessWidget {
           min: _toD(sugarStats['min']),
           max: _toD(sugarStats['max']),
           totalSeconds: totalSeconds,
+          anchor: anchor,
         ),
       ],
     ];
@@ -441,6 +475,7 @@ class _HeartRateHeroCard extends StatelessWidget {
   final double avg, min, max;
   final int readings;
   final double totalSeconds;
+  final DateTime? anchor;
 
   const _HeartRateHeroCard({
     required this.spots,
@@ -449,6 +484,7 @@ class _HeartRateHeroCard extends StatelessWidget {
     required this.max,
     required this.readings,
     required this.totalSeconds,
+    required this.anchor,
   });
 
   Color get _zoneColor {
@@ -598,7 +634,9 @@ class _HeartRateHeroCard extends StatelessWidget {
                               return Padding(
                                 padding: const EdgeInsets.only(top: 6),
                                 child: Text(
-                                  _fmtElapsed(v.toInt()),
+                                  anchor != null
+                                      ? _fmtClock(anchor!, v.toInt())
+                                      : _fmtElapsed(v.toInt()),
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.55),
                                     fontSize: 9,
@@ -642,7 +680,7 @@ class _HeartRateHeroCard extends StatelessWidget {
                               const Color(0xFF0D47A1),
                           getTooltipItems: (spots) => spots
                               .map((s) => LineTooltipItem(
-                                    '${s.y.toInt()} bpm  •  ${_fmtElapsed(s.x.toInt())}',
+                                    '${s.y.toInt()} bpm  •  ${anchor != null ? _fmtClockSec(anchor!, s.x.toInt()) : _fmtElapsed(s.x.toInt())}',
                                     const TextStyle(
                                         color: Colors.white,
                                         fontSize: 11,
@@ -911,6 +949,7 @@ class _HrvLineChart extends StatelessWidget {
   final List<FlSpot> spots;
   final double avg, min, max;
   final double totalSeconds;
+  final DateTime? anchor;
 
   const _HrvLineChart({
     required this.spots,
@@ -918,6 +957,7 @@ class _HrvLineChart extends StatelessWidget {
     required this.min,
     required this.max,
     required this.totalSeconds,
+    required this.anchor,
   });
 
   @override
@@ -1020,7 +1060,9 @@ class _HrvLineChart extends StatelessWidget {
                         return Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
-                            _fmtElapsed(v.toInt()),
+                            anchor != null
+                                ? _fmtClock(anchor!, v.toInt())
+                                : _fmtElapsed(v.toInt()),
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.45),
                               fontSize: 9,
@@ -1163,7 +1205,7 @@ class _EmptyView extends StatelessWidget {
           children: [
             Icon(Icons.assignment_outlined, size: 60, color: AppColors.subtext),
             SizedBox(height: 16),
-            Text('Koi result nahi mila',
+            Text('No result found',
                 style: TextStyle(color: AppColors.subtext, fontSize: 14)),
           ],
         ),

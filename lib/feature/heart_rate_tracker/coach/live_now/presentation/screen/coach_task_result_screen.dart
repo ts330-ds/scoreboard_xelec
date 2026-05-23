@@ -21,6 +21,22 @@ String _fmtElapsed(int totalSeconds) {
   return '$m:${s.toString().padLeft(2, '0')}';
 }
 
+// Helper: anchor + offsetSeconds → "HH:MM" (local time)
+String _fmtClock(DateTime anchor, int offsetSeconds) {
+  final dt = anchor.add(Duration(seconds: offsetSeconds)).toLocal();
+  final h = dt.hour.toString().padLeft(2, '0');
+  final m = dt.minute.toString().padLeft(2, '0');
+  return '$h:$m';
+}
+
+String _fmtClockSec(DateTime anchor, int offsetSeconds) {
+  final dt = anchor.add(Duration(seconds: offsetSeconds)).toLocal();
+  final h = dt.hour.toString().padLeft(2, '0');
+  final m = dt.minute.toString().padLeft(2, '0');
+  final s = dt.second.toString().padLeft(2, '0');
+  return '$h:$m:$s';
+}
+
 class CoachTaskResultScreen extends StatelessWidget {
   final int taskId;
   final String athleteName;
@@ -108,7 +124,7 @@ class _CoachTaskResultBody extends StatelessWidget {
 
           if (state.status == CoachTaskResultStatus.error) {
             return _ErrorView(
-              message: state.errorMessage ?? 'Kuch galat ho gaya',
+              message: state.errorMessage ?? 'Something went wrong',
               onRetry: () => context.read<CoachTaskResultCubit>().load(),
             );
           }
@@ -174,31 +190,49 @@ class _SessionView extends StatelessWidget {
           const SizedBox(height: 16),
         ],
 
-        // ── 2. Session info
+        // ── 2. Heart Rate Zones distribution
+        if (hasChart) ...[
+          _HrZonesCard(
+            spots: ([...session.rawData]
+                  ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt)))
+                .map((p) => FlSpot(
+                      p.recordedAt
+                          .difference(session.startedAt)
+                          .inSeconds
+                          .toDouble(),
+                      p.heartRate.toDouble(),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: 16),
+        ],
+
+        // ── 3. Session info
         _SessionInfoCard(session: session),
         const SizedBox(height: 16),
 
-        // ── 3. HRV chart
+        // ── 4. HRV chart
         Builder(builder: (context) {
-          // Anchor x-axis to first raw_data timestamp (HR chart se consistent)
+          // Anchor x-axis to session.startedAt so labels show clock time
           final sorted = [...session.rawData]
             ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
           if (sorted.isEmpty) return const SizedBox.shrink();
-          final firstTs = sorted.first.recordedAt;
+          final anchor = session.startedAt;
           final hrvSpots = <FlSpot>[];
           for (final p in sorted) {
             final v = p.sugarLevel;
             if (v == null || v <= 0) continue;
             hrvSpots.add(FlSpot(
-              p.recordedAt.difference(firstTs).inSeconds.toDouble(),
+              p.recordedAt.difference(anchor).inSeconds.toDouble(),
               v,
             ));
           }
           if (!hasChart || hrvSpots.length < 2) {
             return const SizedBox.shrink();
           }
-          final totalSec =
-              sorted.last.recordedAt.difference(firstTs).inSeconds.toDouble();
+          final sessionSpan = session.duration.inSeconds.toDouble();
+          final lastX = hrvSpots.last.x;
+          final totalSec = sessionSpan > 0 ? sessionSpan : lastX;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -210,6 +244,7 @@ class _SessionView extends StatelessWidget {
                 spots: hrvSpots,
                 statRange: session.stats.sugar,
                 totalSeconds: totalSec,
+                anchor: anchor,
               ),
             ],
           );
@@ -254,11 +289,11 @@ class _HeartRateHeroCard extends StatelessWidget {
     // Sort raw_data by recorded_at (oldest first) — entity reverses but be safe
     final sorted = [...session.rawData]
       ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
-    // Anchor x-axis to first raw_data point's recorded_at, not session.startedAt
-    final firstTs = sorted.first.recordedAt;
+    // Anchor x-axis to session.startedAt so labels show real clock time
+    final anchor = session.startedAt;
     final spots = sorted
         .map((p) => FlSpot(
-              p.recordedAt.difference(firstTs).inSeconds.toDouble(),
+              p.recordedAt.difference(anchor).inSeconds.toDouble(),
               p.heartRate.toDouble(),
             ))
         .toList();
@@ -268,8 +303,12 @@ class _HeartRateHeroCard extends StatelessWidget {
     final minBpm = bpms.reduce(math.min);
     final maxY = (maxBpm + 20).toDouble();
     final minY = ((minBpm - 20).clamp(0, 999)).toDouble();
-    final double maxX = spots.last.x > 0 ? spots.last.x : 1.0;
-    final double tickInterval = maxX / 4;
+    final sessionSpan = session.duration.inSeconds.toDouble();
+    final lastX = spots.isNotEmpty ? spots.last.x : 0.0;
+    final double maxX =
+        (sessionSpan > 0 ? sessionSpan : lastX).clamp(1.0, double.infinity);
+    final double minX = spots.isNotEmpty && spots.first.x < 0 ? spots.first.x : 0.0;
+    final double tickInterval = (maxX - minX) / 4;
 
     final avgBpm = stats.avg;
 
@@ -383,7 +422,7 @@ class _HeartRateHeroCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(0, 4, 16, 8),
               child: LineChart(
                 LineChartData(
-                  minX: 0,
+                  minX: minX,
                   maxX: maxX,
                   minY: minY,
                   maxY: maxY,
@@ -421,11 +460,11 @@ class _HeartRateHeroCard extends StatelessWidget {
                         reservedSize: 22,
                         interval: tickInterval,
                         getTitlesWidget: (v, _) {
-                          if (v < 0 || v > maxX) return const SizedBox.shrink();
+                          if (v < minX || v > maxX) return const SizedBox.shrink();
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
-                              _fmtElapsed(v.toInt()),
+                              _fmtClock(anchor, v.toInt()),
                               style: const TextStyle(
                                   color: AppColors.subtext, fontSize: 9),
                             ),
@@ -439,7 +478,7 @@ class _HeartRateHeroCard extends StatelessWidget {
                       getTooltipColor: (_) => AppColors.text,
                       getTooltipItems: (spots) => spots
                           .map((s) => LineTooltipItem(
-                                '${s.y.toInt()} bpm  •  ${_fmtElapsed(s.x.toInt())}',
+                                '${s.y.toInt()} bpm  •  ${_fmtClockSec(anchor, s.x.toInt())}',
                                 const TextStyle(
                                     color: Colors.white,
                                     fontSize: 11,
@@ -695,18 +734,202 @@ class _EmptyView extends StatelessWidget {
             Icon(Icons.bar_chart_rounded,
                 color: AppColors.subtext, size: 52),
             SizedBox(height: 16),
-            Text('Koi result nahi mila',
+            Text('No result found',
                 style: TextStyle(
                     color: AppColors.text,
                     fontSize: 16,
                     fontWeight: FontWeight.w600)),
             SizedBox(height: 6),
-            Text('Is task ka koi recorded session nahi hai',
+            Text('This task has no recorded session',
                 style:
                     TextStyle(color: AppColors.subtext, fontSize: 13)),
           ],
         ),
       );
+}
+
+// ── HR Zones Card ────────────────────────────────────────────────────────────
+
+class _HrZonesCard extends StatelessWidget {
+  final List<FlSpot> spots;
+  const _HrZonesCard({required this.spots});
+
+  // Zones based on absolute HR thresholds (age agnostic)
+  // Z1 Resting (<100), Z2 Fat Burn (100-120), Z3 Cardio (120-140),
+  // Z4 Peak (140-160), Z5 Max (>=160)
+  static const _zones = [
+    (label: 'Resting', color: Color(0xFF66BB6A), min: 0, max: 100),
+    (label: 'Fat Burn', color: Color(0xFF9CCC65), min: 100, max: 120),
+    (label: 'Cardio', color: Color(0xFFFFA726), min: 120, max: 140),
+    (label: 'Peak', color: Color(0xFFFB8C00), min: 140, max: 160),
+    (label: 'Max', color: Color(0xFFEF5350), min: 160, max: 999),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final counts = List<int>.filled(_zones.length, 0);
+    for (final s in spots) {
+      for (var i = 0; i < _zones.length; i++) {
+        if (s.y >= _zones[i].min && s.y < _zones[i].max) {
+          counts[i]++;
+          break;
+        }
+      }
+    }
+    final total = counts.fold<int>(0, (a, b) => a + b);
+    final dominant = total == 0
+        ? 0
+        : counts.indexOf(counts.reduce((a, b) => a > b ? a : b));
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                  color: _zones[dominant].color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10)),
+              child: Icon(Icons.bar_chart,
+                  color: _zones[dominant].color, size: 16),
+            ),
+            const SizedBox(width: 10),
+            const Text('Heart Rate Zones',
+                style: TextStyle(
+                    color: AppColors.text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700)),
+            const Spacer(),
+            if (total > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _zones[dominant].color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Mostly ${_zones[dominant].label}',
+                  style: TextStyle(
+                      color: _zones[dominant].color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700),
+                ),
+              ),
+          ]),
+
+          const SizedBox(height: 16),
+
+          // Stacked bar
+          if (total > 0)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Row(
+                children: List.generate(_zones.length, (i) {
+                  if (counts[i] == 0) return const SizedBox.shrink();
+                  return Expanded(
+                    flex: counts[i],
+                    child: Container(height: 14, color: _zones[i].color),
+                  );
+                }),
+              ),
+            )
+          else
+            Container(
+              height: 14,
+              decoration: BoxDecoration(
+                color: AppColors.borderLight,
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+
+          const SizedBox(height: 16),
+
+          // Legend rows
+          for (var i = 0; i < _zones.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: _ZoneRow(
+                color: _zones[i].color,
+                label: _zones[i].label,
+                range: i == _zones.length - 1
+                    ? '${_zones[i].min}+'
+                    : '${_zones[i].min}–${_zones[i].max - 1}',
+                seconds: counts[i],
+                pct: total == 0 ? 0 : counts[i] / total,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ZoneRow extends StatelessWidget {
+  final Color color;
+  final String label, range;
+  final int seconds;
+  final double pct;
+  const _ZoneRow({
+    required this.color,
+    required this.label,
+    required this.range,
+    required this.seconds,
+    required this.pct,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 8),
+      SizedBox(
+        width: 70,
+        child: Text(label,
+            style: const TextStyle(
+                color: AppColors.text,
+                fontSize: 12,
+                fontWeight: FontWeight.w600)),
+      ),
+      SizedBox(
+        width: 64,
+        child: Text('$range bpm',
+            style: const TextStyle(color: AppColors.subtext, fontSize: 11)),
+      ),
+      const Spacer(),
+      Text(_fmtElapsed(seconds),
+          style: const TextStyle(
+              color: AppColors.text,
+              fontSize: 12,
+              fontWeight: FontWeight.w700)),
+      const SizedBox(width: 10),
+      SizedBox(
+        width: 38,
+        child: Text('${(pct * 100).toStringAsFixed(0)}%',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+                color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+      ),
+    ]);
+  }
 }
 
 // ── HRV Line Chart (ECG style) ────────────────────────────────────────────────
@@ -717,11 +940,13 @@ class _HrvLineChart extends StatelessWidget {
   final List<FlSpot> spots;
   final StatRange statRange;
   final double totalSeconds;
+  final DateTime anchor;
 
   const _HrvLineChart({
     required this.spots,
     required this.statRange,
     required this.totalSeconds,
+    required this.anchor,
   });
 
   @override
@@ -826,7 +1051,7 @@ class _HrvLineChart extends StatelessWidget {
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
-                              _fmtElapsed(v.toInt()),
+                              _fmtClock(anchor, v.toInt()),
                               style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.45),
                                   fontSize: 9),

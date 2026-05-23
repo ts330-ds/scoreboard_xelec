@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/failure.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import '../../domain/entity/athlete_health_metrics_entity.dart';
+import '../../domain/entity/athlete_hour_raw_entity.dart';
+import '../../domain/entity/completed_task_entity.dart';
 import '../model/my_athlete_model.dart';
 
 class MyAthletesResult {
@@ -31,6 +33,14 @@ abstract interface class MyAthletesRemoteDataSource {
     required DateTime fromDate,
     required DateTime toDate,
   });
+
+  TaskEither<Failure, AthleteHourRawEntity> getHourRaw({
+    required int athleteId,
+    required DateTime date,
+    required int hour,
+  });
+
+  TaskEither<Failure, List<CompletedTaskEntity>> getCompletedTasks(int athleteId);
 }
 
 class MyAthletesRemoteDataSourceImpl implements MyAthletesRemoteDataSource {
@@ -49,7 +59,7 @@ class MyAthletesRemoteDataSourceImpl implements MyAthletesRemoteDataSource {
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
 
         try {
@@ -92,7 +102,7 @@ class MyAthletesRemoteDataSourceImpl implements MyAthletesRemoteDataSource {
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
 
         try {
@@ -117,7 +127,7 @@ class MyAthletesRemoteDataSourceImpl implements MyAthletesRemoteDataSource {
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
 
         try {
@@ -150,7 +160,7 @@ class MyAthletesRemoteDataSourceImpl implements MyAthletesRemoteDataSource {
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
 
         try {
@@ -177,6 +187,95 @@ class MyAthletesRemoteDataSourceImpl implements MyAthletesRemoteDataSource {
           ));
         } catch (e) {
           return left(ServerFailure('Failed to load health metrics: $e'));
+        }
+      });
+
+  @override
+  TaskEither<Failure, AthleteHourRawEntity> getHourRaw({
+    required int athleteId,
+    required DateTime date,
+    required int hour,
+  }) =>
+      TaskEither(() async {
+        final token = _token;
+        if (token == null || token.isEmpty) {
+          return left(const AuthFailure('Token not found, please login again'));
+        }
+
+        try {
+          final response = await _dio.get(
+            '/coach/health_metrics/$athleteId',
+            queryParameters: {
+              'date': _formatDate(date),
+              'hour': hour,
+            },
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          );
+
+          final dynamic data = response.data['data'] ?? response.data;
+          final Map<String, dynamic> raw = data is Map<String, dynamic>
+              ? data
+              : {'response': data};
+
+          return right(AthleteHourRawEntity(raw: raw));
+        } on DioException catch (e) {
+          return left(ServerFailure(
+            e.response?.data['message'] ??
+                e.message ??
+                'Failed to load hourly readings',
+          ));
+        } catch (e) {
+          return left(ServerFailure('Failed to load hourly readings: $e'));
+        }
+      });
+
+  @override
+  TaskEither<Failure, List<CompletedTaskEntity>> getCompletedTasks(
+          int athleteId) =>
+      TaskEither(() async {
+        final token = _token;
+        if (token == null || token.isEmpty) {
+          return left(const AuthFailure('Token not found, please login again'));
+        }
+
+        try {
+          final response = await _dio.get(
+            '/coach/completed_tasks/$athleteId',
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          );
+
+          final dynamic body = response.data;
+          final dynamic data = body is Map ? (body['data'] ?? body) : body;
+
+          List rawList;
+          if (data is List) {
+            rawList = data;
+          } else if (data is Map) {
+            rawList = (data['tasks'] ??
+                    data['completed_tasks'] ??
+                    data['items'] ??
+                    data['results'] ??
+                    const <dynamic>[])
+                as List;
+          } else {
+            rawList = const [];
+          }
+
+          final tasks = rawList
+              .whereType<Map>()
+              .map((e) =>
+                  CompletedTaskEntity(raw: Map<String, dynamic>.from(e)))
+              .toList();
+
+          return right(tasks);
+        } on DioException catch (e) {
+          return left(ServerFailure(
+            e.response?.data['message'] ??
+                e.message ??
+                'Failed to load completed tasks',
+          ));
+        } catch (e) {
+          return left(ServerFailure('Failed to load completed tasks: $e'));
         }
       });
 

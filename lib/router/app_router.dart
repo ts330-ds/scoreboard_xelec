@@ -14,7 +14,7 @@ import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentati
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/usecase/get_task_result_usecase.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_activity_mobile.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_history_mobile.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/presentation/screen/athlete_history_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_home_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_profile_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/screen/athlete_main_screen.dart';
@@ -609,7 +609,7 @@ final GoRouter appRouter = GoRouter(
                     ],
                   ),
                   content: const Text(
-                    'Kya aap app se bahar jaana chahte hain?',
+                    'Are you sure you want to exit the app?',
                     style: TextStyle(color: Color(0xFF6B7A8D)),
                   ),
                   actions: [
@@ -659,7 +659,7 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: HeartTrackerPaths.athleteHistory,
           pageBuilder: (context, state) =>
-              adaptivePage(state: state, child: const AthleteHistoryMobile()),
+              adaptivePage(state: state, child: const AthleteHistoryScreen()),
         ),
       ],
     ),

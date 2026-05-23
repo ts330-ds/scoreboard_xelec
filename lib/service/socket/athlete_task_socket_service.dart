@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+// import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as sio;
 
 class AthleteTaskSocketService {
@@ -24,12 +24,12 @@ class AthleteTaskSocketService {
 
   void connect(String baseUrl, String token) {
     if (_socket != null && _socket!.connected) {
-      debugPrint('[SESSION SOCKET] Already connected — skipping reconnect');
+      // debugPrint('[SESSION SOCKET] Already connected — skipping reconnect');
       return;
     }
 
     final url = _socketUrl(baseUrl);
-    debugPrint('[SESSION SOCKET] ▶ Connecting to $url');
+    // debugPrint('[SESSION SOCKET] ▶ Connecting to $url');
 
     _socket = sio.io(
       url,
@@ -45,31 +45,31 @@ class AthleteTaskSocketService {
 
     _socket!.onConnect((_) {
       _heartbeatCount = 0;
-      debugPrint('[SESSION SOCKET] ✅ Connected');
+      // debugPrint('[SESSION SOCKET] ✅ Connected');
     });
 
     _socket!.onDisconnect((_) {
-      debugPrint('[SESSION SOCKET] ❌ Disconnected (heartbeats sent: $_heartbeatCount)');
+      // debugPrint('[SESSION SOCKET] ❌ Disconnected (heartbeats sent: $_heartbeatCount)');
       onDisconnected?.call();
     });
 
     _socket!.onConnectError((err) {
-      debugPrint('[SESSION SOCKET] ⚠️ Connection error: $err');
+      // debugPrint('[SESSION SOCKET] ⚠️ Connection error: $err');
       onError?.call('Socket connection failed');
     });
 
     _socket!.on('task_result_saved', (data) {
-      debugPrint('[SESSION SOCKET] ← task_result_saved: $data');
+      // debugPrint('[SESSION SOCKET] ← task_result_saved: $data');
       if (data is Map<String, dynamic>) onTaskSaved?.call(data);
     });
 
     _socket!.on('recording_stopped', (data) {
-      debugPrint('[SESSION SOCKET] ← recording_stopped: $data');
+      // debugPrint('[SESSION SOCKET] ← recording_stopped: $data');
       onRecordingStopped?.call(data is Map<String, dynamic> ? data : {});
     });
 
     _socket!.on('request_error', (data) {
-      debugPrint('[SESSION SOCKET] ← request_error: $data');
+      // debugPrint('[SESSION SOCKET] ← request_error: $data');
       final msg = data is Map ? data['message']?.toString() ?? 'Socket error' : 'Socket error';
       if (_isAuthError(msg)) {
         onAuthFailure?.call(msg);
@@ -102,7 +102,7 @@ class AthleteTaskSocketService {
     double? hrv,
   }) {
     if (!isConnected) {
-      debugPrint('[SESSION SOCKET] submitHeartbeat skipped — not connected');
+      // debugPrint('[SESSION SOCKET] submitHeartbeat skipped — not connected');
       return;
     }
 
@@ -122,8 +122,8 @@ class AthleteTaskSocketService {
 
     // Every 10th heartbeat log karo taaki logs flood na ho
     if (_heartbeatCount % 10 == 1) {
-      debugPrint('[SESSION SOCKET] → task_result_submit #$_heartbeatCount | '
-          'task=$taskId hr=$heartRate spo2=$spo2 sugar=$sugarLevel hrv=$hrv stress=$stressLevel');
+      // debugPrint('[SESSION SOCKET] → task_result_submit #$_heartbeatCount | '
+          // 'task=$taskId hr=$heartRate spo2=$spo2 sugar=$sugarLevel hrv=$hrv stress=$stressLevel');
     }
 
     _socket!.emit('task_result_submit', payload);
@@ -131,15 +131,15 @@ class AthleteTaskSocketService {
 
   void stopTask(int taskId) {
     if (!isConnected) {
-      debugPrint('[SESSION SOCKET] stopTask skipped — not connected (task=$taskId)');
+      // debugPrint('[SESSION SOCKET] stopTask skipped — not connected (task=$taskId)');
       return;
     }
-    debugPrint('[SESSION SOCKET] → stop_task_result (task=$taskId)');
+    // debugPrint('[SESSION SOCKET] → stop_task_result (task=$taskId)');
     _socket!.emit('stop_task_result', taskId);
   }
 
   void disconnect() {
-    debugPrint('[SESSION SOCKET] disconnect() called (heartbeats sent: $_heartbeatCount)');
+    // debugPrint('[SESSION SOCKET] disconnect() called (heartbeats sent: $_heartbeatCount)');
     _heartbeatCount = 0;
     _socket?.disconnect();
     _socket?.dispose();

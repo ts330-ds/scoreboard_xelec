@@ -50,7 +50,7 @@ class _AthleteSleepDetailScreenState extends State<AthleteSleepDetailScreen> {
                       ? 'Sync sleep data'
                       : 'Connect device to sync',
                   onPressed: state.isConnected && !syncing
-                      ? () => context.read<HeartBleCubit>().syncAllHistory()
+                      ? () => context.read<HeartBleCubit>().syncAllHistory(force: true)
                       : null,
                   icon: syncing
                       ? const SizedBox(

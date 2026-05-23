@@ -70,7 +70,7 @@ class _AthleteProfileView extends StatelessWidget {
                   child: CircularProgressIndicator(color: AppColors.primary),
                 ),
               AthleteProfileStatus.error => ProfileErrorView(
-                  message: state.errorMessage ?? 'Kuch galat ho gaya',
+                  message: state.errorMessage ?? 'Something went wrong',
                   onRetry: () =>
                       context.read<AthleteProfileCubit>().fetchProfile(),
                 ),

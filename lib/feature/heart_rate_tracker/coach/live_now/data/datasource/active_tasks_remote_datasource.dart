@@ -29,7 +29,7 @@ class ActiveTasksRemoteDataSourceImpl implements ActiveTasksRemoteDataSource {
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
 
         try {
@@ -52,10 +52,10 @@ class ActiveTasksRemoteDataSourceImpl implements ActiveTasksRemoteDataSource {
           return left(ServerFailure(
             e.response?.data?['message'] ??
                 e.message ??
-                'Active tasks load nahi ho sakey',
+                'Failed to load active tasks',
           ));
         } catch (e) {
-          return left(ServerFailure('Active tasks load nahi ho sakey: $e'));
+          return left(ServerFailure('Failed to load active tasks: $e'));
         }
       });
 
@@ -65,7 +65,7 @@ class ActiveTasksRemoteDataSourceImpl implements ActiveTasksRemoteDataSource {
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
 
         try {

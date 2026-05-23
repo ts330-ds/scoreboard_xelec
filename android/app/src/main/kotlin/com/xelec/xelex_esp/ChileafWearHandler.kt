@@ -44,6 +44,35 @@ class ChileafWearHandler(
     private var pendingHrDataCount = 0
     private val accumulatedHrData = mutableListOf<HashMap<String, Any>>()
 
+    // ── Two-step accumulation: RR Record → RR Data ────────────────────────────
+    private val rrDataLock = Any()
+    private var pendingRrDataCount = 0
+    private val accumulatedRrData = mutableListOf<HashMap<String, Any>>()
+
+    // ── History range filter (0 / MAX = no filter, i.e. fetch everything) ────
+    // Set via syncHistoryRange(); record-callbacks compare item.stamp against
+    // this window before triggering per-stamp data fetches.
+    //
+    // IMPORTANT: Device records are SESSIONS, not point-in-time events.
+    // A record's `stamp` is when that session STARTED — it may contain readings
+    // spanning many hours after that. So we apply a session-buffer on the FROM
+    // side: include records that started up to SESSION_LOOKBACK_SEC before the
+    // requested window. The actual per-reading filter happens Flutter-side.
+    @Volatile private var rangeFromSec: Long = 0L
+    @Volatile private var rangeToSec: Long = Long.MAX_VALUE
+
+    // 24 hours — covers any realistic single recording session on the device.
+    private val SESSION_LOOKBACK_SEC = 24L * 60L * 60L
+
+    private fun stampInRange(stamp: Long): Boolean {
+        val fromWithBuffer = if (rangeFromSec > SESSION_LOOKBACK_SEC) {
+            rangeFromSec - SESSION_LOOKBACK_SEC
+        } else {
+            0L
+        }
+        return stamp in fromWithBuffer..rangeToSec
+    }
+
 
     // ── RSSI polling ──────────────────────────────────────────────────────────
     private fun startRssiPolling() {
@@ -75,7 +104,7 @@ class ChileafWearHandler(
             gattField.isAccessible = true
             gattField.get(requestHandler) as? BluetoothGatt
         } catch (e: Exception) {
-            Log.w(TAG, "getBluetoothGatt failed: ${e.message}")
+            // Log.w(TAG, "getBluetoothGatt failed: ${e.message}")
             null
         }
     }
@@ -85,11 +114,11 @@ class ChileafWearHandler(
         if (!wearManager.isConnected) return
         val gatt = getBluetoothGatt()
         if (gatt == null) {
-            Log.w(TAG, "triggerRssiRead: gatt is null")
+            // Log.w(TAG, "triggerRssiRead: gatt is null")
             return
         }
         val ok = gatt.readRemoteRssi()
-        Log.d(TAG, ">>> readRemoteRssi() called, queued=$ok")
+        // Log.d(TAG, ">>> readRemoteRssi() called, queued=$ok")
     }
 
     // ── Timeout runnables ─────────────────────────────────────────────────────
@@ -106,7 +135,7 @@ class ChileafWearHandler(
     private val connectTimeoutRunnable = Runnable {
         if (isConnecting) {
             isConnecting = false
-            Log.d(TAG, "Connection/reconnection timed out")
+            // Log.d(TAG, "Connection/reconnection timed out")
             sendToFlutter("STATUS", "Disconnected")
         }
     }
@@ -117,7 +146,7 @@ class ChileafWearHandler(
             stopRssiPolling()
             wearManager.disconnectDevice()
         } catch (e: Exception) {
-            Log.w(TAG, "Pre-init disconnect failed (safe to ignore): ${e.message}")
+            // Log.w(TAG, "Pre-init disconnect failed (safe to ignore): ${e.message}")
         }
         wearManager.setDebug(true)
         setupConnectionCallbacks()
@@ -151,7 +180,7 @@ class ChileafWearHandler(
             override fun onScanFailed(errorCode: Int) {
                 isScanning = false
                 sendToFlutter("STATUS", "Scan Failed (code: $errorCode)")
-                Log.e(TAG, "Scan Failed: $errorCode")
+                // Log.e(TAG, "Scan Failed: $errorCode")
             }
         })
     }
@@ -189,23 +218,56 @@ class ChileafWearHandler(
      * HR / RR / Step data is auto-fetched after their record headers arrive.
      */
     fun syncAllHistory() {
-        Log.d(TAG, ">>> syncAllHistory()")
+        // Log.d(TAG, ">>> syncAllHistory()")
+        rangeFromSec = 0L
+        rangeToSec = Long.MAX_VALUE
         sendToFlutter("HISTORY_SYNC_START", "syncing")
         try { wearManager.getHistoryOfHRRecord() } catch (e: Exception) { Log.w(TAG, "getHistoryOfHRRecord: ${e.message}") }
-        // Delay sleep request so it doesn't compete with the HR request in the device's BLE queue
+        // Stagger requests so they don't compete in the device's BLE queue
         mainHandler.postDelayed({
             try {
-                Log.d(TAG, ">>> calling getHistoryOfSleep()")
+                // Log.d(TAG, ">>> calling getHistoryOfRRRecord()")
+                wearManager.getHistoryOfRRRecord()
+            } catch (e: Exception) { Log.w(TAG, "getHistoryOfRRRecord: ${e.message}") }
+        }, 1500L)
+        mainHandler.postDelayed({
+            try {
+                // Log.d(TAG, ">>> calling getHistoryOfSleep()")
                 wearManager.getHistoryOfSleep()
-                Log.d(TAG, ">>> getHistoryOfSleep() called OK")
+                // Log.d(TAG, ">>> getHistoryOfSleep() called OK")
             } catch (e: Exception) { Log.e(TAG, "getHistoryOfSleep FAILED: ${e.message}") }
+        }, 3000L)
+    }
+
+    /**
+     * Range-filtered history sync.
+     *
+     * SDK does not expose a native range API — it always returns ALL record
+     * headers. We filter those headers in the callbacks so only stamps within
+     * [fromMs, toMs] trigger per-record `getHistoryOf*Data(stamp)` calls.
+     * This skips BLE traffic for out-of-range records.
+     *
+     * Sleep does not support filtering at the SDK level (one-shot list);
+     * Flutter filters sleep data client-side.
+     */
+    fun syncHistoryRange(fromMs: Long, toMs: Long) {
+        rangeFromSec = if (fromMs > 0L) fromMs / 1000L else 0L
+        rangeToSec = if (toMs > 0L) toMs / 1000L else Long.MAX_VALUE
+        // Log.d(TAG, ">>> syncHistoryRange(from=$rangeFromSec to=$rangeToSec sec)")
+        sendToFlutter("HISTORY_SYNC_START", "syncing")
+        try { wearManager.getHistoryOfHRRecord() } catch (e: Exception) { Log.w(TAG, "getHistoryOfHRRecord: ${e.message}") }
+        mainHandler.postDelayed({
+            try { wearManager.getHistoryOfRRRecord() } catch (e: Exception) { Log.w(TAG, "getHistoryOfRRRecord: ${e.message}") }
+        }, 1500L)
+        mainHandler.postDelayed({
+            try { wearManager.getHistoryOfSleep() } catch (e: Exception) { Log.e(TAG, "getHistoryOfSleep FAILED: ${e.message}") }
         }, 3000L)
     }
 
     /** Single-record lookup by timestamp */
     fun syncHistorySingleRecord(stamp: Long) {
         try { wearManager.getHistoryOfSingleRecord(stamp) } catch (e: Exception) {
-            Log.w(TAG, "getHistoryOfSingleRecord: ${e.message}")
+            // Log.w(TAG, "getHistoryOfSingleRecord: ${e.message}")
         }
     }
 
@@ -217,7 +279,7 @@ class ChileafWearHandler(
             mainHandler.removeCallbacks(connectTimeoutRunnable)
             wearManager.disconnectDevice()
         } catch (e: Exception) {
-            Log.w(TAG, "destroy error: ${e.message}")
+            // Log.w(TAG, "destroy error: ${e.message}")
         }
     }
 
@@ -228,7 +290,7 @@ class ChileafWearHandler(
         val name = result.scanRecord?.deviceName ?: device.name ?: "Unknown"
         val address = device.address ?: return
 
-        Log.d(TAG, "Found: name=$name address=$address")
+        // Log.d(TAG, "Found: name=$name address=$address")
 
         if (!foundDevices.containsKey(address)) {
             foundDevices[address] = device
@@ -262,7 +324,7 @@ class ChileafWearHandler(
                 energyExpanded: Int?,
                 rrIntervals: List<Int>?
             ) {
-                Log.d(TAG, "Heart Rate: $heartRate, rrIntervals=${rrIntervals?.size ?: 0}")
+                // Log.d(TAG, "Heart Rate: $heartRate, rrIntervals=${rrIntervals?.size ?: 0}")
                 val map = HashMap<String, Any?>()
                 map["heartRate"] = heartRate
                 map["contactDetected"] = contactDetected
@@ -288,7 +350,7 @@ class ChileafWearHandler(
             }
 
             override fun onRssiRead(device: BluetoothDevice, rssi: Int) {
-                Log.d(TAG, "RSSI: $rssi dBm")
+                // Log.d(TAG, "RSSI: $rssi dBm")
                 sendToFlutter("RSSI", rssi)
             }
 
@@ -354,7 +416,7 @@ class ChileafWearHandler(
             override fun onDeviceDisconnecting(device: BluetoothDevice) {}
 
             override fun onLinkLossOccurred(device: BluetoothDevice) {
-                Log.d(TAG, "Link loss occurred: ${device.address}")
+                // Log.d(TAG, "Link loss occurred: ${device.address}")
                 if (userInitiatedDisconnect) return
                 sendToFlutter("STATUS", "Reconnecting...")
 
@@ -364,18 +426,18 @@ class ChileafWearHandler(
                         sendToFlutter("STATUS", "Disconnected")
                         return@postDelayed
                     }
-                    Log.d(TAG, ">>> Reconnecting after link loss: ${last.address}")
+                    // Log.d(TAG, ">>> Reconnecting after link loss: ${last.address}")
                     isConnecting = true
                     mainHandler.removeCallbacks(connectTimeoutRunnable)
                     mainHandler.postDelayed(connectTimeoutRunnable, 20000)
                     try {
                         wearManager.connectDevice(last)
                     } catch (se: SecurityException) {
-                        Log.e(TAG, "SecurityException on link-loss reconnect: ${se.message}")
+                        // Log.e(TAG, "SecurityException on link-loss reconnect: ${se.message}")
                         isConnecting = false
                         sendToFlutter("STATUS", "Disconnected")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Exception on link-loss reconnect: ${e.message}")
+                        // Log.e(TAG, "Exception on link-loss reconnect: ${e.message}")
                         isConnecting = false
                         sendToFlutter("STATUS", "Disconnected")
                     }
@@ -402,7 +464,7 @@ class ChileafWearHandler(
             }
 
             override fun onError(device: BluetoothDevice, message: String, errorCode: Int) {
-                Log.e(TAG, "SDK Error: $message (code: $errorCode)")
+                // Log.e(TAG, "SDK Error: $message (code: $errorCode)")
                 sendToFlutter("ERROR", "$message (code: $errorCode)")
             }
 
@@ -423,7 +485,7 @@ class ChileafWearHandler(
                 } else {
                     // Unexpected disconnect (out of range, BLE reset, etc.)
                     // → try auto-reconnect, fall back to "Disconnected" on failure
-                    Log.d(TAG, "Unexpected disconnect: ${device.address}")
+                    // Log.d(TAG, "Unexpected disconnect: ${device.address}")
                     sendToFlutter("STATUS", "Reconnecting...")
 
                     val last = lastConnectedDevice
@@ -434,18 +496,18 @@ class ChileafWearHandler(
 
                     mainHandler.postDelayed({
                         if (isConnecting || userInitiatedDisconnect) return@postDelayed
-                        Log.d(TAG, ">>> Auto-reconnect attempt: ${last.address}")
+                        // Log.d(TAG, ">>> Auto-reconnect attempt: ${last.address}")
                         isConnecting = true
                         mainHandler.removeCallbacks(connectTimeoutRunnable)
                         mainHandler.postDelayed(connectTimeoutRunnable, 20000)
                         try {
                             wearManager.connectDevice(last)
                         } catch (se: SecurityException) {
-                            Log.e(TAG, "SecurityException on auto-reconnect: ${se.message}")
+                            // Log.e(TAG, "SecurityException on auto-reconnect: ${se.message}")
                             isConnecting = false
                             sendToFlutter("STATUS", "Disconnected")
                         } catch (e: Exception) {
-                            Log.e(TAG, "Exception on auto-reconnect: ${e.message}")
+                            // Log.e(TAG, "Exception on auto-reconnect: ${e.message}")
                             isConnecting = false
                             sendToFlutter("STATUS", "Disconnected")
                         }
@@ -454,7 +516,7 @@ class ChileafWearHandler(
             }
 
             override fun onBluetoothStatusReceived(device: BluetoothDevice, status: Boolean) {
-                Log.d(TAG, "Bluetooth status: $status")
+                // Log.d(TAG, "Bluetooth status: $status")
                 sendToFlutter("BLUETOOTH_STATUS", status)
             }
         })
@@ -467,7 +529,7 @@ class ChileafWearHandler(
 
         // ── Heart Rate Status ─────────────────────────────────────────────────
         wearManager.addHeartRateStatusCallback { device, status, interval, duration ->
-            Log.d(TAG, "[CB] HR Status: status=$status interval=$interval duration=$duration")
+            // Log.d(TAG, "[CB] HR Status: status=$status interval=$interval duration=$duration")
             val map = HashMap<String, Int>()
             map["status"] = status
             map["interval"] = interval
@@ -477,13 +539,13 @@ class ChileafWearHandler(
 
         // ── Heart Rate Max ────────────────────────────────────────────────────
         wearManager.addHeartRateMaxCallback { device, maxHR ->
-            Log.d(TAG, "[CB] HR Max: $maxHR")
+            // Log.d(TAG, "[CB] HR Max: $maxHR")
             sendToFlutter("HEART_RATE_MAX", maxHR)
         }
 
         // ── Heart Rate Alarm ──────────────────────────────────────────────────
         wearManager.addHeartRateAlarmCallback { device, threshold, enabled ->
-            Log.d(TAG, "[CB] HR Alarm: threshold=$threshold enabled=$enabled")
+            // Log.d(TAG, "[CB] HR Alarm: threshold=$threshold enabled=$enabled")
             val map = HashMap<String, Any>()
             map["threshold"] = threshold
             map["enabled"] = enabled
@@ -492,7 +554,7 @@ class ChileafWearHandler(
 
         // ── Body Sport ────────────────────────────────────────────────────────
         wearManager.addBodySportCallback { device, step, calorie, distance ->
-            Log.d(TAG, "[CB] Sport: step=$step calorie=$calorie distance=$distance")
+            // Log.d(TAG, "[CB] Sport: step=$step calorie=$calorie distance=$distance")
             val map = HashMap<String, Int>()
             map["step"] = step
             map["calorie"] = calorie
@@ -502,7 +564,7 @@ class ChileafWearHandler(
 
         // ── Body Health ───────────────────────────────────────────────────────
         wearManager.addBodyHealthCallback { device, heartRate, systolic, diastolic, spo2, stress, temperature1, temperature2, temperature3 ->
-            Log.d(TAG, "[CB] Health: hr=$heartRate sys=$systolic dia=$diastolic spo2=$spo2")
+            // Log.d(TAG, "[CB] Health: hr=$heartRate sys=$systolic dia=$diastolic spo2=$spo2")
             val map = HashMap<String, Any>()
             map["heartRate"] = heartRate
             map["systolic"] = systolic
@@ -518,7 +580,7 @@ class ChileafWearHandler(
 
         // ── Body Sport Health ─────────────────────────────────────────────────
         wearManager.addBodySportHealthCallback { device, heartRate, systolic, diastolic, spo2, stress ->
-            Log.d(TAG, "[CB] SportHealth: hr=$heartRate sys=$systolic dia=$diastolic spo2=$spo2 stress=$stress")
+            // Log.d(TAG, "[CB] SportHealth: hr=$heartRate sys=$systolic dia=$diastolic spo2=$spo2 stress=$stress")
             val map = HashMap<String, Int>()
             map["heartRate"] = heartRate
             map["systolic"] = systolic
@@ -530,7 +592,7 @@ class ChileafWearHandler(
 
         // ── Blood Oxygen ──────────────────────────────────────────────────────
         wearManager.addBloodOxygenCallback { device, spo2, timestamp, heartRate, systolic, diastolic ->
-            Log.d(TAG, "[CB] BloodOxygen: spo2=$spo2 hr=$heartRate")
+            // Log.d(TAG, "[CB] BloodOxygen: spo2=$spo2 hr=$heartRate")
             val map = HashMap<String, Any>()
             map["spo2"] = spo2
             map["timestamp"] = timestamp
@@ -542,7 +604,7 @@ class ChileafWearHandler(
 
         // ── Temperature ───────────────────────────────────────────────────────
         wearManager.addTemperatureCallback { device, temp1, temp2, temp3 ->
-            Log.d(TAG, "[CB] Temperature: $temp1 / $temp2 / $temp3")
+            // Log.d(TAG, "[CB] Temperature: $temp1 / $temp2 / $temp3")
             val map = HashMap<String, Float>()
             map["temperature1"] = temp1
             map["temperature2"] = temp2
@@ -561,7 +623,7 @@ class ChileafWearHandler(
 
         // ── User Info ─────────────────────────────────────────────────────────
         wearManager.addUserInfoCallback { device, gender, age, height, weight, stepLength ->
-            Log.d(TAG, "[CB] UserInfo: gender=$gender age=$age h=$height w=$weight step=$stepLength")
+            // Log.d(TAG, "[CB] UserInfo: gender=$gender age=$age h=$height w=$weight step=$stepLength")
             val map = HashMap<String, Any>()
             map["gender"] = gender
             map["age"] = age
@@ -573,13 +635,13 @@ class ChileafWearHandler(
 
         // ── Bluetooth Status ──────────────────────────────────────────────────
         wearManager.setBluetoothStatusCallback { device, status ->
-            Log.d(TAG, "[CB] BT Status: $status")
+            // Log.d(TAG, "[CB] BT Status: $status")
             sendToFlutter("BLUETOOTH_STATUS", status)
         }
 
         // ── PPG Data ──────────────────────────────────────────────────────────
         wearManager.addPPGDataCallback { device, timestamp, ppgData, heartRate, spo2, systolic, diastolic ->
-            Log.d(TAG, "[CB] PPG: hr=$heartRate spo2=$spo2 samples=${ppgData.size}")
+            // Log.d(TAG, "[CB] PPG: hr=$heartRate spo2=$spo2 samples=${ppgData.size}")
             val map = HashMap<String, Any>()
             map["timestamp"] = timestamp
             map["ppgData"] = ppgData.toList()
@@ -592,19 +654,19 @@ class ChileafWearHandler(
 
         // ── 3D Sensor Frequency ───────────────────────────────────────────────
         wearManager.addSensor3DFrequencyCallback { device, frequency ->
-            Log.d(TAG, "[CB] 3D Freq: $frequency")
+            // Log.d(TAG, "[CB] 3D Freq: $frequency")
             sendToFlutter("SENSOR_3D_FREQUENCY", frequency)
         }
 
         // ── 3D Sensor Status ──────────────────────────────────────────────────
         wearManager.addSensor3DStatusCallback { device, enabled ->
-            Log.d(TAG, "[CB] 3D Status: $enabled")
+            // Log.d(TAG, "[CB] 3D Status: $enabled")
             sendToFlutter("SENSOR_3D_STATUS", enabled)
         }
 
         // ── 6D Sensor Frequency ───────────────────────────────────────────────
         wearManager.addSensor6DFrequencyCallback { device, frequency ->
-            Log.d(TAG, "[CB] 6D Freq: $frequency")
+            // Log.d(TAG, "[CB] 6D Freq: $frequency")
             sendToFlutter("SENSOR_6D_FREQUENCY", frequency)
         }
 
@@ -624,8 +686,10 @@ class ChileafWearHandler(
 
         // ── History: HR Record (auto-chains to fetch HR data) ─────────────────
         wearManager.addHistoryOfHRRecordCallback { device, list ->
-            Log.d(TAG, "[CB] History HR Record: ${list.size} records")
-            val records = list.map { item ->
+            // Range filter — keep only headers within [rangeFromSec, rangeToSec].
+            // For unfiltered sync (defaults), this is a no-op.
+            val filtered = list.filter { stampInRange(it.stamp) }
+            val records = filtered.map { item ->
                 val m = HashMap<String, Any>()
                 m["stamp"] = item.stamp
                 m["record"] = item.record
@@ -633,21 +697,18 @@ class ChileafWearHandler(
             }
             sendToFlutter("HISTORY_HR_RECORD", records)
 
-            // Auto-fetch detailed data for every record
-            if (list.isEmpty()) {
+            if (filtered.isEmpty()) {
                 sendToFlutter("HISTORY_HR_DATA", emptyList<Any>())
+                sendToFlutter("HISTORY_HR_DATA_DONE", 0)
             } else {
                 synchronized(hrDataLock) {
-                    pendingHrDataCount = list.size
+                    pendingHrDataCount = filtered.size
                     accumulatedHrData.clear()
                 }
-                // Post each call to main thread with stagger to avoid overwhelming SDK
-                list.forEachIndexed { index, item ->
-                    Log.d(TAG, "[HR-CHAIN] scheduling getHistoryOfHRData(${item.stamp}) delay=${index * 300}ms")
+                filtered.forEachIndexed { index, item ->
                     mainHandler.postDelayed({
                         try { wearManager.getHistoryOfHRData(item.stamp) }
                         catch (e: Exception) {
-                            Log.w(TAG, "getHistoryOfHRData(${item.stamp}) failed: ${e.message}")
                             synchronized(hrDataLock) {
                                 pendingHrDataCount--
                                 if (pendingHrDataCount <= 0) {
@@ -657,22 +718,20 @@ class ChileafWearHandler(
                         }
                     }, (index * 300L) + 200L)
                 }
-                // Timeout safety: mark done after 30 s regardless
                 mainHandler.postDelayed({
                     synchronized(hrDataLock) {
                         if (pendingHrDataCount > 0) {
-                            Log.w(TAG, "[HR-CHAIN] timeout — marking done with ${accumulatedHrData.size} entries")
                             pendingHrDataCount = 0
                             sendToFlutter("HISTORY_HR_DATA_DONE", accumulatedHrData.size)
                         }
                     }
-                }, (list.size * 300L) + 30_000L)
+                }, (filtered.size * 300L) + 30_000L)
             }
         }
 
         // ── History: HR Data — stream each chunk to Flutter immediately ────────
         wearManager.addHistoryOfHRDataCallback { device, list ->
-            Log.d(TAG, "[CB] History HR Data chunk: ${list.size} entries")
+            // Log.d(TAG, "[CB] History HR Data chunk: ${list.size} entries")
             val chunk = list.map { item ->
                 val m = HashMap<String, Any>()
                 m["stamp"] = item.stamp
@@ -686,15 +745,80 @@ class ChileafWearHandler(
                 accumulatedHrData.addAll(chunk)
                 pendingHrDataCount--
                 if (pendingHrDataCount <= 0) {
-                    Log.d(TAG, "[CB] HR Data complete: ${accumulatedHrData.size} total entries")
+                    // Log.d(TAG, "[CB] HR Data complete: ${accumulatedHrData.size} total entries")
                     sendToFlutter("HISTORY_HR_DATA_DONE", accumulatedHrData.size)
+                }
+            }
+        }
+
+        // ── History: RR Record (auto-chains to fetch RR data) ─────────────────
+        wearManager.addHistoryOfRRRecordCallback { device, list ->
+            val filtered = list.filter { stampInRange(it.stamp) }
+            val records = filtered.map { item ->
+                val m = HashMap<String, Any>()
+                m["stamp"] = item.stamp
+                m["record"] = item.record
+                m
+            }
+            sendToFlutter("HISTORY_RR_RECORD", records)
+
+            if (filtered.isEmpty()) {
+                sendToFlutter("HISTORY_RR_DATA_DONE", 0)
+            } else {
+                synchronized(rrDataLock) {
+                    pendingRrDataCount = filtered.size
+                    accumulatedRrData.clear()
+                }
+                filtered.forEachIndexed { index, item ->
+                    mainHandler.postDelayed({
+                        try { wearManager.getHistoryOfRRData(item.stamp) }
+                        catch (e: Exception) {
+                            synchronized(rrDataLock) {
+                                pendingRrDataCount--
+                                if (pendingRrDataCount <= 0) {
+                                    sendToFlutter("HISTORY_RR_DATA_DONE", accumulatedRrData.size)
+                                }
+                            }
+                        }
+                    }, (index * 300L) + 200L)
+                }
+                mainHandler.postDelayed({
+                    synchronized(rrDataLock) {
+                        if (pendingRrDataCount > 0) {
+                            pendingRrDataCount = 0
+                            sendToFlutter("HISTORY_RR_DATA_DONE", accumulatedRrData.size)
+                        }
+                    }
+                }, (filtered.size * 300L) + 30_000L)
+            }
+        }
+
+        // ── History: RR Data — stream each chunk to Flutter immediately ───────
+        wearManager.addHistoryOfRRDataCallback { device, list ->
+            // Log.d(TAG, "[CB] History RR Data chunk: ${list.size} entries")
+            val chunk = list.map { item ->
+                val m = HashMap<String, Any>()
+                m["stamp"] = item.stamp
+                // SDK names field `respiratoryRate` but per SDK changelog this actually
+                // carries the R-R interval value. Forward raw; Flutter side labels as `value`.
+                m["value"] = item.respiratoryRate
+                m
+            }
+            sendToFlutter("HISTORY_RR_DATA_CHUNK", chunk)
+
+            synchronized(rrDataLock) {
+                accumulatedRrData.addAll(chunk)
+                pendingRrDataCount--
+                if (pendingRrDataCount <= 0) {
+                    // Log.d(TAG, "[CB] RR Data complete: ${accumulatedRrData.size} total entries")
+                    sendToFlutter("HISTORY_RR_DATA_DONE", accumulatedRrData.size)
                 }
             }
         }
 
         // ── Sleep History ─────────────────────────────────────────────────────
         wearManager.addHistoryOfSleepCallback { device, list ->
-            Log.d(TAG, "[CB-SLEEP] callback fired! list.size=${list.size}")
+            // Log.d(TAG, "[CB-SLEEP] callback fired! list.size=${list.size}")
             val records = list.map { item ->
                 val m = HashMap<String, Any>()
                 m["utc"] = item.utc
@@ -706,7 +830,7 @@ class ChileafWearHandler(
                     is List<*>   -> { val l = ArrayList<Int>(a.size); a.forEach { e: Any? -> l.add((e as? Number)?.toInt() ?: 0) }; l }
                     else         -> ArrayList()
                 }
-                Log.d(TAG, "[CB-SLEEP] utc=${item.utc}  actions=${actionsInt.size}  first5=${actionsInt.take(5)}")
+                // Log.d(TAG, "[CB-SLEEP] utc=${item.utc}  actions=${actionsInt.size}  first5=${actionsInt.take(5)}")
                 m["actions"] = actionsInt
                 m
             }
@@ -715,7 +839,7 @@ class ChileafWearHandler(
 
         // ── Custom Data ───────────────────────────────────────────────────────
         wearManager.setCustomDataReceivedCallback { device, data ->
-            Log.d(TAG, "[CB] Custom Data: ${data.size} bytes")
+            // Log.d(TAG, "[CB] Custom Data: ${data.size} bytes")
             sendToFlutter("CUSTOM_DATA", data.toList())
         }
     }

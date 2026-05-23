@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as sio;
 
@@ -140,6 +142,31 @@ class AthleteHealthMonitorSocketService {
           'hr=$heartRate spo2=$spo2 stress=$stressLevel hrv=$hrv');
     }
 
+    _socket!.emit('health_metric_submit', payload);
+  }
+
+  // Bulk history push — emits same `health_metric_submit` event with batch
+  // payload (health_metrics / sleep_metrics / rr_interval arrays). Backend
+  // dedup nahi karta, isliye caller (cubit) watermark se filter karke deta hai.
+  void submitHistoryBatch(Map<String, dynamic> payload) {
+    if (!isConnected) {
+      debugPrint('[HEALTH SOCKET] submitHistoryBatch skipped — not connected');
+      return;
+    }
+    final hr = (payload['health_metrics'] as List?)?.length ?? 0;
+    final sl = (payload['sleep_metrics'] as List?)?.length ?? 0;
+    final rr = (payload['rr_interval'] as List?)?.length ?? 0;
+    debugPrint('[HEALTH SOCKET] → history batch | hr=$hr sleep=$sl rr_sessions=$rr');
+    // Full payload dump — chunked because debugPrint truncates long lines on Android.
+    try {
+      final encoded = const JsonEncoder.withIndent('  ').convert(payload);
+      debugPrint('[HEALTH SOCKET] ↳ payload:');
+      for (var i = 0; i < encoded.length; i += 800) {
+        debugPrint(encoded.substring(i, i + 800 > encoded.length ? encoded.length : i + 800));
+      }
+    } catch (e) {
+      debugPrint('[HEALTH SOCKET] payload encode failed: $e');
+    }
     _socket!.emit('health_metric_submit', payload);
   }
 

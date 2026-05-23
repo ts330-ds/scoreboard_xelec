@@ -39,7 +39,7 @@ class MyTasksListView extends StatelessWidget {
                 const Icon(Icons.error_outline, color: AppColors.error, size: 40),
                 const SizedBox(height: 12),
                 Text(
-                  state.errorMessage ?? 'Kuch galat hua',
+                  state.errorMessage ?? 'Something went wrong',
                   style: const TextStyle(color: AppColors.subtext, fontSize: 14),
                   textAlign: TextAlign.center,
                 ),
@@ -47,7 +47,7 @@ class MyTasksListView extends StatelessWidget {
                 TextButton.icon(
                   onPressed: () => context.read<MyTasksCubit>().fetchTasks(),
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Dobara try karein'),
+                  label: const Text('Try again'),
                 ),
               ],
             ),
@@ -68,12 +68,12 @@ class MyTasksListView extends StatelessWidget {
                 Icon(Icons.assignment_outlined, size: 52, color: AppColors.subtext),
                 SizedBox(height: 12),
                 Text(
-                  'Koi task nahi mila',
+                  'No tasks found',
                   style: TextStyle(color: AppColors.subtext, fontSize: 15),
                 ),
                 SizedBox(height: 6),
                 Text(
-                  'Naya task banane ke liye + button dabaein',
+                  'Tap the + button to create a new task',
                   style: TextStyle(color: AppColors.subtext, fontSize: 12),
                 ),
               ],
@@ -143,31 +143,45 @@ class _TaskCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.timer_outlined,
-                          size: 13, color: AppColors.subtext),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${task.duration} min',
-                        style: const TextStyle(
-                            color: AppColors.subtext, fontSize: 12),
+                  Builder(builder: (_) {
+                    final isPending =
+                        task.status?.toLowerCase() == 'pending';
+                    final durMin = int.tryParse(task.duration) ?? 0;
+                    final showDuration = !isPending && durMin > 0;
+                    final showAssignedBy = task.assignedByName != null &&
+                        task.assignedBy != 'self';
+                    if (!showDuration && !showAssignedBy) {
+                      return const SizedBox.shrink();
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        children: [
+                          if (showDuration) ...[
+                            const Icon(Icons.timer_outlined,
+                                size: 13, color: AppColors.subtext),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$durMin min',
+                              style: const TextStyle(
+                                  color: AppColors.subtext, fontSize: 12),
+                            ),
+                          ],
+                          if (showAssignedBy) ...[
+                            if (showDuration) const SizedBox(width: 10),
+                            const Icon(Icons.person_outline,
+                                size: 13, color: AppColors.subtext),
+                            const SizedBox(width: 4),
+                            Text(
+                              task.assignedByName!,
+                              style: const TextStyle(
+                                  color: AppColors.subtext, fontSize: 12),
+                            ),
+                          ],
+                        ],
                       ),
-                      if (task.assignedByName != null &&
-                          task.assignedBy != 'self') ...[
-                        const SizedBox(width: 10),
-                        const Icon(Icons.person_outline,
-                            size: 13, color: AppColors.subtext),
-                        const SizedBox(width: 4),
-                        Text(
-                          task.assignedByName!,
-                          style: const TextStyle(
-                              color: AppColors.subtext, fontSize: 12),
-                        ),
-                      ],
-                    ],
-                  ),
+                    );
+                  }),
                   if (task.assignedAt != null) ...[
                     const SizedBox(height: 2),
                     Text(

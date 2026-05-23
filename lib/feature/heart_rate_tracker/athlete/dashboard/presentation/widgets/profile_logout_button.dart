@@ -73,7 +73,7 @@ class ProfileLogoutButton extends StatelessWidget {
           ],
         ),
         content: const Text(
-          'Kya aap logout karna chahte hain?',
+          'Are you sure you want to logout?',
           style: TextStyle(color: AppColors.subtext),
         ),
         actions: [

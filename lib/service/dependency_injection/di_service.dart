@@ -98,8 +98,12 @@ import '../../feature/heart_rate_tracker/coach/my_athletes/domain/usecase/get_at
 import '../../feature/heart_rate_tracker/coach/my_athletes/domain/usecase/get_my_athletes_usecase.dart';
 import '../../feature/heart_rate_tracker/coach/my_athletes/domain/usecase/remove_athlete_usecase.dart';
 import '../../feature/heart_rate_tracker/coach/my_athletes/domain/usecase/get_athlete_health_metrics_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/domain/usecase/get_athlete_hour_raw_usecase.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/domain/usecase/get_completed_tasks_usecase.dart';
 import '../../feature/heart_rate_tracker/coach/my_athletes/presentation/cubit/athlete_detail_cubit.dart';
 import '../../feature/heart_rate_tracker/coach/my_athletes/presentation/cubit/athlete_health_metrics_cubit.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/presentation/cubit/athlete_hour_raw_cubit.dart';
+import '../../feature/heart_rate_tracker/coach/my_athletes/presentation/cubit/completed_tasks_cubit.dart';
 import '../../feature/heart_rate_tracker/coach/my_athletes/presentation/cubit/my_athletes_cubit.dart';
 import '../../feature/heart_rate_tracker/coach/profile/data/datasource/coach_profile_remote_datasource.dart';
 import '../../feature/heart_rate_tracker/coach/profile/data/repository/coach_profile_repository_impl.dart';
@@ -121,15 +125,18 @@ import '../../feature/heart_rate_tracker/athlete/notification/domain/usecase/acc
 import '../../feature/heart_rate_tracker/athlete/notification/domain/usecase/reject_coach_request_usecase.dart';
 import '../../feature/heart_rate_tracker/athlete/notification/presentation/cubit/athlete_notification_cubit.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/data/datasource/athlete_task_remote_datasource.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/data/datasource/feedback_remote_datasource.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/data/repository/athlete_task_repository_impl.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/data/repository/feedback_repository_impl.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/domain/repository/athlete_task_repository.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/domain/repository/feedback_repository.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/domain/usecase/create_athlete_task_usecase.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/domain/usecase/get_my_tasks_usecase.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/domain/usecase/get_task_result_usecase.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/domain/usecase/submit_feedback_usecase.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/my_tasks_cubit.dart';
 import '../../feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
-import '../foreground/athlete_health_watcher.dart';
 import '../socket/coach_live_task_socket_service.dart';
 import '../../feature/heart_rate_tracker/coach/live_task/presentation/cubit/coach_live_task_cubit.dart';
 import '../../feature/heart_rate_tracker/coach/live_now/data/datasource/active_tasks_remote_datasource.dart';
@@ -262,13 +269,20 @@ void setupDI({required SharedPreferences sharedPreferences}) {
   sl.registerLazySingleton<GetTaskResultUseCase>(
     () => GetTaskResultUseCase(sl()),
   );
+
+  // Athlete Session Feedback (RPE + notes)
+  sl.registerLazySingleton<FeedbackRemoteDataSource>(
+    () => FeedbackRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+  );
+  sl.registerLazySingleton<FeedbackRepository>(
+    () => FeedbackRepositoryImpl(sl()),
+  );
+  sl.registerLazySingleton<SubmitFeedbackUseCase>(
+    () => SubmitFeedbackUseCase(sl()),
+  );
   sl.registerFactory<MyTasksCubit>(
     () => MyTasksCubit(getMyTasks: sl()),
   );
-  sl.registerLazySingleton<AthleteHealthWatcher>(
-    () => AthleteHealthWatcher(bleCubit: sl(), prefs: sl()),
-  );
-
   // Socket services ab DI mein nahi — background isolate khud banata hai
   sl.registerLazySingleton<AthleteHealthMonitorCubit>(
     () => AthleteHealthMonitorCubit(prefs: sl()),
@@ -377,6 +391,18 @@ void setupDI({required SharedPreferences sharedPreferences}) {
   );
   sl.registerFactory<AthleteHealthMetricsCubit>(
     () => AthleteHealthMetricsCubit(sl()),
+  );
+  sl.registerLazySingleton<GetAthleteHourRawUseCase>(
+    () => GetAthleteHourRawUseCase(sl()),
+  );
+  sl.registerFactory<AthleteHourRawCubit>(
+    () => AthleteHourRawCubit(sl()),
+  );
+  sl.registerLazySingleton<GetCompletedTasksUseCase>(
+    () => GetCompletedTasksUseCase(sl()),
+  );
+  sl.registerFactory<CompletedTasksCubit>(
+    () => CompletedTasksCubit(sl()),
   );
 
   // Coach Request

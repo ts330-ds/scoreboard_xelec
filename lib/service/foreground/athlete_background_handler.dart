@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:xelex_esp/service/socket/athlete_health_monitor_socket_service.dart';
 import 'package:xelex_esp/service/socket/athlete_task_socket_service.dart';
 
 // @pragma annotation zaroori hai — warna release build mein tree shaking
@@ -13,10 +12,11 @@ void startCallback() {
 
 // Yeh class background isolate mein run hogi.
 // Main isolate se bilkul alag — apne khud ke socket instances banayegi.
+//
+// Health monitoring (24/7 live HR streaming) ab REMOVED hai — sirf activity/
+// training session ka real-time data BG isolate me jaata hai. History push
+// HeartBleCubit on-demand main isolate se karta hai (sync ke baad).
 class AthleteBackgroundHandler extends TaskHandler {
-  // Background isolate ke khud ke socket instances.
-  // Main isolate wale socket services yahan available nahi hain.
-  late final AthleteHealthMonitorSocketService _healthSocket;
   late final AthleteTaskSocketService _taskSocket;
 
   // Latest sensor values — main isolate 'update_metrics' bhejta hai
@@ -29,12 +29,8 @@ class AthleteBackgroundHandler extends TaskHandler {
   double? _lng;
 
   // State tracking
-  bool _healthActive = false;
   int? _activeTaskId;
   bool _readyAnnounced = false;
-  // Track if we initiated the disconnect (BLE chla gaya / user logout) — us case
-  // me socket-disconnect ko error nahi treat karna chahiye.
-  bool _intentionalHealthDisconnect = false;
 
   // Notification throttle — onRepeatEvent har 1s pe fire hota hai, lekin
   // notification ko har 3s pe update karte hain (battery + OEM spam-filter ke liye).
@@ -44,9 +40,7 @@ class AthleteBackgroundHandler extends TaskHandler {
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     debugPrint('[BG HANDLER] onStart — background isolate ready');
-    _healthSocket = AthleteHealthMonitorSocketService();
     _taskSocket = AthleteTaskSocketService();
-    _setupHealthSocketCallbacks();
     _setupActivitySocketCallbacks();
     // Note: bg_ready event onStart se directly bhejne pe main tak reliably
     // nahi pahunchta — IPC channel onStart ke andar abhi fully wired nahi
@@ -60,17 +54,6 @@ class AthleteBackgroundHandler extends TaskHandler {
     if (!_readyAnnounced) {
       _readyAnnounced = true;
       FlutterForegroundTask.sendDataToMain({'event': 'bg_ready'});
-    }
-
-    if (_healthActive && _heartRate > 0 && _healthSocket.isConnected) {
-      _healthSocket.submitHealthMetric(
-        heartRate: _heartRate,
-        spo2: _spo2,
-        stressLevel: _stressLevel,
-        hrv: _hrv,
-        lat: _lat,
-        lng: _lng,
-      );
     }
 
     if (_activeTaskId != null && _heartRate > 0 && _taskSocket.isConnected) {
@@ -93,7 +76,7 @@ class AthleteBackgroundHandler extends TaskHandler {
   void _maybeUpdateNotification() {
     _notifTick++;
     if (_notifTick % 3 != 0) return;
-    if (!_healthActive && _activeTaskId == null) return;
+    if (_activeTaskId == null) return;
 
     final bpm = _heartRate;
     if (bpm == _lastShownBpm) return;
@@ -115,10 +98,6 @@ class AthleteBackgroundHandler extends TaskHandler {
     debugPrint('[BG HANDLER] received cmd: $cmd');
 
     switch (cmd) {
-      case 'start_health':
-        _startHealth(data['token'] as String, data['base_url'] as String);
-      case 'stop_health':
-        _stopHealth();
       case 'start_activity':
         _startActivity(
           data['token'] as String,
@@ -143,79 +122,18 @@ class AthleteBackgroundHandler extends TaskHandler {
   @override
   Future<void> onDestroy(DateTime timestamp) async {
     debugPrint('[BG HANDLER] onDestroy — cleaning up');
-    if (_healthSocket.isConnected) _healthSocket.disconnect();
+    // App swipe-kill / system kill scenario: agar active session abhi tak
+    // explicitly stop nahi hui (user ne "Stop" nahi dabaaya), to server ko
+    // bata do taki session "in progress" stuck na rahe.
+    final taskId = _activeTaskId;
+    if (taskId != null && _taskSocket.isConnected) {
+      debugPrint('[BG HANDLER] onDestroy — stopping active task $taskId');
+      _taskSocket.stopTask(taskId);
+      // Socket buffer flush ka thoda time do
+      await Future.delayed(const Duration(milliseconds: 400));
+    }
+    _activeTaskId = null;
     if (_taskSocket.isConnected) _taskSocket.disconnect();
-  }
-
-  // ── Private: Health socket ──────────────────────────────────────────────────
-
-  void _startHealth(String token, String baseUrl) {
-    _healthActive = true;
-    _intentionalHealthDisconnect = false;
-    if (_healthSocket.isConnected) {
-      FlutterForegroundTask.sendDataToMain({'event': 'health_monitoring_started'});
-      return;
-    }
-    FlutterForegroundTask.sendDataToMain({'event': 'health_connecting'});
-    _healthSocket.connect(baseUrl, token);
-  }
-
-  void _stopHealth() {
-    _healthActive = false;
-    _intentionalHealthDisconnect = true;
-    // Banner ko abhi hide kar do — wait nahi karna 3s disconnect ke liye.
-    FlutterForegroundTask.sendDataToMain({'event': 'health_monitoring_stopped'});
-    if (_healthSocket.isConnected) {
-      _healthSocket.notifyDeviceDisconnected();
-      Future.delayed(const Duration(seconds: 3), () {
-        if (_healthSocket.isConnected) _healthSocket.disconnect();
-      });
-    }
-  }
-
-  void _setupHealthSocketCallbacks() {
-    _healthSocket.onMonitoringStarted = () {
-      debugPrint('[BG HANDLER] health monitoring started');
-      FlutterForegroundTask.sendDataToMain({'event': 'health_monitoring_started'});
-    };
-
-    _healthSocket.onMonitoringStopped = () {
-      _healthActive = false;
-      FlutterForegroundTask.sendDataToMain({'event': 'health_monitoring_stopped'});
-    };
-
-    _healthSocket.onMetricSaved = (data) {
-      FlutterForegroundTask.sendDataToMain({
-        'event': 'health_metric_saved',
-        'data': data,
-      });
-    };
-
-    _healthSocket.onError = (msg) {
-      FlutterForegroundTask.sendDataToMain({
-        'event': 'health_error',
-        'message': msg,
-      });
-    };
-
-    _healthSocket.onSocketDisconnected = () {
-      // Agar humne khud disconnect kara (BLE gone / stop_health) to error
-      // nahi — banner already 'monitoring_stopped' bhej chuka hai.
-      if (_intentionalHealthDisconnect) {
-        _intentionalHealthDisconnect = false;
-        return;
-      }
-      FlutterForegroundTask.sendDataToMain({'event': 'health_socket_disconnected'});
-    };
-
-    _healthSocket.onAuthFailure = (msg) {
-      // Token invalid/expired — reconnect waste. Main isolate ko bata do
-      // taaki re-login flow trigger ho.
-      FlutterForegroundTask.sendDataToMain({
-        'event': 'health_auth_failure',
-        'message': msg,
-      });
-    };
   }
 
   // ── Private: Activity socket ────────────────────────────────────────────────

@@ -150,7 +150,7 @@ class _SyncButtonState extends State<_SyncButton>
         context.select<HeartBleCubit, bool>((c) => c.state.isConnected);
     return GestureDetector(
       onTap: connected
-          ? () => context.read<HeartBleCubit>().syncAllHistory()
+          ? () => context.read<HeartBleCubit>().syncAllHistory(force: true)
           : null,
       child: Tooltip(
         message: connected

@@ -10,8 +10,7 @@ class CreateAthleteTaskUseCase {
 
   TaskEither<Failure, AthleteTaskEntity> call({
     required String name,
-    required String duration,
     required String assignedBy,
   }) =>
-      _repo.createTask(name: name, duration: duration, assignedBy: assignedBy);
+      _repo.createTask(name: name, assignedBy: assignedBy);
 }

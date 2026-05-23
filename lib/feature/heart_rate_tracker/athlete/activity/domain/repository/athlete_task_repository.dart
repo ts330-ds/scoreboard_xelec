@@ -6,7 +6,6 @@ import '../entity/task_result_entity.dart';
 abstract interface class AthleteTaskRepository {
   TaskEither<Failure, AthleteTaskEntity> createTask({
     required String name,
-    required String duration,
     required String assignedBy,
   });
 

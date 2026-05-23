@@ -16,6 +16,11 @@ import 'package:xelex_esp/feature/timing_gates/session/data/model/athlete_model.
 import 'package:xelex_esp/feature/timing_gates/session/data/model/athlete_result_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/test_session_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/trial_result_model.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/hr_reading_hive.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/rr_sample_hive.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/sleep_session_hive.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/sync_meta_hive.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/history_local_store.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/router/app_router.dart';
 import 'package:xelex_esp/service/api/api_service.dart';
@@ -24,7 +29,7 @@ import 'package:xelex_esp/service/permission/bluetooth_permission_service.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
 import 'package:xelex_esp/service/foreground/athlete_foreground_service.dart';
-import 'package:xelex_esp/service/foreground/athlete_health_watcher.dart';
+import 'package:xelex_esp/service/network/network_reconnect_notifier.dart';
 import 'package:xelex_esp/utility/theme.dart';
 
 import 'feature/bluetooth/presentation/cubit/ble/ble_cubit.dart';
@@ -43,22 +48,28 @@ void main() async {
   Hive.registerAdapter(TestSessionModelAdapter());
   Hive.registerAdapter(ProfileRoleAdapter());
   Hive.registerAdapter(TimingGateProfileModelAdapter());
+  Hive.registerAdapter(HrReadingHiveAdapter());
+  Hive.registerAdapter(RrSampleHiveAdapter());
+  Hive.registerAdapter(SleepSessionHiveAdapter());
+  Hive.registerAdapter(SyncMetaHiveAdapter());
   await Hive.openBox<AthleteModel>('athletes');
   await Hive.openBox<TestSessionModel>('sessions');
   await Hive.openBox<TimingGateProfileModel>('timing_gate_profile');
+  await HistoryLocalStore.instance.open();
 
   final sharedPreferences = await SharedPreferences.getInstance();
   setupDI(sharedPreferences: sharedPreferences);
   // Foreground service init — notification channel Android pe banata hai
   AthleteForegroundService.init();
+  // Network reconnect notifier — airplane mode toggle / Wi-Fi drop ke baad
+  // socket cubits ko auto-retry ke liye nudge karta hai.
+  unawaited(NetworkReconnectNotifier.instance.start());
 
-  // Agar athlete pehle se logged in hai to watcher abhi shuru karo —
-  // screen khulne ka wait nahi karenge
+  // Athlete logged-in hai to monitor cubit warm-up karo — UI banner cubits ka wait
+  // hota tha, ab on-demand history push HeartBleCubit handle karta hai.
   final athleteToken = sharedPreferences.getString(PrefKeys.userToken) ?? '';
   if (athleteToken.isNotEmpty) {
-    // Cubit pehle create karo — listener register ho jaye BLE events fire hone se pehle
     sl<AthleteHealthMonitorCubit>();
-    sl<AthleteHealthWatcher>().start();
   }
   FlutterBluePlus.setLogLevel(LogLevel.warning, color: false);
   final bluetoothPermission = BluetoothPermissionService();

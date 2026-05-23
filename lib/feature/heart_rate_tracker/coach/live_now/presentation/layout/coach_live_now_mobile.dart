@@ -108,7 +108,7 @@ class _CoachLiveNowMobileState extends State<CoachLiveNowMobile>
 
           if (state.status == CoachLiveNowStatus.error) {
             return _ErrorView(
-              message: state.errorMessage ?? 'Kuch galat ho gaya',
+              message: state.errorMessage ?? 'Something went wrong',
               onRetry: () => context.read<CoachLiveNowCubit>().loadActiveTasks(
                     status: _tabs[_tabController.index],
                   ),
@@ -317,7 +317,7 @@ class _EmptyView extends StatelessWidget {
           Icon(Icons.sensors_off, color: AppColors.subtext, size: 52),
           SizedBox(height: 16),
           Text(
-            'Koi active session nahi hai',
+            'No active session',
             style: TextStyle(
                 color: AppColors.text,
                 fontSize: 16,
@@ -325,7 +325,7 @@ class _EmptyView extends StatelessWidget {
           ),
           SizedBox(height: 6),
           Text(
-            'Jab koi athlete session start karega\nyahan dikhega',
+            'When an athlete starts a session\nit will appear here',
             style: TextStyle(color: AppColors.subtext, fontSize: 13),
             textAlign: TextAlign.center,
           ),

@@ -5,7 +5,6 @@ import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/
 import 'package:xelex_esp/service/api/api_service.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
-import 'package:xelex_esp/service/foreground/athlete_health_watcher.dart';
 import '../../domain/usecase/login_athlete_usecase.dart';
 import '../../domain/usecase/login_athlete_with_social_usecase.dart';
 import '../../domain/usecase/logout_athlete_usecase.dart';
@@ -37,10 +36,8 @@ class AthleteAuthCubit extends Cubit<AthleteAuthState> {
       (failure) => _handleLoginFailure(failure),
       (athlete) {
         sl<ApiService>().setAuthToken(athlete.token);
-        // Cubit pehle create karo — listener register ho jaye BLE events
-        // fire hone se pehle (warna broadcast stream events lost ho jaate hain)
+        // Cubit warm-up — UI banners ka listener register ho jaye early.
         sl<AthleteHealthMonitorCubit>();
-        sl<AthleteHealthWatcher>().start();
         emit(state.copyWith(
           status: AthleteAuthStatus.authenticated,
           athlete: athlete,
@@ -57,10 +54,8 @@ class AthleteAuthCubit extends Cubit<AthleteAuthState> {
       (failure) => _handleLoginFailure(failure),
       (athlete) {
         sl<ApiService>().setAuthToken(athlete.token);
-        // Cubit pehle create karo — listener register ho jaye BLE events
-        // fire hone se pehle (warna broadcast stream events lost ho jaate hain)
+        // Cubit warm-up — UI banners ka listener register ho jaye early.
         sl<AthleteHealthMonitorCubit>();
-        sl<AthleteHealthWatcher>().start();
         emit(state.copyWith(
           status: AthleteAuthStatus.authenticated,
           athlete: athlete,
@@ -91,10 +86,8 @@ class AthleteAuthCubit extends Cubit<AthleteAuthState> {
       ),
       (athlete) {
         sl<ApiService>().setAuthToken(athlete.token);
-        // Cubit pehle create karo — listener register ho jaye BLE events
-        // fire hone se pehle (warna broadcast stream events lost ho jaate hain)
+        // Cubit warm-up — UI banners ka listener register ho jaye early.
         sl<AthleteHealthMonitorCubit>();
-        sl<AthleteHealthWatcher>().start();
         emit(state.copyWith(
           status: AthleteAuthStatus.authenticated,
           athlete: athlete,
@@ -118,7 +111,6 @@ class AthleteAuthCubit extends Cubit<AthleteAuthState> {
         errorMessage: failure.message,
       )),
       (_) {
-        sl<AthleteHealthWatcher>().stop();
         sl<ApiService>().clearAuthToken();
         emit(state.copyWith(status: AthleteAuthStatus.loggedOut));
       },

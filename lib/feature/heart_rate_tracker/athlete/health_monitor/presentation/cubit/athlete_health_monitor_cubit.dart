@@ -2,10 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/service/foreground/athlete_foreground_service.dart';
+import 'package:xelex_esp/service/network/network_reconnect_notifier.dart';
 import 'package:xelex_esp/service/socket/reconnect_controller.dart';
 
 enum HealthMonitorStatus { idle, connecting, monitoring, reconnecting, error }
@@ -46,14 +45,13 @@ class HealthMonitorState {
 }
 
 class AthleteHealthMonitorCubit extends Cubit<HealthMonitorState> {
-  final SharedPreferences _prefs;
   StreamSubscription<Map<String, dynamic>>? _sub;
+  StreamSubscription<void>? _netSub;
   final ReconnectController _reconnect =
       ReconnectController(tag: 'HEALTH RECONNECT');
 
   AthleteHealthMonitorCubit({required SharedPreferences prefs})
-      : _prefs = prefs,
-        super(const HealthMonitorState(HealthMonitorStatus.idle)) {
+      : super(const HealthMonitorState(HealthMonitorStatus.idle)) {
     _sub = AthleteForegroundService.eventStream.listen(_onBackgroundEvent);
     // Broadcast stream events buffer nahi karta. Agar cubit late create hua
     // (e.g. fresh login → dashboard khulte hi cubit bana, lekin BLE already
@@ -61,6 +59,20 @@ class AthleteHealthMonitorCubit extends Cubit<HealthMonitorState> {
     // ko replay karo taki banner correct dikhe.
     final cached = AthleteForegroundService.lastHealthEvent;
     if (cached != null) _onBackgroundEvent(cached);
+    // Airplane mode / Wi-Fi outage ke baad jab network wapas aaye, agar
+    // hum reconnecting/exhausted/error state mein hain to turant retry karo
+    // — user ko manually "Retry" tap karne ki zaroorat nahi.
+    _netSub = NetworkReconnectNotifier.instance.onNetworkRestored.listen((_) {
+      if (isClosed) return;
+      if (state.isAuthFailure) return;
+      final s = state.status;
+      if (s == HealthMonitorStatus.reconnecting ||
+          s == HealthMonitorStatus.error ||
+          state.isReconnectExhausted) {
+        debugPrint('[HEALTH CUBIT] network restored — forcing retry');
+        retryConnectionManually();
+      }
+    });
   }
 
   void _onBackgroundEvent(Map<String, dynamic> event) {
@@ -131,44 +143,24 @@ class AthleteHealthMonitorCubit extends Cubit<HealthMonitorState> {
   }
 
   void _scheduleReconnect() {
-    _reconnect.schedule(
-      onAttempt: (attempt) {
-        if (isClosed) return;
-        debugPrint('[HEALTH CUBIT] Reconnect attempt #$attempt');
-        emit(state.copyWith(reconnectAttempt: attempt));
-        _restartMonitor();
-      },
-      onExhausted: () {
-        if (isClosed) return;
-        debugPrint('[HEALTH CUBIT] Reconnect budget exhausted');
-        emit(state.copyWith(isReconnectExhausted: true));
-      },
-    );
+    // 24/7 health monitoring removed — push ab on-demand HeartBleCubit karta hai.
+    // Reconnect scheduling no-op rakhi hai taaki existing UI banner code (jo
+    // `reconnecting`/`exhausted` flags read karta hai) bina crash kaam kare.
+    _reconnect.cancel();
   }
 
-  // User ne "Retry" dabaya — budget reset + immediate attempt.
+  // User ne "Retry" dabaya — health monitoring removed, ye method ab no-op.
+  // Push retry HeartBleCubit handle karta hai (BLE reconnect pe automatic).
   void retryConnectionManually() {
     if (isClosed) return;
-    _reconnect.reset();
-    emit(state.copyWith(
-      status: HealthMonitorStatus.reconnecting,
-      isReconnectExhausted: false,
-      reconnectAttempt: 0,
-    ));
-    _restartMonitor();
-  }
-
-  void _restartMonitor() {
-    final token = _prefs.getString(PrefKeys.userToken) ?? '';
-    final baseUrl = dotenv.env['BASE_URL'] ?? '';
-    if (token.isEmpty || baseUrl.isEmpty) return;
-    AthleteForegroundService.startHealthMonitor(token, baseUrl);
+    emit(const HealthMonitorState(HealthMonitorStatus.idle));
   }
 
   @override
   Future<void> close() {
     _reconnect.dispose();
     _sub?.cancel();
+    _netSub?.cancel();
     return super.close();
   }
 }

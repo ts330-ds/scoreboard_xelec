@@ -52,11 +52,6 @@ class PendingTaskView extends StatelessWidget {
             alignment: WrapAlignment.center,
             children: [
               _InfoChip(
-                icon: Icons.timer_outlined,
-                label: '${state.selectedDuration} min',
-                color: AppColors.primary,
-              ),
-              _InfoChip(
                 icon: type.icon,
                 label: state.selectedActivity,
                 color: type.color,
@@ -68,29 +63,6 @@ class PendingTaskView extends StatelessWidget {
                   color: AppColors.subtext,
                 ),
             ],
-          ),
-
-          const SizedBox(height: 16),
-
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.success.withOpacity(0.3)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.check_circle_outline,
-                    color: AppColors.success, size: 16),
-                const SizedBox(width: 8),
-                const Text(
-                  'Task created — jab ready ho tab start karein',
-                  style: TextStyle(color: AppColors.success, fontSize: 13),
-                ),
-              ],
-            ),
           ),
 
           const SizedBox(height: 40),
@@ -110,7 +82,7 @@ class PendingTaskView extends StatelessWidget {
               },
               icon: const Icon(Icons.play_arrow_rounded, size: 22),
               label: Text(
-                'Start ${state.selectedActivity} · ${state.selectedDuration} min',
+                'Start ${state.selectedActivity}',
                 style: const TextStyle(
                     fontSize: 15, fontWeight: FontWeight.bold),
               ),
@@ -180,7 +152,7 @@ void _showBleNotConnectedDialog(BuildContext context) {
         ],
       ),
       content: const Text(
-        'Heart rate monitor connected nahi hai.\nSession start karne se pehle apna BLE device connect karein taaki heart rate track ho sake.',
+        'Heart rate monitor is not connected.\nConnect your BLE device before starting a session so that heart rate can be tracked.',
         style: TextStyle(color: AppColors.subtext, fontSize: 13, height: 1.5),
       ),
       actions: [

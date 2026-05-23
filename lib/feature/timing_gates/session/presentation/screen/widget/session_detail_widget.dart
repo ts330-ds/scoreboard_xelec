@@ -1819,7 +1819,7 @@ class _PdfOptionsSheetState extends State<PdfOptionsSheet> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Session results, leaderboard aur trial times PDF mein',
+            'Session results, leaderboard and trial times in PDF',
             style: TextStyle(color: sdSubtext, fontSize: 12),
           ),
           const SizedBox(height: 20),
@@ -1836,7 +1836,7 @@ class _PdfOptionsSheetState extends State<PdfOptionsSheet> {
             icon: Icons.download_outlined,
             iconColor: sdSuccess,
             title: 'Save to Device',
-            subtitle: 'Files app mein SportsIQ folder ke andar save hoga',
+            subtitle: 'Saved inside the SportsIQ folder in the Files app',
             isLoading: _savePending,
             onTap: (_sharePending || _savePending) ? null : _save,
           ),

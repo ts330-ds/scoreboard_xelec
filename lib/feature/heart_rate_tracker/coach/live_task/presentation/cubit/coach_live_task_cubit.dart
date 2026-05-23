@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
+import 'package:xelex_esp/service/network/network_reconnect_notifier.dart';
 import 'package:xelex_esp/service/socket/coach_live_task_socket_service.dart';
 import 'package:xelex_esp/service/socket/reconnect_controller.dart';
 import 'coach_live_task_state.dart';
@@ -17,6 +18,7 @@ class CoachLiveTaskCubit extends Cubit<CoachLiveTaskState>
 
   int? _currentTaskId;
   final ReconnectController _reconnect = ReconnectController(tag: 'COACH RECONNECT');
+  StreamSubscription<void>? _netSub;
 
   CoachLiveTaskCubit({
     required CoachLiveTaskSocketService socketService,
@@ -26,6 +28,15 @@ class CoachLiveTaskCubit extends Cubit<CoachLiveTaskState>
         super(const CoachLiveTaskState()) {
     WidgetsBinding.instance.addObserver(this);
     _setupCallbacks();
+    // Network wapas aaye to coach socket bhi auto-retry kare — manual
+    // Retry button ka wait nahi karna.
+    _netSub = NetworkReconnectNotifier.instance.onNetworkRestored.listen((_) {
+      if (isClosed || _currentTaskId == null || state.isAuthFailure) return;
+      if (!_socketService.isConnected) {
+        debugPrint('[COACH CUBIT] network restored — forcing retry');
+        retryConnectionManually();
+      }
+    });
   }
 
   // ── App Lifecycle ─────────────────────────────────────────────────────────
@@ -201,6 +212,7 @@ class CoachLiveTaskCubit extends Cubit<CoachLiveTaskState>
   Future<void> close() {
     WidgetsBinding.instance.removeObserver(this);
     _reconnect.dispose();
+    _netSub?.cancel();
     _socketService.disconnect();
     return super.close();
   }

@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_state.dart';
-import 'activity_constants.dart';
+import 'activity_constants.dart' show activityTypes;
 
 class _ActivityDropdown extends StatelessWidget {
   final String selectedActivity;
@@ -182,53 +182,6 @@ class NewActivitySheet extends StatelessWidget {
 
                 const SizedBox(height: 24),
 
-                // ── Duration Chips
-                const Text('Duration',
-                    style: TextStyle(
-                        color: AppColors.text,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: durationOptions.map((min) {
-                    final selected = state.selectedDuration == min;
-                    return GestureDetector(
-                      onTap: () => context
-                          .read<AthleteActivityCubit>()
-                          .selectDuration(min),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? AppColors.primary
-                              : AppColors.surfaceAlt,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: selected
-                                ? AppColors.primary
-                                : AppColors.border,
-                          ),
-                        ),
-                        child: Text('$min min',
-                            style: TextStyle(
-                                color: selected
-                                    ? Colors.white
-                                    : AppColors.subtext,
-                                fontSize: 13,
-                                fontWeight: selected
-                                    ? FontWeight.bold
-                                    : FontWeight.normal)),
-                      ),
-                    );
-                  }).toList(),
-                ),
-
-                const SizedBox(height: 24),
-
                 // ── Location
                 const Text('Location',
                     style: TextStyle(
@@ -307,7 +260,7 @@ class NewActivitySheet extends StatelessWidget {
                                 .read<AthleteActivityCubit>()
                                 .createTask();
                             if (created && context.mounted) {
-                              Navigator.of(context).pop();
+                              Navigator.of(context).pop(true);
                             }
                           },
                     icon: state.isCreatingTask

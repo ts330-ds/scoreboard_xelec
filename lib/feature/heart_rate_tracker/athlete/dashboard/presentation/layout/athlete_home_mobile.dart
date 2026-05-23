@@ -101,20 +101,6 @@ class _AthleteHomeView extends StatelessWidget {
                     const SizedBox(height: 12),
                     _VitalGrid(state: bleState),
                     const SizedBox(height: 28),
-                    const _SectionTitle(title: 'Sleep & Recovery'),
-                    const SizedBox(height: 12),
-                    GestureDetector(
-                      onTap: () =>
-                          context.push(HeartTrackerPaths.athleteSleepDetail),
-                      child: _SleepCard(state: bleState),
-                    ),
-                    const SizedBox(height: 28),
-                    if (bleState.hasHistoryData) ...[
-                      const _SectionTitle(title: 'Data Sync'),
-                      const SizedBox(height: 12),
-                      _HistorySyncCard(state: bleState),
-                      const SizedBox(height: 28),
-                    ],
                   ],
                 ),
               ),
@@ -610,35 +596,17 @@ class _VitalGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final vitals = [
-      _VitalData('Blood O₂ (SpO2)', state.spo2 > 0 ? '${state.spo2}%' : '--',
-          Icons.bloodtype, AppColors.vitalOxygen),
-      _VitalData(
-          'Blood Pressure',
-          state.systolic > 0 ? '${state.systolic}/${state.diastolic}' : '--',
-          Icons.speed,
-          AppColors.vitalBP),
-      _VitalData('Stress', state.stressLevel > 0 ? '${state.stressLevel}' : '--',
-          Icons.psychology, AppColors.vitalStress),
-      _VitalData(
-          'HRV (RMSSD)',
-          state.hrv > 0 ? '${state.hrv.toStringAsFixed(1)} ms' : '--',
-          Icons.monitor_heart_outlined,
-          AppColors.primary,
-          route: HeartTrackerPaths.athleteHrvDetail),
-    ];
+    final hrv = _VitalData(
+      'HRV (RMSSD)',
+      state.hrv > 0 ? '${state.hrv.toStringAsFixed(1)} ms' : '--',
+      Icons.monitor_heart_outlined,
+      AppColors.primary,
+      route: HeartTrackerPaths.athleteHrvDetail,
+    );
 
-    return GridView.builder(
-      shrinkWrap: true,
-      padding: EdgeInsets.zero,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.2),
-      itemCount: vitals.length,
-      itemBuilder: (_, i) => _VitalTile(data: vitals[i]),
+    return AspectRatio(
+      aspectRatio: 2.4,
+      child: _VitalTile(data: hrv),
     );
   }
 }

@@ -50,7 +50,7 @@ class CoachLiveTaskMobile extends StatelessWidget {
                 ],
               ),
               content: Text(
-                '$athleteName ne apna session stop kar diya.',
+                '$athleteName has stopped their session.',
                 style: const TextStyle(color: AppColors.subtext, fontSize: 14),
               ),
               actions: [
@@ -261,7 +261,7 @@ class _ErrorView extends StatelessWidget {
                     fontSize: 15,
                     fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
-            const Text('Connection lost ho gayi',
+            const Text('Connection lost',
                 style: TextStyle(color: AppColors.subtext, fontSize: 13)),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -444,8 +444,8 @@ class _AthleteOfflineBannerState extends State<_AthleteOfflineBanner>
                   ),
                   const SizedBox(height: 2),
                   const Text(
-                    'Athlete ka internet ya device disconnect ho gaya. '
-                    'Reconnect hote hi readings phir aayengi.',
+                    "Athlete's internet or device disconnected. "
+                    'Readings will resume once reconnected.',
                     style: TextStyle(
                       color: AppColors.subtext,
                       fontSize: 11,

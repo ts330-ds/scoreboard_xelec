@@ -102,6 +102,18 @@ class MainActivity : FlutterActivity() {
                         result.success("History sync started")
                     }
 
+                    "syncHistoryRange" -> {
+                        if (!chileafHandler.isDeviceConnected) {
+                            result.error("NOT_CONNECTED", "No device connected", null)
+                            return@setMethodCallHandler
+                        }
+                        val args = call.arguments as? Map<*, *>
+                        val fromMs = (args?.get("fromMs") as? Number)?.toLong() ?: 0L
+                        val toMs = (args?.get("toMs") as? Number)?.toLong() ?: 0L
+                        chileafHandler.syncHistoryRange(fromMs, toMs)
+                        result.success("Range sync started")
+                    }
+
                     "syncHistorySingleRecord" -> {
                         val args = call.arguments as? Map<*, *>
                         val stamp = (args?.get("stamp") as? Long) ?: 0L

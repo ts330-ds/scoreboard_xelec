@@ -9,7 +9,6 @@ import '../model/athlete_task_model.dart';
 abstract interface class AthleteTaskRemoteDataSource {
   TaskEither<Failure, AthleteTaskModel> createTask({
     required String name,
-    required String duration,
     required String assignedBy,
   });
 
@@ -29,13 +28,12 @@ class AthleteTaskRemoteDataSourceImpl implements AthleteTaskRemoteDataSource {
   @override
   TaskEither<Failure, AthleteTaskModel> createTask({
     required String name,
-    required String duration,
     required String assignedBy,
   }) =>
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
 
         try {
@@ -43,7 +41,6 @@ class AthleteTaskRemoteDataSourceImpl implements AthleteTaskRemoteDataSource {
             '/athlete/create_task',
             data: {
               'name': name,
-              'duration': duration,
               'assigned_by': assignedBy,
             },
             options: Options(headers: {'Authorization': 'Bearer $token'}),
@@ -71,7 +68,7 @@ class AthleteTaskRemoteDataSourceImpl implements AthleteTaskRemoteDataSource {
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
 
         try {
@@ -106,7 +103,7 @@ class AthleteTaskRemoteDataSourceImpl implements AthleteTaskRemoteDataSource {
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
 
         try {

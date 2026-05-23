@@ -3,15 +3,36 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/cubit/shell_cubit.dart';
+import 'package:xelex_esp/feature/onboarding/battery_optimization_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_activity_mobile.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_history_mobile.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/presentation/screen/athlete_history_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_home_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_profile_mobile.dart';
 import 'package:xelex_esp/router/heart_tracker_path.dart';
 
-class AthleteMainScreenMobile extends StatelessWidget {
+class AthleteMainScreenMobile extends StatefulWidget {
   final Widget child;
   const AthleteMainScreenMobile({super.key, required this.child});
+
+  @override
+  State<AthleteMainScreenMobile> createState() => _AthleteMainScreenMobileState();
+}
+
+class _AthleteMainScreenMobileState extends State<AthleteMainScreenMobile> {
+  // Process ke andar ek hi baar prompt try kare — har rebuild pe nahi.
+  // Persistent gate SharedPreferences flag mein hai (showIfNeeded ke andar).
+  static bool _promptAttempted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!_promptAttempted) {
+      _promptAttempted = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) BatteryOptimizationScreen.showIfNeeded(context);
+      });
+    }
+  }
 
   static const List<_NavItem> _navItems = [
     _NavItem(label: 'Home',     icon: Icons.grid_view_outlined,  activeIcon: Icons.grid_view,   path: HeartTrackerPaths.athleteHome),
@@ -27,7 +48,7 @@ class AthleteMainScreenMobile extends StatelessWidget {
     const AthleteHomeMobile(),
     const AthleteActivityMobile(),
     const AthleteProfileMobile(),
-    const AthleteHistoryMobile(),
+    const AthleteHistoryScreen(),
   ];
 
   int _locationToIndex(String location) {

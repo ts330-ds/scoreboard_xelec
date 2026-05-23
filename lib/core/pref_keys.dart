@@ -29,4 +29,21 @@ abstract class PrefKeys {
   // Sports cache
   static const String sportsData = 'sports_data';
   static const String sportsTimestamp = 'sports_timestamp';
+
+  // Onboarding flags
+  static const String batteryOptPromptShown = 'battery_opt_prompt_shown';
+
+  // History push watermarks (per athlete: '<prefix><athleteId>')
+  // Backend has no dedupe — these prevent re-emitting already-sent records.
+  static const String lastEmittedHrStampPrefix = 'last_emitted_hr_stamp_';
+  static const String lastEmittedRrStampPrefix = 'last_emitted_rr_stamp_';
+  static const String lastEmittedSleepUtcPrefix = 'last_emitted_sleep_utc_';
+
+  // Last completed BLE history sync — used by 2h cooldown gate
+  // (force=true bypasses; manual sync button uses force).
+  static const String lastHistorySyncAtPrefix = 'last_history_sync_at_';
+
+  // Last successful server push — used by 1h cooldown gate so we don't
+  // spam the server on every sync. force=true bypasses.
+  static const String lastHistoryPushAtPrefix = 'last_history_push_at_';
 }

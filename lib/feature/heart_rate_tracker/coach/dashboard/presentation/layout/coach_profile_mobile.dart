@@ -109,7 +109,7 @@ class _CoachProfileView extends StatelessWidget {
                   child: CircularProgressIndicator(color: AppColors.primary),
                 ),
               CoachProfileStatus.error => _ErrorView(
-                  message: state.errorMessage ?? 'Kuch galat ho gaya',
+                  message: state.errorMessage ?? 'Something went wrong',
                   onRetry: () =>
                       context.read<CoachProfileCubit>().fetchProfile(),
                 ),

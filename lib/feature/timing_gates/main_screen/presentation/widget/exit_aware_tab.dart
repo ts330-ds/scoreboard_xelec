@@ -35,13 +35,13 @@ class ExitAwareTab extends StatelessWidget {
             Icon(Icons.exit_to_app, color: _primary),
             SizedBox(width: 10),
             Text(
-              'App se bahar jaayein?',
+              'Exit App?',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ],
         ),
         content: const Text(
-          'Kya aap Sports IQ se bahar jaana chahte hain?',
+          'Are you sure you want to exit Sports IQ?',
           style: TextStyle(color: _subtext),
         ),
         actions: [

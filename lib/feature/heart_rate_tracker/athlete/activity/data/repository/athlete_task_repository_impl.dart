@@ -13,10 +13,9 @@ class AthleteTaskRepositoryImpl implements AthleteTaskRepository {
   @override
   TaskEither<Failure, AthleteTaskEntity> createTask({
     required String name,
-    required String duration,
     required String assignedBy,
   }) =>
-      _dataSource.createTask(name: name, duration: duration, assignedBy: assignedBy);
+      _dataSource.createTask(name: name, assignedBy: assignedBy);
 
   @override
   TaskEither<Failure, List<AthleteTaskEntity>> getMyTasks() =>

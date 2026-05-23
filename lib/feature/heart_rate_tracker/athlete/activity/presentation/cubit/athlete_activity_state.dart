@@ -21,6 +21,11 @@ class AthleteActivityState extends Equatable {
   // Active task (API se mila hua id)
   final int? activeTaskId;
 
+  // Just-completed task — set when session ends so UI can pop the
+  // feedback (RPE + notes) sheet. UI clears it via [acknowledgeFeedbackPrompt]
+  // after handling, so the sheet doesn't reopen.
+  final int? pendingFeedbackTaskId;
+
   // Socket
   final bool isStoppingSession;
   final bool isSocketConnected;
@@ -46,7 +51,7 @@ class AthleteActivityState extends Equatable {
     this.activeSession,
     this.elapsedSeconds = 0,
     this.selectedActivity = 'Running',
-    this.selectedDuration = 30,
+    this.selectedDuration = 0,
     this.locationText = '',
     this.isLoadingLocation = false,
     this.taskName = '',
@@ -54,6 +59,7 @@ class AthleteActivityState extends Equatable {
     this.taskError,
     this.pendingTaskId,
     this.activeTaskId,
+    this.pendingFeedbackTaskId,
     this.isStoppingSession = false,
     this.isSocketConnected = false,
     this.isSocketReconnecting = false,
@@ -98,6 +104,8 @@ class AthleteActivityState extends Equatable {
     bool clearPendingTaskId = false,
     int? activeTaskId,
     bool clearActiveTaskId = false,
+    int? pendingFeedbackTaskId,
+    bool clearPendingFeedbackTaskId = false,
     bool? isStoppingSession,
     bool? isSocketConnected,
     bool? isSocketReconnecting,
@@ -126,6 +134,9 @@ class AthleteActivityState extends Equatable {
       taskError: clearTaskError ? null : (taskError ?? this.taskError),
       pendingTaskId: clearPendingTaskId ? null : (pendingTaskId ?? this.pendingTaskId),
       activeTaskId: clearActiveTaskId ? null : (activeTaskId ?? this.activeTaskId),
+      pendingFeedbackTaskId: clearPendingFeedbackTaskId
+          ? null
+          : (pendingFeedbackTaskId ?? this.pendingFeedbackTaskId),
       isStoppingSession: isStoppingSession ?? this.isStoppingSession,
       isSocketConnected: isSocketConnected ?? this.isSocketConnected,
       isSocketReconnecting: isSocketReconnecting ?? this.isSocketReconnecting,
@@ -156,6 +167,7 @@ class AthleteActivityState extends Equatable {
         taskError,
         pendingTaskId,
         activeTaskId,
+        pendingFeedbackTaskId,
         isStoppingSession,
         isSocketConnected,
         isSocketReconnecting,

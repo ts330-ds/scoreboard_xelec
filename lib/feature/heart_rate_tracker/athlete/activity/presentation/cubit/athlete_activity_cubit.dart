@@ -11,6 +11,7 @@ import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/data/model
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/entity/athlete_task_entity.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/usecase/create_athlete_task_usecase.dart';
 import 'package:xelex_esp/service/foreground/athlete_foreground_service.dart';
+import 'package:xelex_esp/service/network/network_reconnect_notifier.dart';
 import 'package:xelex_esp/service/socket/reconnect_controller.dart';
 import 'athlete_activity_state.dart';
 
@@ -30,9 +31,19 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
         super(const AthleteActivityState()) {
     WidgetsBinding.instance.addObserver(this);
     _bgSub = AthleteForegroundService.eventStream.listen(_onBackgroundEvent);
+    // Airplane mode / Wi-Fi drop ke baad jab network restore ho, agar session
+    // active hai aur socket disconnect/exhausted hai to turant retry karo.
+    _netSub = NetworkReconnectNotifier.instance.onNetworkRestored.listen((_) {
+      if (isClosed || !state.isSessionActive || state.isAuthFailure) return;
+      if (!state.isSocketConnected) {
+        debugPrint('[ACTIVITY CUBIT] network restored — forcing retry');
+        retryConnectionManually();
+      }
+    });
   }
 
   StreamSubscription<Map<String, dynamic>>? _bgSub;
+  StreamSubscription<void>? _netSub;
 
   // UI ke liye timer — sirf elapsed seconds update karta hai
   Timer? _timer;
@@ -144,9 +155,26 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
         _onAppPaused();
       case AppLifecycleState.resumed:
         _onAppResumed();
+      case AppLifecycleState.detached:
+        // App process khatam ho rahi hai (swipe-kill / system kill).
+        // Minimize / screen-off / phone call pe yeh fire nahi hota —
+        // wahan paused/inactive hota hai. Yahan tak pahunchne ka matlab:
+        // app genuinely band ho rahi hai → server ko bata do session stop.
+        // Android me stopWithTask=true se BG service ka onDestroy bhi
+        // yahi kaam karta hai (defense-in-depth). iOS pe Flutter side hi
+        // sole option hai.
+        _onAppDetached();
       default:
         break;
     }
+  }
+
+  void _onAppDetached() {
+    if (!state.isSessionActive) return;
+    final taskId = state.activeTaskId;
+    if (taskId == null) return;
+    debugPrint('[LIFECYCLE] detached — stopping active task $taskId');
+    AthleteForegroundService.stopActivitySession(taskId);
   }
 
   void _onAppPaused() {
@@ -174,7 +202,7 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
 
       _pausedAt = null;
 
-      if (newElapsed >= targetSeconds) {
+      if (targetSeconds > 0 && newElapsed >= targetSeconds) {
         emit(state.copyWith(elapsedSeconds: targetSeconds));
         requestStopSession();
         return;
@@ -243,7 +271,7 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   Future<bool> createTask() async {
     final name = state.taskName.trim();
     if (name.isEmpty) {
-      emit(state.copyWith(taskError: 'Task ka naam daalein'));
+      emit(state.copyWith(taskError: 'Enter task name'));
       return false;
     }
 
@@ -251,7 +279,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
 
     final result = await _createTask(
       name: name,
-      duration: state.selectedDuration.toString(),
       assignedBy: 'self',
     ).run();
 
@@ -364,6 +391,11 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
 
     if (state.activeSession == null) return;
 
+    // Feedback sheet ke liye task id ko activeTaskId clear hone se pehle
+    // capture karo. UI BlocListener pe sheet open karega, phir
+    // acknowledgeFeedbackPrompt() call karega.
+    final justCompletedTaskId = state.activeTaskId;
+
     final completed = state.activeSession!.copyWith(
       endTime: DateTime.now(),
       isCompleted: true,
@@ -376,11 +408,19 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       isStoppingSession: false,
       clearActiveTaskId: true,
       clearPendingTaskId: true,
+      pendingFeedbackTaskId: justCompletedTaskId,
       reconnectAttempt: 0,
       isReconnectExhausted: false,
       isSocketReconnecting: false,
       isAuthFailure: false,
     ));
+  }
+
+  // UI sheet handle karne ke baad call karega (Save / Resume / Discard) —
+  // taaki dobara open na ho jab cubit rebuild ho ya navigation ho.
+  void acknowledgeFeedbackPrompt() {
+    if (state.pendingFeedbackTaskId == null) return;
+    emit(state.copyWith(clearPendingFeedbackTaskId: true));
   }
 
   // ── BLE data — UI mein store karo + background ko forward karo ────────────
@@ -451,13 +491,14 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       emit(state.copyWith(elapsedSeconds: state.elapsedSeconds + 1));
     });
 
-    final targetDuration =
-        Duration(minutes: state.activeSession!.targetDurationMinutes);
-    _autoStopTimer = Timer(targetDuration, () {
-      if (!isClosed && state.isSessionActive) {
-        requestStopSession();
-      }
-    });
+    final targetMinutes = state.activeSession!.targetDurationMinutes;
+    if (targetMinutes > 0) {
+      _autoStopTimer = Timer(Duration(minutes: targetMinutes), () {
+        if (!isClosed && state.isSessionActive) {
+          requestStopSession();
+        }
+      });
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -476,6 +517,7 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     _stopTimeoutTimer?.cancel();
     _reconnect.dispose();
     _bgSub?.cancel();
+    _netSub?.cancel();
     return super.close();
   }
 }

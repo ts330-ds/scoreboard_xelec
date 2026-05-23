@@ -11,7 +11,7 @@ import 'athlete_background_handler.dart';
 class AthleteForegroundService {
   AthleteForegroundService._();
 
-  static bool _healthActive = false;
+  // Health monitoring 24/7 removed — sirf activity (training) BG isolate use karta hai.
   static bool _activityActive = false;
 
   // BG isolate ready handshake — `onStart` complete hone pe BG handler
@@ -92,27 +92,6 @@ class AthleteForegroundService {
     );
   }
 
-  // Health monitor start karo — token aur baseUrl pass karo
-  // kyunki background isolate mein dotenv/shared_prefs available nahi hai
-  static Future<void> startHealthMonitor(String token, String baseUrl) async {
-    _healthActive = true;
-    await _ensureServiceRunning();
-    // BG isolate ka onStart complete hone ka wait karo — warna sendDataToTask
-    // message drop ho jaata hai (yeh actual bug tha jo logs me dikha).
-    await _waitForBgReady();
-    FlutterForegroundTask.sendDataToTask({
-      'cmd': 'start_health',
-      'token': token,
-      'base_url': baseUrl,
-    });
-  }
-
-  static Future<void> stopHealthMonitor() async {
-    _healthActive = false;
-    FlutterForegroundTask.sendDataToTask({'cmd': 'stop_health'});
-    await _stopServiceIfIdle();
-  }
-
   // Activity session start karo
   static Future<void> startActivitySession({
     required String token,
@@ -149,7 +128,7 @@ class AthleteForegroundService {
     double? lat,
     double? lng,
   }) {
-    if (!_healthActive && !_activityActive) return;
+    if (!_activityActive) return;
     FlutterForegroundTask.sendDataToTask({
       'cmd': 'update_metrics',
       'hr': heartRate,
@@ -175,7 +154,7 @@ class AthleteForegroundService {
 
   // Reference count zero ho jaaye tabhi band karo
   static Future<void> _stopServiceIfIdle() async {
-    if (!_healthActive && !_activityActive) {
+    if (!_activityActive) {
       await FlutterForegroundTask.stopService();
       // Service stop hone ke baad next start fresh handshake karega
       _bgReady = false;

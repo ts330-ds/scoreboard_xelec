@@ -69,7 +69,7 @@ class _ActivityBody extends StatelessWidget {
   }
 
   void _showNewActivitySheet(BuildContext context) {
-    showModalBottomSheet(
+    showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -78,8 +78,12 @@ class _ActivityBody extends StatelessWidget {
         value: context.read<AthleteActivityCubit>(),
         child: const NewActivitySheet(),
       ),
-    ).then((_) {
-      if (context.mounted) context.read<MyTasksCubit>().fetchTasks();
+    ).then((created) {
+      // Sheet sirf tab refetch trigger karega jab task actually create
+      // hua ho (success pe pop(true)). Cancel/swipe-down/backdrop pe nahi.
+      if (created == true && context.mounted) {
+        context.read<MyTasksCubit>().fetchTasks();
+      }
     });
   }
 }

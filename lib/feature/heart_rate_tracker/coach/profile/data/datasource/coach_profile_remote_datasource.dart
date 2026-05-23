@@ -37,7 +37,7 @@ class CoachProfileRemoteDataSourceImpl implements CoachProfileRemoteDataSource {
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
 
         try {
@@ -48,7 +48,7 @@ class CoachProfileRemoteDataSourceImpl implements CoachProfileRemoteDataSource {
           return right(CoachProfileModel.fromJson(response.data));
         } on DioException catch (e) {
           if (e.response?.statusCode == 401) {
-            return left(const AuthFailure('Session expire ho gayi, dobara login karein'));
+            return left(const AuthFailure('Session expired, please login again'));
           }
           return left(ServerFailure(
             e.response?.data['message'] ?? e.message ?? 'Failed to fetch profile',
@@ -76,7 +76,7 @@ class CoachProfileRemoteDataSourceImpl implements CoachProfileRemoteDataSource {
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token nahi mila, dobara login karein'));
+          return left(const AuthFailure('Token not found, please login again'));
         }
 
         try {
@@ -109,7 +109,7 @@ class CoachProfileRemoteDataSourceImpl implements CoachProfileRemoteDataSource {
           return right(const CoachProfileModel(name: '', email: ''));
         } on DioException catch (e) {
           if (e.response?.statusCode == 401) {
-            return left(const AuthFailure('Session expire ho gayi, dobara login karein'));
+            return left(const AuthFailure('Session expired, please login again'));
           }
           return left(ServerFailure(
             e.response?.data['message'] ?? e.message ?? 'Failed to update profile',

@@ -14,11 +14,11 @@ class ActiveSessionView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final type = typeFor(state.activeSession!.activityType);
-    final target = state.activeSession!.targetDurationMinutes * 60;
-    final remaining = (target - state.elapsedSeconds).clamp(0, target);
     final bleState = context.watch<HeartBleCubit>().state;
 
-    return SingleChildScrollView(
+    return SafeArea(
+      top: false,
+      child: SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
@@ -77,20 +77,6 @@ class ActiveSessionView extends StatelessWidget {
                           fontSize: 40,
                           fontWeight: FontWeight.bold,
                           letterSpacing: 2),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Remaining  ${AthleteActivityCubit.formatSeconds(remaining)}',
-                      style: const TextStyle(
-                          color: AppColors.subtext, fontSize: 12),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${state.activeSession!.targetDurationMinutes} min target',
-                      style: TextStyle(
-                          color: type.color,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -251,6 +237,7 @@ class ActiveSessionView extends StatelessWidget {
           const SizedBox(height: 20),
         ],
       ),
+      ),
     );
   }
 }
@@ -381,7 +368,7 @@ class _SessionReconnectBanner extends StatelessWidget {
         } else if (state.isReconnectExhausted) {
           color = AppColors.error;
           icon = Icons.wifi_off_rounded;
-          label = 'Cannot reach server. Data save nahi ho raha.';
+          label = 'Cannot reach server. Data is not being saved.';
           showSpinner = false;
           showRetry = true;
         } else {

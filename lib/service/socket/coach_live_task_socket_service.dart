@@ -28,7 +28,7 @@ class CoachLiveTaskSocketService {
     }
 
     final url = _socketUrl(baseUrl);
-    debugPrint('[COACH SOCKET] Connecting to $url');
+    // debugPrint('[COACH SOCKET] Connecting to $url');
 
     _socket = sio.io(
       url,
@@ -42,27 +42,27 @@ class CoachLiveTaskSocketService {
     );
 
     _socket!.onConnect((_) {
-      debugPrint('[COACH SOCKET] Connected');
+      // debugPrint('[COACH SOCKET] Connected');
       onConnected?.call();
     });
 
     _socket!.onDisconnect((_) {
-      debugPrint('[COACH SOCKET] Disconnected');
+      // debugPrint('[COACH SOCKET] Disconnected');
       onDisconnected?.call();
     });
 
     _socket!.onConnectError((err) {
-      debugPrint('[COACH SOCKET] Connection error: $err');
+      // debugPrint('[COACH SOCKET] Connection error: $err');
       onError?.call('Socket connection failed');
     });
 
     _socket!.on('watching_task', (data) {
-      debugPrint('[COACH SOCKET] watching_task: $data');
+      // debugPrint('[COACH SOCKET] watching_task: $data');
       onWatching?.call();
     });
 
     _socket!.on('live_result_update', (data) {
-      debugPrint('[COACH SOCKET] live_result_update: $data');
+      // debugPrint('[COACH SOCKET] live_result_update: $data');
       if (data is! Map) return;
 
       final latestRaw = data['latestReading'];
@@ -85,14 +85,14 @@ class CoachLiveTaskSocketService {
     });
 
     _socket!.on('athlete_stopped', (data) {
-      debugPrint('[COACH SOCKET] athlete_stopped: $data');
+      // debugPrint('[COACH SOCKET] athlete_stopped: $data');
       onAthleteStopped?.call();
     });
 
     // Athlete temporarily disconnected (internet/bluetooth drop) — NOT session end.
     // Coach UI should show a "reconnecting" indicator, not the stop dialog.
     _socket!.on('athlete_connection_lost', (data) {
-      debugPrint('[COACH SOCKET] athlete_connection_lost: $data');
+      // debugPrint('[COACH SOCKET] athlete_connection_lost: $data');
       onAthleteConnectionLost?.call();
     });
 
@@ -113,14 +113,14 @@ class CoachLiveTaskSocketService {
   // Task ko watch karna shuru karo
   void watchTask(int taskId) {
     if (!isConnected) return;
-    debugPrint('[COACH SOCKET] Emitting watch_task_results for task $taskId');
+    // debugPrint('[COACH SOCKET] Emitting watch_task_results for task $taskId');
     _socket!.emit('watch_task_results', taskId);
   }
 
   // Watch band karo jab coach page chhode
   void unwatchTask(int taskId) {
     if (!isConnected) return;
-    debugPrint('[COACH SOCKET] Emitting unwatch_task_results for task $taskId');
+    // debugPrint('[COACH SOCKET] Emitting unwatch_task_results for task $taskId');
     _socket!.emit('unwatch_task_results', taskId);
   }
 
