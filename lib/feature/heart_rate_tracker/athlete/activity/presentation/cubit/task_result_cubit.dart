@@ -13,8 +13,10 @@ class TaskResultCubit extends Cubit<TaskResultState> {
         super(const TaskResultState.initial());
 
   Future<void> load() async {
+    if (state.status == TaskResultStatus.loading) return;
     emit(state.copyWith(status: TaskResultStatus.loading));
     final result = await _getTaskResult(taskId).run();
+    if (isClosed) return;
     result.fold(
       (failure) => emit(state.copyWith(
         status: TaskResultStatus.error,

@@ -64,6 +64,21 @@ class HistoryLocalStore {
   List<Map<dynamic, dynamic>> getAllHr() =>
       _hr.values.map((r) => r.toMap()).toList();
 
+  /// Returns HR readings whose key (seconds) falls within [fromMs, toMs].
+  /// Much cheaper than getAllHr() + manual filter for large boxes.
+  List<HrReadingHive> getHrInRange(int fromMs, int toMs) {
+    final fromKey = fromMs ~/ 1000;
+    final toKey = toMs ~/ 1000;
+    final result = <HrReadingHive>[];
+    for (final entry in _hr.toMap().entries) {
+      final key = entry.key as int;
+      if (key >= fromKey && key <= toKey) {
+        result.add(entry.value);
+      }
+    }
+    return result;
+  }
+
   // ── RR ────────────────────────────────────────────────────────────────────
   Future<int> upsertRrChunk(List<Map<dynamic, dynamic>> chunk) async {
     if (chunk.isEmpty) return 0;

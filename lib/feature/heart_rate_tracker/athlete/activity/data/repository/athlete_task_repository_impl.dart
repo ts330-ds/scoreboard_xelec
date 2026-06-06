@@ -18,10 +18,29 @@ class AthleteTaskRepositoryImpl implements AthleteTaskRepository {
       _dataSource.createTask(name: name, assignedBy: assignedBy);
 
   @override
-  TaskEither<Failure, List<AthleteTaskEntity>> getMyTasks() =>
-      _dataSource.getMyTasks();
+  TaskEither<Failure, MyTasksPage> getMyTasks({int page = 1}) =>
+      _dataSource.getMyTasks(page: page).map(
+            (result) => MyTasksPage(
+              tasks: result.tasks,
+              totalRecords: result.totalRecords,
+            ),
+          );
 
   @override
   TaskEither<Failure, TaskResultEntity> getTaskResult(int taskId) =>
       _dataSource.getTaskResult(taskId);
+
+  @override
+  TaskEither<Failure, bool> submitTaskResults({
+    required int taskId,
+    required bool isFirstChunk,
+    required bool isLastChunk,
+    required List<Map<String, dynamic>> readings,
+  }) =>
+      _dataSource.submitTaskResults(
+        taskId: taskId,
+        isFirstChunk: isFirstChunk,
+        isLastChunk: isLastChunk,
+        readings: readings,
+      );
 }

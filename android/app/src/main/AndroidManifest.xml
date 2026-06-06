@@ -27,6 +27,9 @@
         android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" />
 
+    <!-- Allow app to request disabling battery optimization -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- Keep CPU awake so socket/BLE survive screen-off (critical for Vivo/Xiaomi/Oppo) -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 

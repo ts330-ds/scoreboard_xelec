@@ -19,8 +19,6 @@ class SportRepositoryImpl implements SportRepository {
           final cached = await _local.getSports();
           if (cached != null) return right(cached);
         }
-
-        // Cache nahi hai ya expire — API se fetch karo
         final result = await _remote.getSports().run();
         return result.fold(
           (failure) => left(failure),

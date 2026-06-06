@@ -279,18 +279,27 @@ class _SectionHeader extends StatelessWidget {
 
 // ── Heart Rate Hero Card (chart + stats) ─────────────────────────────────────
 
-class _HeartRateHeroCard extends StatelessWidget {
+class _HeartRateHeroCard extends StatefulWidget {
   final CoachTaskResultSession session;
   const _HeartRateHeroCard({required this.session});
 
   @override
+  State<_HeartRateHeroCard> createState() => _HeartRateHeroCardState();
+}
+
+class _HeartRateHeroCardState extends State<_HeartRateHeroCard> {
+  static const _zoomLevels = [0.3, 0.5, 1.0, 2.0, 4.0];
+  static const _zoomLabels = ['1x', '2x', '3x', '5x', '10x'];
+  int _zoomIndex = 1;
+
+  double get _pxPerSecond => _zoomLevels[_zoomIndex];
+
+  @override
   Widget build(BuildContext context) {
-    final stats = session.stats.heartRate;
-    // Sort raw_data by recorded_at (oldest first) — entity reverses but be safe
-    final sorted = [...session.rawData]
+    final stats = widget.session.stats.heartRate;
+    final sorted = [...widget.session.rawData]
       ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
-    // Anchor x-axis to session.startedAt so labels show real clock time
-    final anchor = session.startedAt;
+    final anchor = widget.session.startedAt;
     final spots = sorted
         .map((p) => FlSpot(
               p.recordedAt.difference(anchor).inSeconds.toDouble(),
@@ -301,14 +310,13 @@ class _HeartRateHeroCard extends StatelessWidget {
     final bpms = sorted.map((p) => p.heartRate).toList();
     final maxBpm = bpms.reduce(math.max);
     final minBpm = bpms.reduce(math.min);
-    final maxY = (maxBpm + 20).toDouble();
-    final minY = ((minBpm - 20).clamp(0, 999)).toDouble();
-    final sessionSpan = session.duration.inSeconds.toDouble();
+    final yFloor = ((minBpm - 20).clamp(0, 999) / 20).floor() * 20.0;
+    final yCeil = ((maxBpm + 20) / 20).ceil() * 20.0;
+    const double yInterval = 20;
+    final sessionSpan = widget.session.duration.inSeconds.toDouble();
     final lastX = spots.isNotEmpty ? spots.last.x : 0.0;
     final double maxX =
         (sessionSpan > 0 ? sessionSpan : lastX).clamp(1.0, double.infinity);
-    final double minX = spots.isNotEmpty && spots.first.x < 0 ? spots.first.x : 0.0;
-    final double tickInterval = (maxX - minX) / 4;
 
     final avgBpm = stats.avg;
 
@@ -328,6 +336,32 @@ class _HeartRateHeroCard extends StatelessWidget {
 
     final color = zoneColor(avgBpm);
 
+    final screenWidth = MediaQuery.of(context).size.width - 72;
+    const minChartWidth = 350.0;
+    final calculatedWidth =
+        (maxX * _pxPerSecond).clamp(minChartWidth, double.infinity);
+    final chartWidth = math.max(calculatedWidth, screenWidth);
+
+    final visibleSeconds =
+        chartWidth > 0 ? maxX / (chartWidth / screenWidth) : maxX;
+    final double labelInterval;
+    if (visibleSeconds <= 120) {
+      labelInterval = 15;
+    } else if (visibleSeconds <= 300) {
+      labelInterval = 30;
+    } else if (visibleSeconds <= 600) {
+      labelInterval = 60;
+    } else if (visibleSeconds <= 1800) {
+      labelInterval = 120;
+    } else if (visibleSeconds <= 3600) {
+      labelInterval = 300;
+    } else {
+      labelInterval = 600;
+    }
+
+    final canZoomIn = _zoomIndex < _zoomLevels.length - 1;
+    final canZoomOut = _zoomIndex > 0;
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -343,7 +377,6 @@ class _HeartRateHeroCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // ── Top band
           Container(
             width: double.infinity,
             padding:
@@ -387,7 +420,6 @@ class _HeartRateHeroCard extends StatelessWidget {
             ),
           ),
 
-          // ── Avg BPM display
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
             child: Row(
@@ -415,108 +447,209 @@ class _HeartRateHeroCard extends StatelessWidget {
             ),
           ),
 
-          // ── Chart
-          SizedBox(
-            height: 160,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 4, 16, 8),
-              child: LineChart(
-                LineChartData(
-                  minX: minX,
-                  maxX: maxX,
-                  minY: minY,
-                  maxY: maxY,
-                  clipData: const FlClipData.all(),
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    horizontalInterval: 20,
-                    getDrawingHorizontalLine: (_) => FlLine(
-                      color: AppColors.borderLight,
-                      strokeWidth: 1,
-                    ),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  titlesData: FlTitlesData(
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 38,
-                        interval: 20,
-                        getTitlesWidget: (val, _) => Text(
-                          '${val.toInt()}',
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Icon(Icons.swipe_outlined,
+                    size: 12,
+                    color: AppColors.subtext.withValues(alpha: 0.6)),
+                const SizedBox(width: 4),
+                Text('Swipe to scroll',
+                    style: TextStyle(
+                        color: AppColors.subtext.withValues(alpha: 0.6),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600)),
+                const Spacer(),
+                _ZoomButton(
+                    icon: Icons.remove,
+                    onTap: canZoomOut
+                        ? () => setState(() => _zoomIndex--)
+                        : null),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _zoomIndex = 1),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(_zoomLabels[_zoomIndex],
                           style: const TextStyle(
-                              color: AppColors.subtext, fontSize: 10),
-                        ),
-                      ),
-                    ),
-                    rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 22,
-                        interval: tickInterval,
-                        getTitlesWidget: (v, _) {
-                          if (v < minX || v > maxX) return const SizedBox.shrink();
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              _fmtClock(anchor, v.toInt()),
-                              style: const TextStyle(
-                                  color: AppColors.subtext, fontSize: 9),
-                            ),
-                          );
-                        },
-                      ),
+                              color: AppColors.primary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800)),
                     ),
                   ),
-                  lineTouchData: LineTouchData(
-                    touchTooltipData: LineTouchTooltipData(
-                      getTooltipColor: (_) => AppColors.text,
-                      getTooltipItems: (spots) => spots
-                          .map((s) => LineTooltipItem(
-                                '${s.y.toInt()} bpm  •  ${_fmtClockSec(anchor, s.x.toInt())}',
-                                const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600),
-                              ))
-                          .toList(),
-                    ),
-                  ),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: spots,
-                      isCurved: true,
-                      curveSmoothness: 0.35,
-                      color: color,
-                      barWidth: 2.5,
-                      dotData: const FlDotData(show: false),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            color.withValues(alpha: 0.2),
-                            color.withValues(alpha: 0.0),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
-              ),
+                _ZoomButton(
+                    icon: Icons.add,
+                    onTap: canZoomIn
+                        ? () => setState(() => _zoomIndex++)
+                        : null),
+              ],
             ),
           ),
+          const SizedBox(height: 6),
 
-          // ── Divider
-          Divider(height: 1, color: AppColors.border),
+          SizedBox(
+            height: 200,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 44,
+                  child: LineChart(
+                    LineChartData(
+                      minY: yFloor,
+                      maxY: yCeil,
+                      minX: 0,
+                      maxX: 1,
+                      gridData: const FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      lineBarsData: [],
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 36,
+                            interval: yInterval,
+                            getTitlesWidget: (v, _) => Text(
+                                v.toStringAsFixed(0),
+                                style: const TextStyle(
+                                    color: AppColors.subtext,
+                                    fontSize: 10)),
+                          ),
+                        ),
+                        rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 26,
+                            getTitlesWidget: (_, __) =>
+                                const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                      lineTouchData: const LineTouchData(enabled: false),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: SizedBox(
+                        width: chartWidth,
+                        child: LineChart(
+                          LineChartData(
+                            minY: yFloor,
+                            maxY: yCeil,
+                            minX: 0,
+                            maxX: maxX,
+                            clipData: const FlClipData.none(),
+                            gridData: FlGridData(
+                              show: true,
+                              drawVerticalLine: true,
+                              horizontalInterval: yInterval,
+                              verticalInterval: labelInterval,
+                              getDrawingHorizontalLine: (_) => FlLine(
+                                  color: AppColors.borderLight,
+                                  strokeWidth: 1),
+                              getDrawingVerticalLine: (_) => FlLine(
+                                  color: AppColors.borderLight
+                                      .withValues(alpha: 0.5),
+                                  strokeWidth: 0.5),
+                            ),
+                            borderData: FlBorderData(show: false),
+                            titlesData: FlTitlesData(
+                              leftTitles: const AxisTitles(
+                                  sideTitles:
+                                      SideTitles(showTitles: false)),
+                              rightTitles: const AxisTitles(
+                                  sideTitles:
+                                      SideTitles(showTitles: false)),
+                              topTitles: const AxisTitles(
+                                  sideTitles:
+                                      SideTitles(showTitles: false)),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 26,
+                                  interval: labelInterval,
+                                  getTitlesWidget: (v, _) {
+                                    if (v < 0 || v > maxX) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return Padding(
+                                      padding:
+                                          const EdgeInsets.only(top: 6),
+                                      child: Text(
+                                          _fmtClock(anchor, v.toInt()),
+                                          style: const TextStyle(
+                                              color: AppColors.subtext,
+                                              fontSize: 9)),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                            lineTouchData: LineTouchData(
+                              touchTooltipData: LineTouchTooltipData(
+                                getTooltipColor: (_) => AppColors.text,
+                                getTooltipItems: (spots) => spots
+                                    .map((s) => LineTooltipItem(
+                                          '${s.y.toInt()} bpm  •  ${_fmtClockSec(anchor, s.x.toInt())}',
+                                          const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11,
+                                              fontWeight:
+                                                  FontWeight.w600),
+                                        ))
+                                    .toList(),
+                              ),
+                            ),
+                            lineBarsData: [
+                              LineChartBarData(
+                                spots: spots,
+                                isCurved: true,
+                                curveSmoothness: 0.35,
+                                color: color,
+                                barWidth: 2.5,
+                                dotData: const FlDotData(show: false),
+                                belowBarData: BarAreaData(
+                                  show: true,
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      color.withValues(alpha: 0.2),
+                                      color.withValues(alpha: 0.0),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
 
-          // ── Min / Avg / Max / Readings
+          const Divider(height: 1, color: AppColors.border),
+
           Padding(
             padding:
                 const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
@@ -936,7 +1069,7 @@ class _ZoneRow extends StatelessWidget {
 
 const _kHrvColor = Color(0xFF40C4FF);
 
-class _HrvLineChart extends StatelessWidget {
+class _HrvLineChart extends StatefulWidget {
   final List<FlSpot> spots;
   final StatRange statRange;
   final double totalSeconds;
@@ -950,18 +1083,58 @@ class _HrvLineChart extends StatelessWidget {
   });
 
   @override
+  State<_HrvLineChart> createState() => _HrvLineChartState();
+}
+
+class _HrvLineChartState extends State<_HrvLineChart> {
+  static const _zoomLevels = [0.3, 0.5, 1.0, 2.0, 4.0];
+  static const _zoomLabels = ['1x', '2x', '3x', '5x', '10x'];
+  int _zoomIndex = 1;
+
+  double get _pxPerSecond => _zoomLevels[_zoomIndex];
+
+  @override
   Widget build(BuildContext context) {
+    final spots = widget.spots;
     final ys = spots.map((s) => s.y);
     final maxVal = ys.reduce(math.max);
     final minVal = ys.reduce(math.min);
     final range = maxVal - minVal;
     final padding = range < 5 ? 5.0 : range * 0.2;
-    final maxY = maxVal + padding;
-    final minY = (minVal - padding).clamp(0.0, double.infinity);
-    final double maxX = totalSeconds > 0
-        ? totalSeconds
+    final yFloor = ((minVal - padding).clamp(0.0, double.infinity) / 10)
+            .floor() *
+        10.0;
+    final yCeil = ((maxVal + padding) / 10).ceil() * 10.0;
+    const double yInterval = 10;
+    final double maxX = widget.totalSeconds > 0
+        ? widget.totalSeconds
         : (spots.isNotEmpty ? spots.last.x : 1.0);
-    final double tickInterval = maxX / 4;
+
+    final screenWidth = MediaQuery.of(context).size.width - 72;
+    const minChartWidth = 350.0;
+    final calculatedWidth =
+        (maxX * _pxPerSecond).clamp(minChartWidth, double.infinity);
+    final chartWidth = math.max(calculatedWidth, screenWidth);
+
+    final visibleSeconds =
+        chartWidth > 0 ? maxX / (chartWidth / screenWidth) : maxX;
+    final double labelInterval;
+    if (visibleSeconds <= 120) {
+      labelInterval = 15;
+    } else if (visibleSeconds <= 300) {
+      labelInterval = 30;
+    } else if (visibleSeconds <= 600) {
+      labelInterval = 60;
+    } else if (visibleSeconds <= 1800) {
+      labelInterval = 120;
+    } else if (visibleSeconds <= 3600) {
+      labelInterval = 300;
+    } else {
+      labelInterval = 600;
+    }
+
+    final canZoomIn = _zoomIndex < _zoomLevels.length - 1;
+    final canZoomOut = _zoomIndex > 0;
 
     return Container(
       decoration: BoxDecoration(
@@ -979,13 +1152,12 @@ class _HrvLineChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
             child: Row(
               children: [
                 Text(
-                  '${statRange.avg.toStringAsFixed(1)} ms',
+                  '${widget.statRange.avg.toStringAsFixed(1)} ms',
                   style: const TextStyle(
                       color: _kHrvColor,
                       fontSize: 20,
@@ -996,89 +1168,265 @@ class _HrvLineChart extends StatelessWidget {
                     style: TextStyle(color: Colors.white54, fontSize: 12)),
                 const Spacer(),
                 Text(
-                  'min ${statRange.min.toStringAsFixed(1)}  max ${statRange.max.toStringAsFixed(1)}',
-                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                  'min ${widget.statRange.min.toStringAsFixed(1)}  max ${widget.statRange.max.toStringAsFixed(1)}',
+                  style:
+                      const TextStyle(color: Colors.white38, fontSize: 11),
                 ),
               ],
             ),
           ),
 
-          // Chart
-          SizedBox(
-            height: 130,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 8, 16, 8),
-              child: LineChart(
-                LineChartData(
-                  minX: 0,
-                  maxX: maxX,
-                  minY: minY,
-                  maxY: maxY,
-                  clipData: const FlClipData.all(),
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    horizontalInterval: 10,
-                    getDrawingHorizontalLine: (_) => FlLine(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      strokeWidth: 1,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Icon(Icons.swipe_outlined,
+                    size: 12,
+                    color: Colors.white.withValues(alpha: 0.3)),
+                const SizedBox(width: 4),
+                Text('Swipe to scroll',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.3),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600)),
+                const Spacer(),
+                _ZoomButton(
+                    icon: Icons.remove,
+                    dark: true,
+                    onTap: canZoomOut
+                        ? () => setState(() => _zoomIndex--)
+                        : null),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _zoomIndex = 1),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: _kHrvColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(_zoomLabels[_zoomIndex],
+                          style: const TextStyle(
+                              color: _kHrvColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800)),
                     ),
                   ),
-                  borderData: FlBorderData(show: false),
-                  titlesData: FlTitlesData(
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 38,
-                        getTitlesWidget: (val, _) => Text(
-                          val.toStringAsFixed(0),
-                          style: const TextStyle(
-                              color: Colors.white38, fontSize: 10),
+                ),
+                _ZoomButton(
+                    icon: Icons.add,
+                    dark: true,
+                    onTap: canZoomIn
+                        ? () => setState(() => _zoomIndex++)
+                        : null),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          SizedBox(
+            height: 160,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 44,
+                  child: LineChart(
+                    LineChartData(
+                      minY: yFloor,
+                      maxY: yCeil,
+                      minX: 0,
+                      maxX: 1,
+                      gridData: const FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      lineBarsData: [],
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 36,
+                            interval: yInterval,
+                            getTitlesWidget: (v, _) => Text(
+                                v.toStringAsFixed(0),
+                                style: const TextStyle(
+                                    color: Colors.white38,
+                                    fontSize: 10)),
+                          ),
+                        ),
+                        rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 26,
+                            getTitlesWidget: (_, __) =>
+                                const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                      lineTouchData: const LineTouchData(enabled: false),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 20),
+                      child: SizedBox(
+                        width: chartWidth,
+                        child: LineChart(
+                          LineChartData(
+                            minX: 0,
+                            maxX: maxX,
+                            minY: yFloor,
+                            maxY: yCeil,
+                            clipData: const FlClipData.none(),
+                            gridData: FlGridData(
+                              show: true,
+                              drawVerticalLine: true,
+                              horizontalInterval: yInterval,
+                              verticalInterval: labelInterval,
+                              getDrawingHorizontalLine: (_) => FlLine(
+                                color:
+                                    Colors.white.withValues(alpha: 0.05),
+                                strokeWidth: 1,
+                              ),
+                              getDrawingVerticalLine: (_) => FlLine(
+                                color:
+                                    Colors.white.withValues(alpha: 0.03),
+                                strokeWidth: 0.5,
+                              ),
+                            ),
+                            borderData: FlBorderData(show: false),
+                            titlesData: FlTitlesData(
+                              leftTitles: const AxisTitles(
+                                  sideTitles:
+                                      SideTitles(showTitles: false)),
+                              rightTitles: const AxisTitles(
+                                  sideTitles:
+                                      SideTitles(showTitles: false)),
+                              topTitles: const AxisTitles(
+                                  sideTitles:
+                                      SideTitles(showTitles: false)),
+                              bottomTitles: AxisTitles(
+                                sideTitles: SideTitles(
+                                  showTitles: true,
+                                  reservedSize: 26,
+                                  interval: labelInterval,
+                                  getTitlesWidget: (v, _) {
+                                    if (v < 0 || v > maxX) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                          top: 6),
+                                      child: Text(
+                                        _fmtClock(widget.anchor,
+                                            v.toInt()),
+                                        style: TextStyle(
+                                            color: Colors.white
+                                                .withValues(
+                                                    alpha: 0.45),
+                                            fontSize: 9),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                            lineTouchData: LineTouchData(
+                              touchTooltipData: LineTouchTooltipData(
+                                getTooltipColor: (_) =>
+                                    const Color(0xFF1A2940),
+                                getTooltipItems: (touched) =>
+                                    touched.map((s) {
+                                  return LineTooltipItem(
+                                    '${s.y.toStringAsFixed(1)} ms  •  ${_fmtClockSec(widget.anchor, s.x.toInt())}',
+                                    const TextStyle(
+                                        color: _kHrvColor,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            lineBarsData: [
+                              LineChartBarData(
+                                spots: spots,
+                                isCurved: false,
+                                color: _kHrvColor,
+                                barWidth: 1.8,
+                                dotData:
+                                    const FlDotData(show: false),
+                                belowBarData:
+                                    BarAreaData(show: false),
+                                shadow: Shadow(
+                                    color: _kHrvColor.withValues(
+                                        alpha: 0.4),
+                                    blurRadius: 6),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                    rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 22,
-                        interval: tickInterval,
-                        getTitlesWidget: (v, _) {
-                          if (v < 0 || v > maxX) return const SizedBox.shrink();
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              _fmtClock(anchor, v.toInt()),
-                              style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.45),
-                                  fontSize: 9),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
                   ),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: spots,
-                      isCurved: false,
-                      color: _kHrvColor,
-                      barWidth: 1.8,
-                      dotData: const FlDotData(show: false),
-                      belowBarData: BarAreaData(show: false),
-                      shadow: Shadow(
-                          color: _kHrvColor.withValues(alpha: 0.4),
-                          blurRadius: 6),
-                    ),
-                  ],
                 ),
-              ),
+              ],
             ),
           ),
+          const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+}
+
+// ── Zoom Button ─────────────────────────────────────────────────────────────
+
+class _ZoomButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool dark;
+  const _ZoomButton({required this.icon, this.onTap, this.dark = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    final bgEnabled = dark
+        ? _kHrvColor.withValues(alpha: 0.12)
+        : AppColors.primary.withValues(alpha: 0.1);
+    final bgDisabled = dark
+        ? Colors.white.withValues(alpha: 0.05)
+        : AppColors.surfaceAlt;
+    final borderEnabled = dark
+        ? _kHrvColor.withValues(alpha: 0.25)
+        : AppColors.primary.withValues(alpha: 0.3);
+    final borderDisabled =
+        dark ? Colors.white.withValues(alpha: 0.1) : AppColors.borderLight;
+    final iconEnabled = dark ? _kHrvColor : AppColors.primary;
+    final iconDisabled =
+        dark ? Colors.white.withValues(alpha: 0.3) : AppColors.subtext;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: enabled ? bgEnabled : bgDisabled,
+          borderRadius: BorderRadius.circular(7),
+          border:
+              Border.all(color: enabled ? borderEnabled : borderDisabled),
+        ),
+        child: Icon(icon,
+            size: 14, color: enabled ? iconEnabled : iconDisabled),
       ),
     );
   }

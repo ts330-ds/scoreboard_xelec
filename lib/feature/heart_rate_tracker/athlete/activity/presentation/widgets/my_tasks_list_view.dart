@@ -5,10 +5,37 @@ import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/ent
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/my_tasks_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/my_tasks_state.dart';
 
-class MyTasksListView extends StatelessWidget {
+class MyTasksListView extends StatefulWidget {
   final void Function(AthleteTaskEntity task) onTaskTap;
 
   const MyTasksListView({super.key, required this.onTaskTap});
+
+  @override
+  State<MyTasksListView> createState() => _MyTasksListViewState();
+}
+
+class _MyTasksListViewState extends State<MyTasksListView> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      context.read<MyTasksCubit>().loadMore();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +50,8 @@ class MyTasksListView extends StatelessWidget {
   }
 
   Widget _buildContent(BuildContext context, MyTasksState state) {
-    if (state.status == MyTasksStatus.loading) {
+    if (state.status == MyTasksStatus.initial ||
+        state.status == MyTasksStatus.loading) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -36,7 +64,11 @@ class MyTasksListView extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, color: AppColors.error, size: 40),
+                Icon(
+                  state.isAuthError ? Icons.lock_outline : Icons.error_outline,
+                  color: AppColors.error,
+                  size: 40,
+                ),
                 const SizedBox(height: 12),
                 Text(
                   state.errorMessage ?? 'Something went wrong',
@@ -44,11 +76,18 @@ class MyTasksListView extends StatelessWidget {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
-                TextButton.icon(
-                  onPressed: () => context.read<MyTasksCubit>().fetchTasks(),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Try again'),
-                ),
+                if (state.isAuthError)
+                  TextButton.icon(
+                    onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst),
+                    icon: const Icon(Icons.login),
+                    label: const Text('Login again'),
+                  )
+                else
+                  TextButton.icon(
+                    onPressed: () => context.read<MyTasksCubit>().fetchTasks(),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Try again'),
+                  ),
               ],
             ),
           ),
@@ -83,13 +122,30 @@ class MyTasksListView extends StatelessWidget {
       );
     }
 
+    final count = state.tasks.length;
+
     return ListView.separated(
+      controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-      itemCount: state.tasks.length,
+      // +1 for the bottom loader while the next page is being fetched.
+      itemCount: count + (state.hasMore ? 1 : 0),
       separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, index) =>
-          _TaskCard(task: state.tasks[index], onTap: onTaskTap),
+      itemBuilder: (context, index) {
+        if (index >= count) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        return _TaskCard(task: state.tasks[index], onTap: widget.onTaskTap);
+      },
     );
   }
 }

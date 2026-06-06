@@ -2,18 +2,18 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:device_info_plus/device_info_plus.dart';
-// import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/repository/history_repository.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/push_status_event.dart';
-import 'package:xelex_esp/service/socket/athlete_health_monitor_socket_service.dart';
+import 'package:xelex_esp/service/api/api_service.dart';
 import 'package:xelex_esp/service/socket/history_watermark_store.dart';
 
 class HeartBleCubit extends Cubit<HeartBleState> {
@@ -32,33 +32,19 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
   // BLE history sync cooldown — auto-triggers (tab open, etc.) skip if a
   // sync was completed within this window. Manual sync button passes
-  // force:true to bypass. 2h chosen so a morning device-connect always
-  // captures previous night's data.
-  static const Duration _syncCooldown = Duration(hours: 2);
+  // force:true to bypass.
+  static const Duration _syncCooldown = Duration(minutes: 10);
 
-  // Don't hammer the server — successful pushes are throttled to once per hour.
-  // Auto-push (after full sync) and the manual "Push to Server Now" button
-  // both respect this gate. Use `force: true` to bypass programmatically.
-  static const Duration _pushCooldown = Duration(hours: 1);
 
   StreamSubscription? _dataSubscription;
   Timer? _scanTimeout;
   Timer? _syncDoneTimer;
   Timer? _autoPushTimer;
-  Timer? _pushTimeoutTimer;
 
-  // History push state — ack-based watermark commit.
-  // Pending maxes are precomputed at send time; on `health_metric_saved`
-  // callback se SharedPreferences me commit hote hain.
   bool _pushingHistory = false;
-  int? _pendingHrMax;
-  int? _pendingRrMax;
-  int? _pendingSleepMax;
-
-  // On-demand socket — sirf push ke time connect, ack ke baad disconnect.
-  // BG isolate / foreground service ki zaroorat nahi (24/7 health monitoring removed).
-  AthleteHealthMonitorSocketService? _healthSocket;
   Map<String, dynamic>? _pendingPayload;
+  bool _showingPlaceholderHr = false;
+  bool _historySyncing = false;
 
   final GlobalErrorCubit errorCubit;
 
@@ -67,6 +53,9 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   // Set true before a user-initiated range sync so the post-sync auto-push
   // is skipped — range fetches are exploration, not server commits.
   bool _skipNextAutoPush = false;
+
+  bool _sessionActive = false;
+  void setSessionActive(bool active) => _sessionActive = active;
 
   HeartBleCubit({required this.errorCubit}) : super(const HeartBleState()) {
     _hydrateFromDb();
@@ -99,12 +88,30 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     ));
   }
 
+  List<Map<dynamic, dynamic>> _generatePlaceholderHr() {
+    final rng = math.Random();
+    final now = DateTime.now();
+    final start = now.subtract(const Duration(hours: 1));
+    final list = <Map<dynamic, dynamic>>[];
+    for (int i = 0; i < 60; i++) {
+      final t = start.add(Duration(minutes: i));
+      final hr = 68 + rng.nextInt(15) + (5 * (0.5 - 0.5 * (i % 10) / 10)).round();
+      list.add(<dynamic, dynamic>{
+        'stamp': t.millisecondsSinceEpoch,
+        'heartRate': hr.clamp(60, 95),
+      });
+    }
+    return list;
+  }
+
   // ─── EventChannel listener ──────────────────────────────────────────────────
   void _listenToDeviceData() {
     _dataSubscription = _eventChannel.receiveBroadcastStream().listen(
       (dynamic event) {
-        final map = event as Map<dynamic, dynamic>;
-        final type = map['type'] as String;
+        if (event is! Map<dynamic, dynamic>) return;
+        final map = event;
+        final type = map['type'] as String?;
+        if (type == null) return;
         final value = map['value'];
 
         // ── Log every arriving event (remove once debugging is done) ──────
@@ -254,27 +261,16 @@ class HeartBleCubit extends Cubit<HeartBleState> {
           case "HISTORY_HR_DATA_CHUNK":
             final chunk = _toList(value);
             _dumpHistory('HR_CHUNK_DATA', chunk);
-            // Persist + dedupe via Hive (stamp key), then rebuild in-memory
-            // list from the store so duplicates can never accumulate.
-            _historyRepo.persistHrChunk(chunk).then((_) {
-              emit(state.copyWith(
-                historyHrData: _historyRepo.hydrate().hr,
-              ));
-            });
+            _historyRepo.persistHrChunk(chunk);
+            final base = _showingPlaceholderHr ? <Map<dynamic, dynamic>>[] : state.historyHrData;
+            _showingPlaceholderHr = false;
+            emit(state.copyWith(
+              historyHrData: [...base, ...chunk],
+            ));
             break;
           case "HISTORY_HR_DATA_DONE":
             _dumpHistory('HR_FULL_DATA', state.historyHrData);
-            _syncDoneTimer?.cancel();
-            emit(state.copyWith(status: "Sync complete"));
-            _commitSyncCompleted();
-            // Skip auto-push for user-initiated range fetches — they're
-            // exploration, not server commits. Push happens via auto-push
-            // after `syncAllHistory` or via the "Push to Server Now" button.
-            if (_skipNextAutoPush) {
-              _skipNextAutoPush = false;
-            } else {
-              _scheduleAutoPush();
-            }
+            emit(state.copyWith(status: "HR sync complete"));
             break;
           case "HISTORY_RR_RECORD":
             final rrRec = _toList(value);
@@ -289,11 +285,10 @@ class HeartBleCubit extends Cubit<HeartBleState> {
           case "HISTORY_RR_DATA_CHUNK":
             final chunk = _toList(value);
             _dumpHistory('RR_CHUNK_DATA', chunk);
-            _historyRepo.persistRrChunk(chunk).then((_) {
-              emit(state.copyWith(
-                historyRrData: _historyRepo.hydrate().rr,
-              ));
-            });
+            _historyRepo.persistRrChunk(chunk);
+            emit(state.copyWith(
+              historyRrData: [...state.historyRrData, ...chunk],
+            ));
             break;
           case "HISTORY_RR_DATA_DONE":
             // debugPrint(
@@ -313,11 +308,8 @@ class HeartBleCubit extends Cubit<HeartBleState> {
           case "HISTORY_SLEEP":
             final sleepList = _toList(value);
             _dumpHistory('HISTORY_SLEEP', sleepList);
-            _historyRepo.persistSleep(sleepList).then((_) {
-              emit(state.copyWith(
-                historySleep: _historyRepo.hydrate().sleep,
-              ));
-            });
+            _historyRepo.persistSleep(sleepList);
+            emit(state.copyWith(historySleep: sleepList));
             break;
           case "HISTORY_SINGLE_RECORD":
             // debugPrint('[BLE-HISTORY] HISTORY_SINGLE_RECORD → $value');
@@ -345,23 +337,52 @@ class HeartBleCubit extends Cubit<HeartBleState> {
             break;
 
           case "HISTORY_SYNC_START":
-            // DB-first: persisted data stays visible. Incoming chunks merge
-            // via Hive (stamp-keyed) so duplicates are impossible. We only
-            // reset volatile record-headers, not the actual data lists.
+            _showingPlaceholderHr = true;
+            _historySyncing = true;
             emit(state.copyWith(
               status: "Syncing history…",
-              historyRrRecord: const [],
+              historyHrData: _generatePlaceholderHr(),
+              historyRrData: const [],
+              historySleep: const [],
             ));
-            // 40 s covers HR chain (up to 30 s) + 3 s sleep delay + buffer
             _syncDoneTimer?.cancel();
-            _syncDoneTimer = Timer(const Duration(seconds: 40), () {
-              if (!isClosed && state.status.contains('yncing')) {
-                // debugPrint('[BLE-HISTORY] ⏱ sync timer expired — marking complete');
-                emit(state.copyWith(status: "Sync complete"));
+            _syncDoneTimer = Timer(const Duration(seconds: 30), () {
+              if (!isClosed && _historySyncing) {
+                debugPrint('[BLE-HISTORY] ⏱ sync safety timer expired — marking complete');
+                _historySyncing = false;
+                _showingPlaceholderHr = false;
+                final h = _historyRepo.hydrate();
+                emit(state.copyWith(
+                  status: "Sync complete",
+                  historyHrData: h.hr,
+                  historyRrData: h.rr,
+                  historySleep: h.sleep,
+                ));
+                _historyRepo.updateAllMeta();
                 _commitSyncCompleted();
                 _scheduleAutoPush();
               }
             });
+            break;
+
+          case "SYNC_COMPLETE":
+            _syncDoneTimer?.cancel();
+            _historySyncing = false;
+            _showingPlaceholderHr = false;
+            final hiveData = _historyRepo.hydrate();
+            emit(state.copyWith(
+              status: "Sync complete",
+              historyHrData: hiveData.hr,
+              historyRrData: hiveData.rr,
+              historySleep: hiveData.sleep,
+            ));
+            _historyRepo.updateAllMeta();
+            _commitSyncCompleted();
+            if (_skipNextAutoPush) {
+              _skipNextAutoPush = false;
+            } else {
+              _scheduleAutoPush();
+            }
             break;
 
           default:
@@ -371,23 +392,32 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       },
       onError: (dynamic error) {
         //debugPrint('[BLE] ✖ Stream error: $error');
-        emit(state.copyWith(status: "Stream Error: $error"));
+        if (!isClosed) emit(state.copyWith(status: "Stream Error: $error"));
       },
     );
   }
 
   // ─── Private Handlers ──────────────────────────────────────────────────────
   void _handleStatus(String s) {
+    if (isClosed) return;
     final wasConnected = state.isConnected;
     final isDisconnected = s == "Disconnected";
-    final rssiReset = (s == "Disconnected" || s == "Reconnecting..." || s == "Link Lost") ? 0 : null;
+    final bleOff = s == "BLUETOOTH_OFF";
+    final permDenied = s == "PERMISSION_DENIED";
+
+    if (bleOff || permDenied || isDisconnected) {
+      _scanTimeout?.cancel();
+      _stopScanNative();
+    }
+
+    final rssiReset = (isDisconnected || s == "Reconnecting..." || s == "Link Lost") ? 0 : null;
     emit(state.copyWith(
       status: s,
       isConnected: s == "Connected",
-      isScanning: s == "Scanning...",
+      isScanning: (bleOff || permDenied || isDisconnected) ? false : null,
       isReconnecting: s == "Reconnecting..." || s == "Link Lost",
-      isBluetoothOff: s == "BLUETOOTH_OFF",
-      isPermissionDenied: s == "PERMISSION_DENIED",
+      isBluetoothOff: bleOff,
+      isPermissionDenied: permDenied,
       connectedRssi: rssiReset,
       // Clear all data on disconnect
       heartRate: isDisconnected ? 0 : null,
@@ -416,8 +446,8 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       hrv: isDisconnected ? 0.0 : null,
     ));
 
-    // BLE connect hote hi check karo — agar 2h+ se sync nahi hua, auto sync
-    // trigger karo. Sync complete pe push automatically chal jaayega.
+    // BLE connect hote hi check karo — agar cooldown se zyada time ho gaya to
+    // auto sync trigger karo. Sync complete pe push automatically chal jaayega.
     if (s == "Connected" && !wasConnected) {
       _maybeAutoSyncOnConnect();
     }
@@ -427,8 +457,11 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     // Small delay — device info exchange + handshake settle hone do
     await Future.delayed(const Duration(seconds: 2));
     if (isClosed || !state.isConnected) return;
-    // debugPrint('[BLE] auto-sync check on BLE connect');
-    syncAllHistory(); // force:false → cooldown gate apply
+    if (_sessionActive) {
+      debugPrint('[BLE] auto-sync skipped — activity session active');
+      return;
+    }
+    syncNewFromDevice();
   }
 
   void _handleDeviceFound(Map<dynamic, dynamic> d) {
@@ -455,27 +488,56 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   }
 
   // ─── Permissions ────────────────────────────────────────────────────────────
-  Future<void> _checkPermissions() async {
+  /// Returns `true` when all required permissions are granted.
+  Future<bool> _checkPermissions() async {
     if (Platform.isAndroid) {
       final info = await DeviceInfoPlugin().androidInfo;
       final permissions = [Permission.bluetoothScan, Permission.bluetoothConnect];
       if (info.version.sdkInt < 31) permissions.add(Permission.location);
       if (info.version.sdkInt >= 33) permissions.add(Permission.notification);
-      await permissions.request();
+      final results = await permissions.request();
+
+      final denied = results.entries
+          .where((e) => e.key != Permission.notification)
+          .where((e) => !e.value.isGranted)
+          .toList();
+
+      if (denied.isEmpty) return true;
+
+      final permanentlyDenied = denied.any((e) => e.value.isPermanentlyDenied);
+      if (permanentlyDenied) {
+        emit(state.copyWith(
+          status: "PERMISSION_DENIED",
+          isPermissionDenied: true,
+        ));
+        await openAppSettings();
+        return false;
+      }
+
+      emit(state.copyWith(
+        status: "PERMISSION_DENIED",
+        isPermissionDenied: true,
+      ));
+      return false;
     }
+    return true;
   }
 
   // ─── Scan ───────────────────────────────────────────────────────────────────
   /// Returns true if scan started successfully, false if blocked (e.g. BT off)
   Future<bool> startScan() async {
     _scanTimeout?.cancel();
-    await _checkPermissions();
+    if (state.isScanning) await _stopScanNative();
+    final granted = await _checkPermissions();
+    if (!granted) return false;
     emit(state.copyWith(foundDevices: [], isScanning: true, status: "Scanning..."));
     try {
       await _methodChannel.invokeMethod('startScan');
       _scanTimeout = Timer(const Duration(seconds: 15), () {
         _stopScanNative();
-        if (!isClosed) emit(state.copyWith(isScanning: false));
+        if (!isClosed) {
+          emit(state.copyWith(isScanning: false, status: "Scan complete"));
+        }
       });
       return true;
     } on PlatformException catch (e) {
@@ -517,6 +579,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   // ─── Connect ────────────────────────────────────────────────────────────────
   Future<void> connectToDevice(HeartBleDevice device) async {
     _scanTimeout?.cancel();
+    await _stopScanNative();
     emit(state.copyWith(
       lastDevice: device.name,
       status: "Connecting to ${device.name}...",
@@ -546,18 +609,19 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   /// Requests all history data from the connected device.
   /// Results arrive asynchronously via the EventChannel callbacks.
   ///
-  /// [force]: bypass the 2h cooldown gate. Use `true` for manual sync button
+  /// [force]: bypass the cooldown gate. Use `true` for manual sync button
   /// taps; auto-triggers (tab open, BLE reconnect) should leave it `false`.
   Future<void> syncAllHistory({bool force = false}) async {
+    if (_sessionActive) {
+      debugPrint('[BLE] syncAllHistory skipped — activity session active');
+      return;
+    }
     if (!force) {
       final wm = await HistoryWatermarkStore.create();
       final lastSync = wm.lastSyncAt;
       if (lastSync.millisecondsSinceEpoch > 0) {
         final elapsed = DateTime.now().difference(lastSync);
         if (elapsed < _syncCooldown) {
-          // final mins = _syncCooldown.inMinutes - elapsed.inMinutes;
-          // debugPrint(
-              // '[BLE] sync skipped — cooldown active (${mins}m remaining). Use force:true to override');
           return;
         }
       }
@@ -565,6 +629,60 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     try {
       await _methodChannel.invokeMethod('syncAllHistory');
     } on PlatformException catch (e) {
+      if (e.code == 'NOT_CONNECTED') {
+        emit(state.copyWith(status: "Not connected — connect a device first"));
+      } else {
+        emit(state.copyWith(status: "Sync failed: ${e.message}"));
+      }
+    }
+  }
+
+  /// Smart sync — fetches only data newer than the last successful push.
+  /// Falls back to full sync if no watermark exists (first time).
+  /// Unlike syncHistoryRange, this does NOT skip auto-push.
+  Future<void> syncNewFromDevice() async {
+    if (_sessionActive) {
+      debugPrint('[BLE] syncNewFromDevice skipped — activity session active');
+      return;
+    }
+    try {
+      final wm = await HistoryWatermarkStore.create();
+
+      // Server watermark is the source of truth — seed local before deciding range.
+      final serverStamp = await _fetchServerWatermark();
+      if (serverStamp > 0) {
+        await wm.commitHr(serverStamp);
+      }
+
+      final lastStamp = wm.lastHrStamp;
+      final toMs = DateTime.now().millisecondsSinceEpoch;
+      final int fromMs;
+      if (lastStamp > 0) {
+        fromMs = lastStamp > 9999999999 ? lastStamp : lastStamp * 1000;
+      } else {
+        fromMs = DateTime.now().subtract(const Duration(days: 30)).millisecondsSinceEpoch;
+      }
+      await _methodChannel.invokeMethod('syncHistoryRange', {
+        'fromMs': fromMs,
+        'toMs': toMs,
+      });
+    } on PlatformException catch (e) {
+      if (e.code == 'NOT_CONNECTED') {
+        emit(state.copyWith(status: "Not connected — connect a device first"));
+      } else {
+        emit(state.copyWith(status: "Sync failed: ${e.message}"));
+      }
+    }
+  }
+
+  /// Fetches only the latest HR session from the device.
+  /// Flutter's _filteredData handles the duration-based display filter.
+  Future<void> syncLatestSession() async {
+    _skipNextAutoPush = true;
+    try {
+      await _methodChannel.invokeMethod('syncLatestSession');
+    } on PlatformException catch (e) {
+      _skipNextAutoPush = false;
       if (e.code == 'NOT_CONNECTED') {
         emit(state.copyWith(status: "Not connected — connect a device first"));
       } else {
@@ -644,20 +762,48 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   }
 
   void _scheduleAutoPush() {
+    if (_sessionActive) return;
     _autoPushTimer?.cancel();
     _autoPushTimer = Timer(const Duration(seconds: 2), () {
-      if (!isClosed) pushHistoryBatch();
+      if (!isClosed && !_sessionActive) pushHistoryBatch();
     });
   }
 
-  /// Filter sync'd history against per-athlete watermarks and emit a
-  /// batched payload via the bg health socket. Idempotent — duplicate
-  /// records are filtered out before send; watermark commits on backend ack.
-  ///
-  /// [force]: bypass the 1-hour push cooldown gate. Auto-push (after a full
-  /// sync) and the manual "Push to Server Now" button both pass `false`;
-  /// they wait for the cooldown to elapse.
-  Future<void> pushHistoryBatch({bool force = false}) async {
+  /// Sync from device then push to server. Device must be connected.
+  Future<void> syncAndPush() async {
+    if (!state.isConnected) {
+      _emitPushEvent(const PushNotConnected());
+      return;
+    }
+    await syncNewFromDevice();
+    // SYNC_COMPLETE → _scheduleAutoPush() → pushHistoryBatch() automatically
+  }
+
+  /// Fetches the server-side last pushed HR timestamp for this athlete.
+  /// Returns the timestamp (ms) or 0 on failure (caller falls back to local).
+  Future<int> _fetchServerWatermark() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString(PrefKeys.userToken) ?? '';
+      if (token.isEmpty) return 0;
+      ApiService.instance.setAuthToken(token);
+      final response = await ApiService.instance.dio.get(
+        '/athlete/health_metrics/last_timestamp',
+      );
+      final data = response.data as Map<String, dynamic>? ?? {};
+      if (data['success'] == true) {
+        final inner = data['data'] as Map<String, dynamic>? ?? {};
+        return (inner['recorded_at'] as num?)?.toInt() ?? 0;
+      }
+      return 0;
+    } on DioException {
+      return 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<void> pushHistoryBatch() async {
     if (_pushingHistory) {
       _emitPushEvent(const PushAlreadyInFlight());
       return;
@@ -666,42 +812,40 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     _emitPushEvent(const PushPreparing());
     try {
       final wm = await HistoryWatermarkStore.create();
-      // Guard: no logged-in user → don't attribute readings to 'anon' or
-      // (worse) leak them onto whoever logs in next on this device.
       if (wm.isAnonymous) {
         _emitPushEvent(const PushAnonymous());
         _cleanupPush();
         return;
       }
 
-      // ─── 1-hour push cooldown ─────────────────────────────────────────
-      // Skip if a successful push happened within the window — backend
-      // doesn't need every-sync chatter. Manual button gets the same
-      // throttle (pass force: true to override).
-      if (!force && wm.lastPushAtMs > 0) {
-        final elapsed = DateTime.now().difference(wm.lastPushAt);
-        if (elapsed < _pushCooldown) {
-          final remainingMin =
-              _pushCooldown.inMinutes - elapsed.inMinutes;
-          _emitPushEvent(PushCooldownActive(remainingMin.clamp(1, 60)));
-          _cleanupPush();
-          return;
-        }
+      // Server is the single source of truth — fetch and seed local watermark.
+      // On failure (no internet, timeout, etc.) local cache is used as fallback.
+      final serverStamp = await _fetchServerWatermark();
+      if (serverStamp > 0) {
+        await wm.commitHr(serverStamp);
       }
 
-      final hrFiltered = state.historyHrData.where((r) {
+      final watermark = wm.lastHrStamp;
+      int stampMs(int s) => s > 9999999999 ? s : s * 1000;
+
+      final hive = _historyRepo.hydrate();
+
+      final hrFiltered = hive.hr.where((r) {
         final s = (r['stamp'] as num?)?.toInt() ?? 0;
-        return s > wm.lastHrStamp;
+        if (s <= 0) return false;
+        return stampMs(s) > watermark;
       }).toList();
 
-      final rrFiltered = state.historyRrData.where((r) {
+      final rrFiltered = hive.rr.where((r) {
         final s = (r['stamp'] as num?)?.toInt() ?? 0;
-        return s > wm.lastRrStamp;
+        if (s <= 0) return false;
+        return stampMs(s) > watermark;
       }).toList();
 
-      final sleepFiltered = state.historySleep.where((r) {
+      final sleepFiltered = hive.sleep.where((r) {
         final u = (r['utc'] as num?)?.toInt() ?? 0;
-        return u > wm.lastSleepUtc;
+        if (u <= 0) return false;
+        return stampMs(u) > watermark;
       }).toList();
 
       if (hrFiltered.isEmpty &&
@@ -757,23 +901,6 @@ class HeartBleCubit extends Cubit<HeartBleState> {
         };
       }
 
-      // Pending maxes — commit on ack
-      _pendingHrMax = hrFiltered.isEmpty
-          ? null
-          : hrFiltered
-              .map((r) => (r['stamp'] as num?)?.toInt() ?? 0)
-              .reduce((a, b) => a > b ? a : b);
-      _pendingRrMax = rrFiltered.isEmpty
-          ? null
-          : rrFiltered
-              .map((r) => (r['stamp'] as num?)?.toInt() ?? 0)
-              .reduce((a, b) => a > b ? a : b);
-      _pendingSleepMax = sleepFiltered.isEmpty
-          ? null
-          : sleepFiltered
-              .map((r) => (r['utc'] as num?)?.toInt() ?? 0)
-              .reduce((a, b) => a > b ? a : b);
-
       final payload = <String, dynamic>{};
       if (healthMetrics.isNotEmpty) payload['health_metrics'] = healthMetrics;
       if (sleepMetrics.isNotEmpty) payload['sleep_metrics'] = sleepMetrics;
@@ -806,121 +933,208 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   int _pendingRrCount = 0;
   int _pendingSleepCount = 0;
 
-  // Token + base URL fetch karke socket connect karo. onMonitoringStarted
-  // callback fire hone pe payload submit hoga.
+  // Token fetch karke REST API call karo — 15-min windows mein chunked.
   Future<void> _connectAndPush() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString(PrefKeys.userToken) ?? '';
-    final baseUrl = dotenv.env['BASE_URL'] ?? '';
-    if (token.isEmpty || baseUrl.isEmpty) {
-      // debugPrint('[HISTORY-PUSH] missing token/baseUrl — abort');
+    if (token.isEmpty) {
       _emitPushEvent(const PushMissingAuth());
       _cleanupPush();
       return;
     }
 
-    // Naya socket instance — purane callbacks/state contamination avoid karne ke liye
-    _healthSocket?.disconnect();
-    final socket = AthleteHealthMonitorSocketService();
-    _healthSocket = socket;
-
-    socket.onMonitoringStarted = () {
-      // Backend ne device_connected accept kar liya — ab batch bhej do
-      final payload = _pendingPayload;
-      if (payload == null) return;
-      // debugPrint('[HISTORY-PUSH] socket ready — submitting batch');
-      _emitPushEvent(PushUploading(
-        hrCount: _pendingHrCount,
-        rrCount: _pendingRrCount,
-        sleepCount: _pendingSleepCount,
-      ));
-      socket.submitHistoryBatch(payload);
-    };
-
-    socket.onMetricSaved = (data) async {
-      // debugPrint('[HISTORY-PUSH] ✅ ack: $data');
-      _emitPushEvent(PushSucceeded(data));
-      await _commitPendingWatermarks();
-      _disconnectSocket();
-    };
-
-    socket.onError = (msg) {
-      // debugPrint('[HISTORY-PUSH] socket error: $msg');
-      _emitPushEvent(PushFailed(msg.toString()));
+    final payload = _pendingPayload;
+    if (payload == null) {
       _cleanupPush();
-      _disconnectSocket();
-    };
-
-    socket.onSocketDisconnected = () {
-      // Ack ke baad humne khud disconnect kiya — pending pehle hi clear ho gaya.
-      // Agar pending abhi tak set hai → unexpected disconnect mid-flow.
-      if (_pendingPayload != null) {
-        // debugPrint('[HISTORY-PUSH] unexpected disconnect — discarding pending');
-        _emitPushEvent(const PushDisconnected());
-        _cleanupPush();
-      }
-    };
-
-    socket.onAuthFailure = (msg) {
-      // debugPrint('[HISTORY-PUSH] auth failure: $msg');
-      _emitPushEvent(PushAuthFailed(msg.toString()));
-      _cleanupPush();
-      _disconnectSocket();
-    };
-
-    // 20s timeout — agar ack/error nahi aaya, cleanup
-    _pushTimeoutTimer?.cancel();
-    _pushTimeoutTimer = Timer(const Duration(seconds: 20), () {
-      if (_pendingPayload != null) {
-        // debugPrint('[HISTORY-PUSH] ⏱ timeout — disconnecting');
-        _emitPushEvent(const PushTimedOut());
-        _cleanupPush();
-        _disconnectSocket();
-      }
-    });
-
-    _emitPushEvent(const PushConnecting());
-    socket.connect(baseUrl, token);
-  }
-
-  Future<void> _commitPendingWatermarks() async {
-    if (_pendingHrMax == null &&
-        _pendingRrMax == null &&
-        _pendingSleepMax == null) {
       return;
     }
+
+    _emitPushEvent(PushUploading(
+      hrCount: _pendingHrCount,
+      rrCount: _pendingRrCount,
+      sleepCount: _pendingSleepCount,
+    ));
+
     try {
+      ApiService.instance.setAuthToken(token);
+
+      final chunks = _split15MinChunks(payload);
+      Map<String, dynamic> lastAck = {};
       final wm = await HistoryWatermarkStore.create();
-      if (_pendingHrMax != null) await wm.commitHr(_pendingHrMax!);
-      if (_pendingRrMax != null) await wm.commitRr(_pendingRrMax!);
-      if (_pendingSleepMax != null) await wm.commitSleep(_pendingSleepMax!);
-      // Mark "last push at now" — drives the 1h cooldown gate on next call.
+
+      for (final chunk in chunks) {
+        final response = await ApiService.instance.dio.post(
+          '/athlete/health_metrics',
+          data: chunk,
+        );
+        if (response.data is Map<String, dynamic>) {
+          lastAck = response.data as Map<String, dynamic>;
+          await _commitChunkWatermark(wm, lastAck, chunk);
+        }
+      }
+
       await wm.commitPushAtNow();
+      _emitPushEvent(PushSucceeded(lastAck));
+    } on DioException catch (e) {
+      final status = e.response?.statusCode ?? 0;
+      switch (e.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+          _emitPushEvent(const PushTimedOut());
+        case DioExceptionType.badResponse:
+          if (status == 401 || status == 403) {
+            final msg = _extractServerMessage(e.response?.data) ?? 'Auth failed';
+            _emitPushEvent(PushAuthFailed(msg));
+          } else {
+            final msg = _extractServerMessage(e.response?.data) ??
+                'Server error ($status)';
+            _emitPushEvent(PushFailed(msg));
+          }
+        case DioExceptionType.connectionError:
+          _emitPushEvent(const PushFailed('No internet connection'));
+        default:
+          _emitPushEvent(PushFailed(e.message ?? 'Unexpected error'));
+      }
     } catch (e) {
-      // debugPrint('[HISTORY-PUSH] watermark commit failed: $e');
+      _emitPushEvent(PushFailed(e.toString()));
     } finally {
-      _pendingHrMax = null;
-      _pendingRrMax = null;
-      _pendingSleepMax = null;
+      _cleanupPush();
     }
+  }
+
+  // Payload ko 15-minute time windows mein split karta hai, phir har window
+  // ko max _maxRowsPerChunk rows mein sub-chunk karta hai taaki "data too
+  // large" error kabhi na aaye.
+  static const int _chunkWindowMs = 15 * 60 * 1000;
+  static const int _maxRowsPerChunk = 500;
+
+  List<Map<String, dynamic>> _split15MinChunks(Map<String, dynamic> payload) {
+    final healthList = (payload['health_metrics'] as List? ?? [])
+        .cast<Map<dynamic, dynamic>>();
+    final sleepList = (payload['sleep_metrics'] as List? ?? [])
+        .cast<Map<dynamic, dynamic>>();
+    final rrList = (payload['rr_interval'] as List? ?? [])
+        .cast<Map<dynamic, dynamic>>();
+
+    // bucket key = (stampMs ~/ 15min) * 15min
+    int bucketKey(int ms) => (ms ~/ _chunkWindowMs) * _chunkWindowMs;
+
+    final buckets = <int, Map<String, List<dynamic>>>{};
+
+    void addTo(int key, String field, dynamic item) {
+      buckets.putIfAbsent(key, () => {});
+      buckets[key]!.putIfAbsent(field, () => []);
+      buckets[key]![field]!.add(item);
+    }
+
+    for (final m in healthList) {
+      final t = (m['timestamp'] as num?)?.toInt() ?? 0;
+      if (t > 0) addTo(bucketKey(t), 'health_metrics', m);
+    }
+    for (final m in sleepList) {
+      // utc is in seconds — convert to ms for bucketing
+      final t = ((m['utc'] as num?)?.toInt() ?? 0) * 1000;
+      if (t > 0) addTo(bucketKey(t), 'sleep_metrics', m);
+    }
+    for (final r in rrList) {
+      final t = (r['sessionStamp'] as num?)?.toInt() ?? 0;
+      if (t > 0) addTo(bucketKey(t), 'rr_interval', r);
+    }
+
+    final sortedKeys = buckets.keys.toList()..sort();
+    final result = <Map<String, dynamic>>[];
+
+    for (final k in sortedKeys) {
+      final b = buckets[k]!;
+      final hr = b['health_metrics'] ?? [];
+      final sleep = b['sleep_metrics'] ?? [];
+      final rr = b['rr_interval'] ?? [];
+
+      // Sub-chunk health_metrics by _maxRowsPerChunk rows.
+      // Sleep & RR are small — attach to first sub-chunk only.
+      if (hr.isEmpty) {
+        // No HR — just send sleep/rr if present
+        if (sleep.isNotEmpty || rr.isNotEmpty) {
+          result.add(<String, dynamic>{
+            if (sleep.isNotEmpty) 'sleep_metrics': sleep,
+            if (rr.isNotEmpty) 'rr_interval': rr,
+          });
+        }
+      } else {
+        for (int i = 0; i < hr.length; i += _maxRowsPerChunk) {
+          final end = (i + _maxRowsPerChunk).clamp(0, hr.length);
+          final subChunk = <String, dynamic>{
+            'health_metrics': hr.sublist(i, end),
+          };
+          // Attach sleep & rr to first sub-chunk of this window
+          if (i == 0) {
+            if (sleep.isNotEmpty) subChunk['sleep_metrics'] = sleep;
+            if (rr.isNotEmpty) subChunk['rr_interval'] = rr;
+          }
+          result.add(subChunk);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  String? _extractServerMessage(dynamic data) {
+    if (data is Map) {
+      return data['message']?.toString() ??
+          data['error']?.toString() ??
+          data['msg']?.toString();
+    }
+    return null;
+  }
+
+  Future<void> _commitChunkWatermark(
+    HistoryWatermarkStore wm,
+    Map<String, dynamic> ack,
+    Map<String, dynamic> chunk,
+  ) async {
+    try {
+      final data = ack['data'] as Map<String, dynamic>? ?? {};
+      final hrCount = (data['health_count'] as num?)?.toInt() ?? 0;
+      final sleepCount = (data['sleep_count'] as num?)?.toInt() ?? 0;
+      final rrCount = (data['rr_count'] as num?)?.toInt() ?? 0;
+
+      if (hrCount > 0) {
+        final latest = data['latestHealthReading'] as Map<String, dynamic>?;
+        final serverStamp = (latest?['recorded_at'] as num?)?.toInt();
+        if (serverStamp != null && serverStamp > 0) {
+          await wm.commitHr(serverStamp);
+        }
+      }
+
+      if (rrCount > 0) {
+        final rrList = chunk['rr_interval'] as List?;
+        if (rrList != null && rrList.isNotEmpty) {
+          final maxRrStamp = rrList
+              .whereType<Map>()
+              .map((r) => (r['sessionStamp'] as num?)?.toInt() ?? 0)
+              .fold(0, (a, b) => a > b ? a : b);
+          if (maxRrStamp > 0) await wm.commitRr(maxRrStamp);
+        }
+      }
+
+      if (sleepCount > 0) {
+        final sleepList = chunk['sleep_metrics'] as List?;
+        if (sleepList != null && sleepList.isNotEmpty) {
+          final maxUtc = sleepList
+              .whereType<Map>()
+              .map((r) => (r['utc'] as num?)?.toInt() ?? 0)
+              .fold(0, (a, b) => a > b ? a : b);
+          if (maxUtc > 0) await wm.commitSleep(maxUtc);
+        }
+      }
+    } catch (_) {}
   }
 
   void _cleanupPush() {
-    _pushTimeoutTimer?.cancel();
-    _pushTimeoutTimer = null;
     _pendingPayload = null;
-    _pendingHrMax = null;
-    _pendingRrMax = null;
-    _pendingSleepMax = null;
     _pushingHistory = false;
-  }
-
-  void _disconnectSocket() {
-    final s = _healthSocket;
-    _healthSocket = null;
-    if (s != null && s.isConnected) {
-      s.disconnect();
-    }
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -928,19 +1142,19 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   // Device history data ko console pe dump karta hai. Android logcat ki
   // per-line ~1000 char limit hoti hai — isliye 800 char chunks me todte hain.
   void _dumpHistory(String tag, List<dynamic> data) {
-    // debugPrint('[BLE-HISTORY] $tag — count=${data.length}');
+    //debugPrint('[BLE-HISTORY] $tag — count=${data.length}');
     if (data.isEmpty) return;
     final str = data.toString();
     const chunkSize = 800;
     if (str.length <= chunkSize) {
-      // debugPrint('[BLE-HISTORY] $tag → $str');
+      //debugPrint('[BLE-HISTORY] $tag → $str');
       return;
     }
     final total = (str.length / chunkSize).ceil();
     for (var i = 0; i < total; i++) {
-      // final start = i * chunkSize;
-      // final end = (start + chunkSize) < str.length ? start + chunkSize : str.length;
-      // debugPrint('[BLE-HISTORY] $tag [${i + 1}/$total] ${str.substring(start, end)}');
+      final start = i * chunkSize;
+      final end = (start + chunkSize) < str.length ? start + chunkSize : str.length;
+     // debugPrint('[BLE-HISTORY] $tag [${i + 1}/$total] ${str.substring(start, end)}');
     }
   }
 
@@ -955,16 +1169,14 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
   int _toInt(dynamic v) => v is int ? v : int.tryParse(v.toString()) ?? 0;
   List<Map<dynamic, dynamic>> _toList(dynamic v) =>
-      (v as List).cast<Map<dynamic, dynamic>>();
+      v is List ? v.whereType<Map<dynamic, dynamic>>().toList() : const [];
 
   @override
   Future<void> close() {
     _scanTimeout?.cancel();
     _syncDoneTimer?.cancel();
     _autoPushTimer?.cancel();
-    _pushTimeoutTimer?.cancel();
     _dataSubscription?.cancel();
-    _disconnectSocket();
     _pushEvents.close();
     return super.close();
   }

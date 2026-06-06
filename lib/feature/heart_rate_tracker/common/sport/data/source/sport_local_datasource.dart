@@ -1,6 +1,5 @@
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:xelex_esp/core/pref_keys.dart';
+import 'package:hive/hive.dart';
 import '../model/sport_model.dart';
 
 abstract interface class SportLocalDataSource {
@@ -10,15 +9,17 @@ abstract interface class SportLocalDataSource {
 }
 
 class SportLocalDataSourceImpl implements SportLocalDataSource {
-  final SharedPreferences _prefs;
+  final Box _box;
 
-  static const _cacheValidHours = 24;
+  static const _cacheValidHours = 4;
+  static const _keyData = 'sports_data';
+  static const _keyTimestamp = 'sports_timestamp';
 
-  const SportLocalDataSourceImpl(this._prefs);
+  const SportLocalDataSourceImpl(this._box);
 
   @override
   Future<List<SportModel>?> getSports() async {
-    final jsonString = _prefs.getString(PrefKeys.sportsData);
+    final jsonString = _box.get(_keyData) as String?;
     if (jsonString == null) return null;
     final List<dynamic> data = jsonDecode(jsonString) as List<dynamic>;
     return data
@@ -29,13 +30,13 @@ class SportLocalDataSourceImpl implements SportLocalDataSource {
   @override
   Future<void> saveSports(List<SportModel> sports) async {
     final jsonString = jsonEncode(sports.map((e) => e.toJson()).toList());
-    await _prefs.setString(PrefKeys.sportsData, jsonString);
-    await _prefs.setInt(PrefKeys.sportsTimestamp, DateTime.now().millisecondsSinceEpoch);
+    await _box.put(_keyData, jsonString);
+    await _box.put(_keyTimestamp, DateTime.now().millisecondsSinceEpoch);
   }
 
   @override
   Future<bool> isCacheValid() async {
-    final timestamp = _prefs.getInt(PrefKeys.sportsTimestamp);
+    final timestamp = _box.get(_keyTimestamp) as int?;
     if (timestamp == null) return false;
     final savedTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
     final difference = DateTime.now().difference(savedTime);

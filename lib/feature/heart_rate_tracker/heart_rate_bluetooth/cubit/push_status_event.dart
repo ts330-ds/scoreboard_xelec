@@ -90,3 +90,8 @@ class PushCooldownActive extends PushStatusEvent {
   final int minutesRemaining;
   const PushCooldownActive(this.minutesRemaining);
 }
+
+/// Device not connected — sync required before push.
+class PushNotConnected extends PushStatusEvent {
+  const PushNotConnected();
+}

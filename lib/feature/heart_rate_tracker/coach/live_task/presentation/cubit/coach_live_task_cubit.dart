@@ -19,6 +19,10 @@ class CoachLiveTaskCubit extends Cubit<CoachLiveTaskState>
   int? _currentTaskId;
   final ReconnectController _reconnect = ReconnectController(tag: 'COACH RECONNECT');
   StreamSubscription<void>? _netSub;
+  // Athlete disconnect ka banner sirf tab dikhao jab sach mein lamba cut ho.
+  // Quick reconnect (Vivo flicker) pe coach ko disturb nahi karna.
+  Timer? _connectionLostDebounce;
+  static const _connectionLostDelay = Duration(seconds: 6);
 
   CoachLiveTaskCubit({
     required CoachLiveTaskSocketService socketService,
@@ -70,6 +74,9 @@ class CoachLiveTaskCubit extends Cubit<CoachLiveTaskState>
 
     _socketService.onLiveUpdate = (reading, totalReadings) {
       if (isClosed) return;
+      // Athlete reconnect ho gaya — pending disconnect banner cancel karo
+      _connectionLostDebounce?.cancel();
+      _connectionLostDebounce = null;
       final updated = [...state.readings, reading];
       // Purane readings drop karo agar limit se zyada ho
       final trimmed = updated.length > _maxReadings
@@ -104,11 +111,17 @@ class CoachLiveTaskCubit extends Cubit<CoachLiveTaskState>
     };
 
     _socketService.onAthleteConnectionLost = () {
-      if (!isClosed) {
-        // Banner ke liye flag set karo. Session end NAHI — dialog mat kholo.
-        // Reconnect hone par next live_result_update flag reset kar dega.
-        emit(state.copyWith(isAthleteConnectionLost: true));
-      }
+      if (isClosed) return;
+      // Turant banner mat dikhao — 6s wait karo.
+      // Agar is dauran live data aa jaye (athlete reconnect ho gaya) to
+      // timer cancel ho jayega aur coach ko kuch dikhe ga hi nahi.
+      _connectionLostDebounce?.cancel();
+      _connectionLostDebounce = Timer(_connectionLostDelay, () {
+        if (!isClosed) {
+          debugPrint('[COACH CUBIT] athlete still disconnected after ${_connectionLostDelay.inSeconds}s — showing banner');
+          emit(state.copyWith(isAthleteConnectionLost: true));
+        }
+      });
     };
 
     _socketService.onDisconnected = () {
@@ -124,10 +137,7 @@ class CoachLiveTaskCubit extends Cubit<CoachLiveTaskState>
 
     _socketService.onError = (message) {
       if (!isClosed) {
-        emit(state.copyWith(
-          status: CoachLiveTaskStatus.error,
-          errorMessage: message,
-        ));
+        emit(state.copyWith(errorMessage: message));
       }
     };
 
@@ -213,7 +223,8 @@ class CoachLiveTaskCubit extends Cubit<CoachLiveTaskState>
     WidgetsBinding.instance.removeObserver(this);
     _reconnect.dispose();
     _netSub?.cancel();
-    _socketService.disconnect();
+    _connectionLostDebounce?.cancel();
+    _socketService.dispose();
     return super.close();
   }
 }

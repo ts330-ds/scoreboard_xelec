@@ -5,11 +5,12 @@ import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/entity/athlete_task_entity.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_state.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_result_submit_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/screen/session_upload_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/active_session_view.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/pending_task_view.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/session_feedback_sheet.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
+import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 
 class AthleteTaskDetailScreen extends StatefulWidget {
   final AthleteTaskEntity task;
@@ -37,23 +38,7 @@ class _AthleteTaskDetailScreenState extends State<AthleteTaskDetailScreen> {
   Widget build(BuildContext context) {
     return BlocProvider.value(
       value: widget.activityCubit,
-      child: BlocListener<HeartBleCubit, HeartBleState>(
-        listenWhen: (prev, curr) =>
-            (prev.heartRate != curr.heartRate && curr.heartRate > 0) ||
-            prev.spo2 != curr.spo2 ||
-            prev.stressLevel != curr.stressLevel ||
-            prev.hrv != curr.hrv,
-        listener: (context, bleState) {
-          if (bleState.heartRate > 0) {
-            widget.activityCubit.recordHeartRate(bleState.heartRate);
-          }
-          widget.activityCubit.updateBiometrics(
-            spo2: bleState.spo2 > 0 ? bleState.spo2.toDouble() : null,
-            stressLevel: bleState.stressLevel > 0 ? bleState.stressLevel : null,
-            hrv: bleState.hrv > 0 ? bleState.hrv : null,
-          );
-        },
-        child: BlocConsumer<AthleteActivityCubit, AthleteActivityState>(
+      child: BlocConsumer<AthleteActivityCubit, AthleteActivityState>(
           listenWhen: (prev, curr) =>
               // Session khatam — feedback sheet show karne ka moment.
               (prev.pendingFeedbackTaskId == null &&
@@ -69,11 +54,41 @@ class _AthleteTaskDetailScreenState extends State<AthleteTaskDetailScreen> {
               if (mounted) context.pop();
               return;
             }
-            final navigator = GoRouter.of(context);
-            await SessionFeedbackSheet.show(context, taskId: taskId);
+
+            final sessionStart = state.completedSessionStart;
+            final sessionEnd = state.completedSessionEnd;
+            if (sessionStart == null || sessionEnd == null) {
+              if (mounted) context.pop();
+              return;
+            }
+
+            // Create a fresh cubit for this session's upload.
+            // Registered in activityCubit so reference stays alive even
+            // if user navigates away — upload continues in background.
+            final submitCubit = widget.activityCubit
+                .createUploadCubit(sl<TaskResultSubmitCubit>());
+
             if (!mounted) return;
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SessionUploadScreen(
+                  submitCubit: submitCubit,
+                  taskId: taskId,
+                  sessionStart: sessionStart,
+                  sessionEnd: sessionEnd,
+                ),
+              ),
+            );
+
+            // Upload done — now show feedback form
+            if (!mounted) return;
+            await SessionFeedbackSheet.show(context, taskId: taskId);
+
+            // Clear pending feedback BEFORE popping, so the main screen
+            // doesn't see a stale pendingFeedbackTaskId and open a second sheet.
             widget.activityCubit.acknowledgeFeedbackPrompt();
-            navigator.pop();
+            if (!mounted) return;
+            context.pop();
           },
           builder: (context, state) {
             final isActive = state.isSessionActive;
@@ -82,7 +97,9 @@ class _AthleteTaskDetailScreenState extends State<AthleteTaskDetailScreen> {
               canPop: !isActive,
               onPopInvokedWithResult: (didPop, _) {
                 if (didPop) return;
-                ScaffoldMessenger.of(context).showSnackBar(
+                final messenger = ScaffoldMessenger.of(context);
+                messenger.clearSnackBars();
+                messenger.showSnackBar(
                   const SnackBar(
                     content: Text("Can't go back without stopping the session."),
                     behavior: SnackBarBehavior.floating,
@@ -114,7 +131,7 @@ class _AthleteTaskDetailScreenState extends State<AthleteTaskDetailScreen> {
             );
           },
         ),
-      ),
     );
   }
 }
+

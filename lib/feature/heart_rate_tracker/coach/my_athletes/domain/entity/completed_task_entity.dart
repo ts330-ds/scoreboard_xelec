@@ -10,9 +10,13 @@ class CompletedTaskEntity {
 
   String? get status => _toStr(raw['status']);
 
-  /// Duration of the task in **minutes**.
-  int? get durationMinutes =>
-      _toInt(raw['duration'] ?? raw['duration_minutes']);
+  /// Duration calculated from assigned_at → feedback submitted_at.
+  int? get durationSeconds {
+    final start = assignedAt;
+    final end = feedback?.submittedAt;
+    if (start == null || end == null) return null;
+    return end.difference(start).inSeconds;
+  }
 
   String? get assignedBy => _toStr(raw['assigned_by']);
 
@@ -44,8 +48,8 @@ class CompletedTaskFeedback {
   String? get note => _toStr(raw['note']);
   int? get trainingLoad => _toInt(raw['training_load']);
 
-  /// Session duration in **minutes**.
-  int? get sessionDurationMinutes =>
+  /// Session duration in **seconds** (API returns seconds).
+  int? get sessionDurationSeconds =>
       _toInt(raw['session_duration'] ?? raw['session_duration_minutes']);
 
   DateTime? get submittedAt {

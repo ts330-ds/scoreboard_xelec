@@ -14,19 +14,17 @@ class BatteryOptimizationScreen extends StatefulWidget {
   @override
   State<BatteryOptimizationScreen> createState() => _BatteryOptimizationScreenState();
 
-  // Call from the athlete dashboard to show once on first launch.
-  // Android only, and only when battery optimization is still enabled
-  // and the prompt hasn't been shown to the user yet.
   static Future<void> showIfNeeded(BuildContext context) async {
     if (!Platform.isAndroid) return;
     final prefs = await SharedPreferences.getInstance();
+    if (!context.mounted) return;
     if (prefs.getBool(PrefKeys.batteryOptPromptShown) ?? false) return;
     final ignoring = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+    if (!context.mounted) return;
     if (ignoring) {
       await prefs.setBool(PrefKeys.batteryOptPromptShown, true);
       return;
     }
-    if (!context.mounted) return;
     await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         builder: (_) => const BatteryOptimizationScreen(),
@@ -36,7 +34,8 @@ class BatteryOptimizationScreen extends StatefulWidget {
   }
 }
 
-class _BatteryOptimizationScreenState extends State<BatteryOptimizationScreen> {
+class _BatteryOptimizationScreenState extends State<BatteryOptimizationScreen>
+    with WidgetsBindingObserver {
   bool _ignoring = false;
   String _manufacturer = '';
   bool _busy = false;
@@ -44,7 +43,27 @@ class _BatteryOptimizationScreenState extends State<BatteryOptimizationScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshIgnoringStatus();
+    }
+  }
+
+  Future<void> _refreshIgnoringStatus() async {
+    final ignoring = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+    if (!context.mounted) return;
+    setState(() => _ignoring = ignoring);
   }
 
   Future<void> _load() async {
@@ -54,7 +73,7 @@ class _BatteryOptimizationScreenState extends State<BatteryOptimizationScreen> {
       final info = await DeviceInfoPlugin().androidInfo;
       mfr = info.manufacturer.toLowerCase();
     }
-    if (!mounted) return;
+    if (!context.mounted) return;
     setState(() {
       _ignoring = ignoring;
       _manufacturer = mfr;
@@ -69,14 +88,17 @@ class _BatteryOptimizationScreenState extends State<BatteryOptimizationScreen> {
   Future<void> _requestIgnore() async {
     if (_busy) return;
     setState(() => _busy = true);
-    await FlutterForegroundTask.requestIgnoreBatteryOptimization();
-    await Future.delayed(const Duration(milliseconds: 400));
-    final ignoring = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
-    if (!mounted) return;
-    setState(() {
-      _ignoring = ignoring;
-      _busy = false;
-    });
+    try {
+      await FlutterForegroundTask.requestIgnoreBatteryOptimization();
+      await Future.delayed(const Duration(milliseconds: 400));
+      final ignoring = await FlutterForegroundTask.isIgnoringBatteryOptimizations;
+      if (!context.mounted) return;
+      setState(() => _ignoring = ignoring);
+    } catch (_) {
+      // Some devices throw when the system dialog is dismissed or unsupported.
+    } finally {
+      if (context.mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _openAutoStart() async {
@@ -90,7 +112,7 @@ class _BatteryOptimizationScreenState extends State<BatteryOptimizationScreen> {
   Future<void> _finish() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(PrefKeys.batteryOptPromptShown, true);
-    if (!mounted) return;
+    if (!context.mounted) return;
     Navigator.of(context).pop();
   }
 

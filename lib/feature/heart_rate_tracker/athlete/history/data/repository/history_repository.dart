@@ -60,21 +60,22 @@ class HistoryRepository {
 
   /// Persist incoming HR chunk; dedupes by stamp. Returns inserted/updated count.
   Future<int> persistHrChunk(List<Map<dynamic, dynamic>> chunk) async {
-    final n = await _store.upsertHrChunk(chunk);
-    if (n > 0) await _store.updateMeta(HistoryLocalStore.metaHr);
-    return n;
+    return _store.upsertHrChunk(chunk);
   }
 
   Future<int> persistRrChunk(List<Map<dynamic, dynamic>> chunk) async {
-    final n = await _store.upsertRrChunk(chunk);
-    if (n > 0) await _store.updateMeta(HistoryLocalStore.metaRr);
-    return n;
+    return _store.upsertRrChunk(chunk);
   }
 
   Future<int> persistSleep(List<Map<dynamic, dynamic>> list) async {
-    final n = await _store.upsertSleepList(list);
-    if (n > 0) await _store.updateMeta(HistoryLocalStore.metaSleep);
-    return n;
+    return _store.upsertSleepList(list);
+  }
+
+  /// Update meta for all streams — call once after sync completes.
+  Future<void> updateAllMeta() async {
+    await _store.updateMeta(HistoryLocalStore.metaHr);
+    await _store.updateMeta(HistoryLocalStore.metaRr);
+    await _store.updateMeta(HistoryLocalStore.metaSleep);
   }
 
   HistorySyncMeta getMeta() => HistorySyncMeta(

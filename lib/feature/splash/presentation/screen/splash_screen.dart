@@ -24,6 +24,16 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
+
+    // Already logged-in user ko splash animation mat dikhao — seedha navigate karo.
+    // Ye tab hota hai jab Android ne background mein activity kill ki
+    // (e.g. Settings se wapas aane pe) aur app restart hua.
+    if (_hasExistingSession()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _navigate();
+      });
+    }
+
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -40,10 +50,20 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (!mounted) return;
-      _navigate();
-    });
+    if (!_hasExistingSession()) {
+      Future.delayed(const Duration(milliseconds: 2500), () {
+        if (!mounted) return;
+        _navigate();
+      });
+    }
+  }
+
+  bool _hasExistingSession() {
+    final prefs = sl<SharedPreferences>();
+    final coachToken = prefs.getString(PrefKeys.coachToken);
+    final athleteToken = prefs.getString(PrefKeys.userToken);
+    return (coachToken != null && coachToken.isNotEmpty) ||
+        (athleteToken != null && athleteToken.isNotEmpty);
   }
 
   void _navigate() {

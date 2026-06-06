@@ -28,7 +28,9 @@ class SportCubit extends Cubit<SportState> {
                 Sport(id: 4, name: 'Tennis'),
                 Sport(id: 5, name: 'Swimming'),
               ];
-        emit(state.copyWith(status: SportStatus.loaded, sports: list));
+        final sorted = List<Sport>.from(list)
+          ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        emit(state.copyWith(status: SportStatus.loaded, sports: sorted));
       },
     );
   }

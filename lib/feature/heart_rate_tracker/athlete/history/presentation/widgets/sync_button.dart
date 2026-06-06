@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 
 class SyncButton extends StatefulWidget {
   final bool isSyncing;
@@ -42,29 +40,23 @@ class _SyncButtonState extends State<SyncButton>
 
   @override
   Widget build(BuildContext context) {
-    final connected =
-        context.select<HeartBleCubit, bool>((c) => c.state.isConnected);
     return GestureDetector(
-      onTap: connected ? widget.onTap : null,
+      onTap: widget.onTap,
       child: Tooltip(
-        message:
-            connected ? 'Sync history from device' : 'Connect a device first',
+        message: 'Sync history from device',
         child: Container(
           width: 36,
           height: 36,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: connected ? 0.20 : 0.10),
+            color: Colors.white.withValues(alpha: 0.20),
             border: Border.all(
-                color:
-                    Colors.white.withValues(alpha: connected ? 0.50 : 0.20)),
+                color: Colors.white.withValues(alpha: 0.50)),
           ),
           child: RotationTransition(
             turns: _spin,
-            child: Icon(Icons.sync,
-                color: connected
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.40),
+            child: const Icon(Icons.sync,
+                color: Colors.white,
                 size: 18),
           ),
         ),

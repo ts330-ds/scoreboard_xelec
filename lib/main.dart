@@ -21,6 +21,8 @@ import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/sleep_session_hive.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/sync_meta_hive.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/history_local_store.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/data/local/task_upload_record.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/data/local/task_upload_store.dart';
 import 'package:xelex_esp/router/app_path.dart';
 import 'package:xelex_esp/router/app_router.dart';
 import 'package:xelex_esp/service/api/api_service.dart';
@@ -52,10 +54,13 @@ void main() async {
   Hive.registerAdapter(RrSampleHiveAdapter());
   Hive.registerAdapter(SleepSessionHiveAdapter());
   Hive.registerAdapter(SyncMetaHiveAdapter());
+  Hive.registerAdapter(TaskUploadRecordAdapter());
   await Hive.openBox<AthleteModel>('athletes');
   await Hive.openBox<TestSessionModel>('sessions');
   await Hive.openBox<TimingGateProfileModel>('timing_gate_profile');
+  await Hive.openBox('sports_cache');
   await HistoryLocalStore.instance.open();
+  await TaskUploadStore.instance.open();
 
   final sharedPreferences = await SharedPreferences.getInstance();
   setupDI(sharedPreferences: sharedPreferences);

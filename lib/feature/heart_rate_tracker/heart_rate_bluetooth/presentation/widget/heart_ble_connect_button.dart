@@ -34,7 +34,9 @@ class HeartBleConnectButton extends StatelessWidget {
         value: cubit,
         child: const HeartBleDeviceListSheet(),
       ),
-    );
+    ).whenComplete(() {
+      if (cubit.state.isScanning) cubit.stopScan();
+    });
   }
 
   @override

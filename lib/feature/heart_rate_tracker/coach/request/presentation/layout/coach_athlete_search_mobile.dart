@@ -21,7 +21,6 @@ class _CoachAthleteSearchMobileState extends State<CoachAthleteSearchMobile> {
   @override
   void initState() {
     super.initState();
-    context.read<CoachRequestCubit>().loadAll();
   }
 
   @override

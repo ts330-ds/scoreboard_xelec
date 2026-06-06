@@ -16,6 +16,10 @@ class CoachRequestCubit extends Cubit<CoachRequestState> {
 
   Future<void> searchAthletes(String query) {
     _currentQuery = query.trim();
+    if (_currentQuery.length < 4) {
+      emit(const CoachRequestState());
+      return Future.value();
+    }
     return _fetch(_currentQuery, page: 1, append: false);
   }
 

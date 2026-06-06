@@ -26,10 +26,6 @@ abstract class PrefKeys {
   // Feature Selection
   static const String selectedFeature = 'selected_feature';
 
-  // Sports cache
-  static const String sportsData = 'sports_data';
-  static const String sportsTimestamp = 'sports_timestamp';
-
   // Onboarding flags
   static const String batteryOptPromptShown = 'battery_opt_prompt_shown';
 

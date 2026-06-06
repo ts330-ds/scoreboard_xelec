@@ -56,7 +56,7 @@ class PendingTaskView extends StatelessWidget {
                 label: state.selectedActivity,
                 color: type.color,
               ),
-              if (state.locationText.isNotEmpty)
+              if (state.lat != null && state.lng != null && state.locationText.isNotEmpty)
                 _InfoChip(
                   icon: Icons.location_on_outlined,
                   label: state.locationText,

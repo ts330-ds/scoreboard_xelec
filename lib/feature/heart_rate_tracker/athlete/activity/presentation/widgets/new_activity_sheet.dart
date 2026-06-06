@@ -3,7 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_state.dart';
-import 'activity_constants.dart' show activityTypes;
+import 'package:xelex_esp/feature/heart_rate_tracker/common/sport/presentation/cubit/sport_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/common/sport/presentation/cubit/sport_state.dart';
 
 class _ActivityDropdown extends StatelessWidget {
   final String selectedActivity;
@@ -14,71 +15,156 @@ class _ActivityDropdown extends StatelessWidget {
     required this.onChanged,
   });
 
+  static const _sportColor = AppColors.primary;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selectedActivity,
-          isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: AppColors.subtext),
-          selectedItemBuilder: (_) => activityTypes
-              .map(
-                (a) => Row(
-                  children: [
-                    Icon(a.icon, color: a.color, size: 20),
-                    const SizedBox(width: 10),
-                    Text(a.name,
-                        style: const TextStyle(
-                            color: AppColors.text,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600)),
-                  ],
+    return BlocBuilder<SportCubit, SportState>(
+      builder: (context, sportState) {
+        if (sportState.status == SportStatus.loading ||
+            sportState.status == SportStatus.initial) {
+          return Container(
+            height: 50,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: const Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+
+        if (sportState.status == SportStatus.error ||
+            sportState.sports.isEmpty) {
+          return Container(
+            height: 50,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceAlt,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline,
+                    size: 16, color: AppColors.error),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('Failed to load sports',
+                      style:
+                          TextStyle(color: AppColors.subtext, fontSize: 13)),
                 ),
-              )
-              .toList(),
-          items: activityTypes
-              .map(
-                (a) => DropdownMenuItem<String>(
-                  value: a.name,
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: a.color.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(a.icon, color: a.color, size: 18),
+                GestureDetector(
+                  onTap: () => context.read<SportCubit>().getSports(),
+                  child: const Icon(Icons.refresh,
+                      size: 18, color: AppColors.primary),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final sports = sportState.sports;
+        final isValid = sports.any((s) => s.name == selectedActivity);
+        if (!isValid && sports.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            onChanged(sports.first.name);
+          });
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: AppColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: isValid ? selectedActivity : null,
+              isExpanded: true,
+              hint: const Text('Select sport',
+                  style: TextStyle(color: AppColors.textHint, fontSize: 14)),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                  color: AppColors.subtext),
+              selectedItemBuilder: (_) => sports
+                  .map(
+                    (s) => Row(
+                      children: [
+                        Icon(Icons.sports, color: _sportColor, size: 20),
+                        const SizedBox(width: 10),
+                        Text(s.name,
+                            style: const TextStyle(
+                                color: AppColors.text,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  )
+                  .toList(),
+              items: sports
+                  .map(
+                    (s) => DropdownMenuItem<String>(
+                      value: s.name,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: _sportColor.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.sports,
+                                color: _sportColor, size: 18),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(s.name,
+                              style: const TextStyle(
+                                  color: AppColors.text, fontSize: 14)),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Text(a.name,
-                          style: const TextStyle(
-                              color: AppColors.text, fontSize: 14)),
-                    ],
-                  ),
-                ),
-              )
-              .toList(),
-          onChanged: (value) {
-            if (value != null) onChanged(value);
-          },
-        ),
-      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) onChanged(value);
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 }
 
-class NewActivitySheet extends StatelessWidget {
+class NewActivitySheet extends StatefulWidget {
   const NewActivitySheet({super.key});
+
+  @override
+  State<NewActivitySheet> createState() => _NewActivitySheetState();
+}
+
+class _NewActivitySheetState extends State<NewActivitySheet> {
+  final _nameController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    context.read<AthleteActivityCubit>().resetTaskForm();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -150,6 +236,7 @@ class NewActivitySheet extends StatelessWidget {
                     border: Border.all(color: AppColors.border),
                   ),
                   child: TextField(
+                    controller: _nameController,
                     onChanged: (v) =>
                         context.read<AthleteActivityCubit>().setTaskName(v),
                     style: const TextStyle(color: AppColors.text, fontSize: 14),

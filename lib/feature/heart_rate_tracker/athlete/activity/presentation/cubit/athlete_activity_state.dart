@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/data/model/activity_session_model.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/entity/athlete_task_entity.dart';
 
 class AthleteActivityState extends Equatable {
   final List<ActivitySession> sessions;
@@ -18,13 +19,21 @@ class AthleteActivityState extends Equatable {
   // Task created but session not started yet
   final int? pendingTaskId;
 
+  // Active task — original entity store karte hain taaki session ke dauran
+  // kisi bhi screen se active session pe navigate kar sakein.
+  final AthleteTaskEntity? activeTask;
+
   // Active task (API se mila hua id)
   final int? activeTaskId;
 
-  // Just-completed task — set when session ends so UI can pop the
-  // feedback (RPE + notes) sheet. UI clears it via [acknowledgeFeedbackPrompt]
-  // after handling, so the sheet doesn't reopen.
+  // Just-completed task — set when session ends so UI can navigate
+  // to SessionUploadScreen. UI clears it via [acknowledgeFeedbackPrompt]
+  // after handling, so the screen doesn't reopen.
   final int? pendingFeedbackTaskId;
+
+  // Session times captured at end — needed for BLE fetch + upload
+  final DateTime? completedSessionStart;
+  final DateTime? completedSessionEnd;
 
   // Socket
   final bool isStoppingSession;
@@ -58,8 +67,11 @@ class AthleteActivityState extends Equatable {
     this.isCreatingTask = false,
     this.taskError,
     this.pendingTaskId,
+    this.activeTask,
     this.activeTaskId,
     this.pendingFeedbackTaskId,
+    this.completedSessionStart,
+    this.completedSessionEnd,
     this.isStoppingSession = false,
     this.isSocketConnected = false,
     this.isSocketReconnecting = false,
@@ -102,10 +114,15 @@ class AthleteActivityState extends Equatable {
     bool clearTaskError = false,
     int? pendingTaskId,
     bool clearPendingTaskId = false,
+    AthleteTaskEntity? activeTask,
+    bool clearActiveTask = false,
     int? activeTaskId,
     bool clearActiveTaskId = false,
     int? pendingFeedbackTaskId,
     bool clearPendingFeedbackTaskId = false,
+    DateTime? completedSessionStart,
+    DateTime? completedSessionEnd,
+    bool clearCompletedSession = false,
     bool? isStoppingSession,
     bool? isSocketConnected,
     bool? isSocketReconnecting,
@@ -118,6 +135,7 @@ class AthleteActivityState extends Equatable {
     double? spo2,
     double? lat,
     double? lng,
+    bool clearLocation = false,
     int? stressLevel,
     double? hrv,
   }) {
@@ -127,16 +145,23 @@ class AthleteActivityState extends Equatable {
       elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
       selectedActivity: selectedActivity ?? this.selectedActivity,
       selectedDuration: selectedDuration ?? this.selectedDuration,
-      locationText: locationText ?? this.locationText,
-      isLoadingLocation: isLoadingLocation ?? this.isLoadingLocation,
+      locationText: clearLocation ? '' : (locationText ?? this.locationText),
+      isLoadingLocation: clearLocation ? false : (isLoadingLocation ?? this.isLoadingLocation),
       taskName: taskName ?? this.taskName,
       isCreatingTask: isCreatingTask ?? this.isCreatingTask,
       taskError: clearTaskError ? null : (taskError ?? this.taskError),
       pendingTaskId: clearPendingTaskId ? null : (pendingTaskId ?? this.pendingTaskId),
+      activeTask: clearActiveTask ? null : (activeTask ?? this.activeTask),
       activeTaskId: clearActiveTaskId ? null : (activeTaskId ?? this.activeTaskId),
       pendingFeedbackTaskId: clearPendingFeedbackTaskId
           ? null
           : (pendingFeedbackTaskId ?? this.pendingFeedbackTaskId),
+      completedSessionStart: clearCompletedSession
+          ? null
+          : (completedSessionStart ?? this.completedSessionStart),
+      completedSessionEnd: clearCompletedSession
+          ? null
+          : (completedSessionEnd ?? this.completedSessionEnd),
       isStoppingSession: isStoppingSession ?? this.isStoppingSession,
       isSocketConnected: isSocketConnected ?? this.isSocketConnected,
       isSocketReconnecting: isSocketReconnecting ?? this.isSocketReconnecting,
@@ -146,8 +171,8 @@ class AthleteActivityState extends Equatable {
       isAuthFailure: isAuthFailure ?? this.isAuthFailure,
       sugarLevel: sugarLevel ?? this.sugarLevel,
       spo2: spo2 ?? this.spo2,
-      lat: lat ?? this.lat,
-      lng: lng ?? this.lng,
+      lat: clearLocation ? null : (lat ?? this.lat),
+      lng: clearLocation ? null : (lng ?? this.lng),
       stressLevel: stressLevel ?? this.stressLevel,
       hrv: hrv ?? this.hrv,
     );
@@ -166,8 +191,11 @@ class AthleteActivityState extends Equatable {
         isCreatingTask,
         taskError,
         pendingTaskId,
+        activeTask,
         activeTaskId,
         pendingFeedbackTaskId,
+        completedSessionStart,
+        completedSessionEnd,
         isStoppingSession,
         isSocketConnected,
         isSocketReconnecting,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/failure.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/service/api/api_service.dart';
@@ -115,6 +116,39 @@ class AthleteAuthCubit extends Cubit<AthleteAuthState> {
         emit(state.copyWith(status: AthleteAuthStatus.loggedOut));
       },
     );
+  }
+
+  Future<void> deleteAccount() async {
+    emit(state.copyWith(status: AthleteAuthStatus.loggingOut));
+
+    final bleCubit = sl<HeartBleCubit>();
+    if (bleCubit.state.isConnected) {
+      await bleCubit.disconnect();
+    }
+
+    try {
+      final api = sl<ApiService>();
+      final response = await api.dio.delete('/athlete/delete_account');
+      final data = response.data as Map<String, dynamic>? ?? {};
+
+      if (data['success'] == true) {
+        api.clearAuthToken();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.clear();
+        emit(state.copyWith(status: AthleteAuthStatus.loggedOut));
+      } else {
+        final msg = data['message']?.toString() ?? 'Delete failed';
+        emit(state.copyWith(
+          status: AthleteAuthStatus.error,
+          errorMessage: msg,
+        ));
+      }
+    } catch (e) {
+      emit(state.copyWith(
+        status: AthleteAuthStatus.error,
+        errorMessage: 'Failed to delete account: $e',
+      ));
+    }
   }
 
   // Agar login mein 404 aaye — user registered nahi hai

@@ -462,6 +462,84 @@ class _AthleteOfflineBannerState extends State<_AthleteOfflineBanner>
   }
 }
 
+// ── Debug Socket Status Bar ───────────────────────────────────────────────────
+
+class _DebugSocketStatusBar extends StatelessWidget {
+  final CoachLiveTaskState state;
+  const _DebugSocketStatusBar({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final coachConnected = state.status == CoachLiveTaskStatus.watching ||
+        state.status == CoachLiveTaskStatus.athleteStopped;
+    final coachReconnecting = state.status == CoachLiveTaskStatus.reconnecting;
+
+    final coachColor = coachConnected
+        ? Colors.greenAccent
+        : coachReconnecting
+            ? Colors.orangeAccent
+            : Colors.redAccent;
+
+    final coachLabel = coachConnected
+        ? 'Connected'
+        : coachReconnecting
+            ? 'Reconnecting${state.reconnectAttempt > 0 ? ' #${state.reconnectAttempt}' : ''}'
+            : state.status == CoachLiveTaskStatus.connecting
+                ? 'Connecting'
+                : 'Disconnected';
+
+    final athleteColor =
+        state.isAthleteConnectionLost ? Colors.redAccent : Colors.greenAccent;
+    final athleteLabel =
+        state.isAthleteConnectionLost ? 'Offline' : 'Online';
+
+    return Container(
+      width: double.infinity,
+      color: Colors.black87,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: Row(
+        children: [
+          const Text('DEBUG  ',
+              style: TextStyle(
+                  color: Colors.white38,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1)),
+          _StatusDot(color: coachColor, label: 'Coach: $coachLabel'),
+          const SizedBox(width: 16),
+          _StatusDot(color: athleteColor, label: 'Athlete: $athleteLabel'),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusDot extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _StatusDot({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(label,
+            style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 11,
+                fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+}
+
 // ── Live View ─────────────────────────────────────────────────────────────────
 
 class _LiveView extends StatelessWidget {
@@ -497,6 +575,7 @@ class _LiveView extends StatelessWidget {
 
     return Column(
       children: [
+        _DebugSocketStatusBar(state: state),
         if (showReconnectBanner)
           _ReconnectingBanner(
             attempt: state.reconnectAttempt,

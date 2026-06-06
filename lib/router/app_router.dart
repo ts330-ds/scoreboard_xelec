@@ -10,6 +10,7 @@ import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/ent
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/screen/athlete_task_detail_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/screen/task_result_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/screen/ble_fetch_demo_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_result_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/usecase/get_task_result_usecase.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
@@ -559,6 +560,17 @@ final GoRouter appRouter = GoRouter(
             )..load(),
             child: TaskResultScreen(task: task),
           ),
+        );
+      },
+    ),
+
+    /// ── BLE Fetch Demo (testing screen) ───────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.bleFetchDemo,
+      pageBuilder: (context, state) {
+        return adaptivePage(
+          state: state,
+          child: const BleFetchDemoScreen(),
         );
       },
     ),

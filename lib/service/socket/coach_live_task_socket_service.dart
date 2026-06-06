@@ -3,6 +3,7 @@ import 'package:socket_io_client/socket_io_client.dart' as sio;
 
 class CoachLiveTaskSocketService {
   sio.Socket? _socket;
+  bool _isConnecting = false;
 
   // Callbacks — cubit set karega
   void Function()? onWatching;
@@ -26,9 +27,15 @@ class CoachLiveTaskSocketService {
       onConnected?.call();
       return;
     }
+    if (_isConnecting) return;
 
+    if (_socket != null) {
+      _socket!.dispose();
+      _socket = null;
+    }
+
+    _isConnecting = true;
     final url = _socketUrl(baseUrl);
-    // debugPrint('[COACH SOCKET] Connecting to $url');
 
     _socket = sio.io(
       url,
@@ -36,33 +43,31 @@ class CoachLiveTaskSocketService {
           .setTransports(['websocket'])
           .setQuery({'token': token})
           .disableAutoConnect()
-          // ReconnectController hi reconnect handle karega.
           .disableReconnection()
           .build(),
     );
 
     _socket!.onConnect((_) {
-      // debugPrint('[COACH SOCKET] Connected');
+      _isConnecting = false;
       onConnected?.call();
     });
 
     _socket!.onDisconnect((_) {
-      // debugPrint('[COACH SOCKET] Disconnected');
+      _isConnecting = false;
       onDisconnected?.call();
     });
 
     _socket!.onConnectError((err) {
-      // debugPrint('[COACH SOCKET] Connection error: $err');
+      _isConnecting = false;
       onError?.call('Socket connection failed');
+      onDisconnected?.call();
     });
 
     _socket!.on('watching_task', (data) {
-      // debugPrint('[COACH SOCKET] watching_task: $data');
       onWatching?.call();
     });
 
     _socket!.on('live_result_update', (data) {
-      // debugPrint('[COACH SOCKET] live_result_update: $data');
       if (data is! Map) return;
 
       final latestRaw = data['latestReading'];
@@ -85,21 +90,16 @@ class CoachLiveTaskSocketService {
     });
 
     _socket!.on('athlete_stopped', (data) {
-      // debugPrint('[COACH SOCKET] athlete_stopped: $data');
       onAthleteStopped?.call();
     });
 
-    // Athlete temporarily disconnected (internet/bluetooth drop) — NOT session end.
-    // Coach UI should show a "reconnecting" indicator, not the stop dialog.
     _socket!.on('athlete_connection_lost', (data) {
-      // debugPrint('[COACH SOCKET] athlete_connection_lost: $data');
       onAthleteConnectionLost?.call();
     });
 
     _socket!.on('request_error', (data) {
-      final msg = data is Map
-          ? data['message']?.toString() ?? 'Socket error'
-          : 'Socket error';
+      final map = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+      final msg = map['message']?.toString() ?? 'Socket error';
       if (_isAuthError(msg)) {
         onAuthFailure?.call(msg);
       } else {
@@ -125,9 +125,14 @@ class CoachLiveTaskSocketService {
   }
 
   void disconnect() {
+    _isConnecting = false;
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
+  }
+
+  void dispose() {
+    disconnect();
     onWatching = null;
     onLiveUpdate = null;
     onAthleteStopped = null;

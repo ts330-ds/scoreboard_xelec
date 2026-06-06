@@ -55,19 +55,11 @@ String pad2(int n) => n.toString().padLeft(2, '0');
 List<Map<dynamic, dynamic>> dedupeHrData(List<Map<dynamic, dynamic>> data) {
   if (data.isEmpty) return data;
   final seenStamps = <int>{};
-  final uniqueByStamp = data.where((r) {
+  return data.where((r) {
     final s = (r['stamp'] as num?)?.toInt() ?? 0;
     if (s <= 0) return true;
     return seenStamps.add(s);
   }).toList();
-
-  final result = <Map<dynamic, dynamic>>[uniqueByStamp.first];
-  for (int i = 1; i < uniqueByStamp.length; i++) {
-    final prev = (result.last['heartRate'] as num?)?.toInt() ?? -1;
-    final curr = (uniqueByStamp[i]['heartRate'] as num?)?.toInt() ?? -1;
-    if (curr != prev) result.add(uniqueByStamp[i]);
-  }
-  return result;
 }
 
 List<Map<dynamic, dynamic>> filterByDateRange(

@@ -37,6 +37,9 @@ abstract class HeartTrackerPaths {
   static const String coachHome    = '/coach-home';
   static const String coachProfile = '/coach-profile';
 
+  // ── Demo / Testing ─────────────────────────────────────────────────────────
+  static const String bleFetchDemo = '/ble-fetch-demo';
+
   // ── Shared ─────────────────────────────────────────────────────────────────
   static const String heartBleSelectionScreen = '/heart-ble-selection';
 

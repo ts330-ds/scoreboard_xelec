@@ -3,8 +3,10 @@ import 'package:socket_io_client/socket_io_client.dart' as sio;
 
 class AthleteTaskSocketService {
   sio.Socket? _socket;
+  bool _isConnecting = false;
 
   // Callbacks — cubit inhe set karega
+  void Function()? onConnected;
   void Function(Map<String, dynamic> data)? onTaskSaved;
   void Function(Map<String, dynamic> data)? onRecordingStopped;
   void Function(String message)? onError;
@@ -23,13 +25,16 @@ class AthleteTaskSocketService {
   int _heartbeatCount = 0;
 
   void connect(String baseUrl, String token) {
-    if (_socket != null && _socket!.connected) {
-      // debugPrint('[SESSION SOCKET] Already connected — skipping reconnect');
-      return;
+    if (_socket != null && _socket!.connected) return;
+    if (_isConnecting) return;
+
+    if (_socket != null) {
+      _socket!.dispose();
+      _socket = null;
     }
 
+    _isConnecting = true;
     final url = _socketUrl(baseUrl);
-    // debugPrint('[SESSION SOCKET] ▶ Connecting to $url');
 
     _socket = sio.io(
       url,
@@ -37,40 +42,38 @@ class AthleteTaskSocketService {
           .setTransports(['websocket'])
           .setQuery({'token': token})
           .disableAutoConnect()
-          // Library ka auto-reconnect band — ReconnectController handle karega.
-          // Single source of truth, double-attempts ka risk nahi.
           .disableReconnection()
           .build(),
     );
 
     _socket!.onConnect((_) {
+      _isConnecting = false;
       _heartbeatCount = 0;
-      // debugPrint('[SESSION SOCKET] ✅ Connected');
+      onConnected?.call();
     });
 
     _socket!.onDisconnect((_) {
-      // debugPrint('[SESSION SOCKET] ❌ Disconnected (heartbeats sent: $_heartbeatCount)');
+      _isConnecting = false;
       onDisconnected?.call();
     });
 
     _socket!.onConnectError((err) {
-      // debugPrint('[SESSION SOCKET] ⚠️ Connection error: $err');
+      _isConnecting = false;
       onError?.call('Socket connection failed');
+      onDisconnected?.call();
     });
 
     _socket!.on('task_result_saved', (data) {
-      // debugPrint('[SESSION SOCKET] ← task_result_saved: $data');
-      if (data is Map<String, dynamic>) onTaskSaved?.call(data);
+      onTaskSaved?.call(_toStringKeyMap(data));
     });
 
     _socket!.on('recording_stopped', (data) {
-      // debugPrint('[SESSION SOCKET] ← recording_stopped: $data');
-      onRecordingStopped?.call(data is Map<String, dynamic> ? data : {});
+      onRecordingStopped?.call(_toStringKeyMap(data));
     });
 
     _socket!.on('request_error', (data) {
-      // debugPrint('[SESSION SOCKET] ← request_error: $data');
-      final msg = data is Map ? data['message']?.toString() ?? 'Socket error' : 'Socket error';
+      final map = _toStringKeyMap(data);
+      final msg = map['message']?.toString() ?? 'Socket error';
       if (_isAuthError(msg)) {
         onAuthFailure?.call(msg);
       } else {
@@ -89,6 +92,12 @@ class AthleteTaskSocketService {
     final min = t.minute.toString().padLeft(2, '0');
     final ss = t.second.toString().padLeft(2, '0');
     return '${t.year}-$mm-$dd $hh:$min:$ss';
+  }
+
+  static Map<String, dynamic> _toStringKeyMap(dynamic data) {
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return <String, dynamic>{};
   }
 
   void submitHeartbeat({
@@ -139,11 +148,16 @@ class AthleteTaskSocketService {
   }
 
   void disconnect() {
-    // debugPrint('[SESSION SOCKET] disconnect() called (heartbeats sent: $_heartbeatCount)');
+    _isConnecting = false;
     _heartbeatCount = 0;
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
+  }
+
+  void dispose() {
+    disconnect();
+    onConnected = null;
     onTaskSaved = null;
     onRecordingStopped = null;
     onError = null;

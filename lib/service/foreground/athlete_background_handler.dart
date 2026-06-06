@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:xelex_esp/service/socket/athlete_task_socket_service.dart';
@@ -31,6 +32,19 @@ class AthleteBackgroundHandler extends TaskHandler {
   // State tracking
   int? _activeTaskId;
   bool _readyAnnounced = false;
+
+  // BG-side self-reconnect — Vivo/Xiaomi screen-off pe main isolate throttle
+  // ho jaata hai, isliye main isolate pe depend nahi karte.
+  Timer? _reconnectTimer;
+  int _reconnectAttempt = 0;
+  String? _lastToken;
+  String? _lastBaseUrl;
+  static const _maxReconnectAttempts = 5; // 2+4+8+16+30 = ~60s max
+
+  // Pending stop — jab stop_activity aaye lekin socket disconnected ho,
+  // reconnect karke stop deliver karo.
+  int? _pendingStopTaskId;
+  Timer? _stopDeliveryTimer;
 
   // Notification throttle — onRepeatEvent har 1s pe fire hota hai, lekin
   // notification ko har 3s pe update karte hain (battery + OEM spam-filter ke liye).
@@ -76,7 +90,7 @@ class AthleteBackgroundHandler extends TaskHandler {
   void _maybeUpdateNotification() {
     _notifTick++;
     if (_notifTick % 3 != 0) return;
-    if (_activeTaskId == null) return;
+    if (_activeTaskId == null && _pendingStopTaskId == null) return;
 
     final bpm = _heartRate;
     if (bpm == _lastShownBpm) return;
@@ -105,9 +119,7 @@ class AthleteBackgroundHandler extends TaskHandler {
           data['task_id'] as int,
         );
       case 'stop_activity':
-        final taskId = data['task_id'] as int?;
-        if (taskId != null) _taskSocket.stopTask(taskId);
-        _activeTaskId = null;
+        _handleStopActivity(data['task_id'] as int?);
       case 'update_metrics':
         // Main isolate se BLE data aata hai — yahan store karo
         _heartRate = (data['hr'] as num?)?.toInt() ?? 0;
@@ -119,13 +131,57 @@ class AthleteBackgroundHandler extends TaskHandler {
     }
   }
 
+  void _handleStopActivity(int? taskId) {
+    _reconnectTimer?.cancel();
+    _reconnectAttempt = 0;
+    _activeTaskId = null;
+
+    if (taskId == null) return;
+
+    _pendingStopTaskId = taskId;
+    _stopRetryCount = 0;
+
+    if (_taskSocket.isConnected) {
+      _taskSocket.stopTask(taskId);
+    } else {
+      _attemptStopDelivery();
+    }
+  }
+
+  static const _maxStopRetries = 5;
+  int _stopRetryCount = 0;
+
+  void _attemptStopDelivery() {
+    final token = _lastToken;
+    final baseUrl = _lastBaseUrl;
+    if (token == null || baseUrl == null || _pendingStopTaskId == null) return;
+
+    _taskSocket.connect(baseUrl, token);
+
+    _stopDeliveryTimer?.cancel();
+    _stopRetryCount++;
+    final delaySec = (2 * (1 << (_stopRetryCount - 1))).clamp(2, 15);
+    _stopDeliveryTimer = Timer(Duration(seconds: delaySec), () {
+      if (_pendingStopTaskId == null) return;
+      if (_stopRetryCount >= _maxStopRetries) {
+        debugPrint('[BG HANDLER] stop delivery failed after $_maxStopRetries retries — giving up');
+        _pendingStopTaskId = null;
+        return;
+      }
+      debugPrint('[BG HANDLER] stop delivery retry #$_stopRetryCount');
+      _attemptStopDelivery();
+    });
+  }
+
   @override
   Future<void> onDestroy(DateTime timestamp) async {
     debugPrint('[BG HANDLER] onDestroy — cleaning up');
+    _reconnectTimer?.cancel();
+    _stopDeliveryTimer?.cancel();
     // App swipe-kill / system kill scenario: agar active session abhi tak
     // explicitly stop nahi hui (user ne "Stop" nahi dabaaya), to server ko
     // bata do taki session "in progress" stuck na rahe.
-    final taskId = _activeTaskId;
+    final taskId = _activeTaskId ?? _pendingStopTaskId;
     if (taskId != null && _taskSocket.isConnected) {
       debugPrint('[BG HANDLER] onDestroy — stopping active task $taskId');
       _taskSocket.stopTask(taskId);
@@ -133,17 +189,59 @@ class AthleteBackgroundHandler extends TaskHandler {
       await Future.delayed(const Duration(milliseconds: 400));
     }
     _activeTaskId = null;
-    if (_taskSocket.isConnected) _taskSocket.disconnect();
+    _pendingStopTaskId = null;
+    _taskSocket.dispose();
   }
 
   // ── Private: Activity socket ────────────────────────────────────────────────
 
   void _startActivity(String token, String baseUrl, int taskId) {
+    _pendingStopTaskId = null;
+    _stopDeliveryTimer?.cancel();
     _activeTaskId = taskId;
+    _lastToken = token;
+    _lastBaseUrl = baseUrl;
+    _reconnectAttempt = 0;
+    _reconnectTimer?.cancel();
     _taskSocket.connect(baseUrl, token);
   }
 
+  void _scheduleBgReconnect() {
+    if (_activeTaskId == null && _pendingStopTaskId == null) return;
+    if (_reconnectAttempt >= _maxReconnectAttempts) {
+      debugPrint('[BG HANDLER] max reconnect attempts reached — main isolate will handle');
+      return;
+    }
+    _reconnectTimer?.cancel();
+    _reconnectAttempt++;
+    // Exponential backoff: 2s → 4s → 8s → 16s → 30s
+    final delayMs = (2000 * (1 << (_reconnectAttempt - 1))).clamp(0, 30000);
+    debugPrint('[BG HANDLER] self-reconnect attempt #$_reconnectAttempt in ${delayMs}ms');
+    _reconnectTimer = Timer(Duration(milliseconds: delayMs), () {
+      if (_activeTaskId == null && _pendingStopTaskId == null) return;
+      if (_taskSocket.isConnected) return;
+      final token = _lastToken;
+      final baseUrl = _lastBaseUrl;
+      if (token == null || baseUrl == null) return;
+      _taskSocket.connect(baseUrl, token);
+    });
+  }
+
   void _setupActivitySocketCallbacks() {
+    _taskSocket.onConnected = () {
+      _reconnectAttempt = 0;
+      _reconnectTimer?.cancel();
+      debugPrint('[BG HANDLER] socket connected — reconnect counters reset');
+
+      final pendingStop = _pendingStopTaskId;
+      if (pendingStop != null) {
+        debugPrint('[BG HANDLER] delivering pending stop for task $pendingStop');
+        _pendingStopTaskId = null;
+        _stopDeliveryTimer?.cancel();
+        _taskSocket.stopTask(pendingStop);
+      }
+    };
+
     _taskSocket.onTaskSaved = (data) {
       FlutterForegroundTask.sendDataToMain({
         'event': 'activity_task_saved',
@@ -153,6 +251,11 @@ class AthleteBackgroundHandler extends TaskHandler {
 
     _taskSocket.onRecordingStopped = (data) {
       _activeTaskId = null;
+      _pendingStopTaskId = null;
+      _stopDeliveryTimer?.cancel();
+      _reconnectTimer?.cancel();
+      _reconnectAttempt = 0;
+      _taskSocket.disconnect();
       FlutterForegroundTask.sendDataToMain({
         'event': 'activity_recording_stopped',
         'data': data,
@@ -168,6 +271,9 @@ class AthleteBackgroundHandler extends TaskHandler {
 
     _taskSocket.onDisconnected = () {
       FlutterForegroundTask.sendDataToMain({'event': 'activity_disconnected'});
+      // Main isolate ke saath-saath BG handler khud bhi retry karta hai —
+      // Vivo/Xiaomi screen-off pe main isolate throttle ho sakta hai.
+      _scheduleBgReconnect();
     };
 
     _taskSocket.onAuthFailure = (msg) {

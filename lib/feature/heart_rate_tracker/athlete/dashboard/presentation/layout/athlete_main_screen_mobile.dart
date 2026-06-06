@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_state.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/session_feedback_sheet.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/cubit/shell_cubit.dart';
 import 'package:xelex_esp/feature/onboarding/battery_optimization_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_activity_mobile.dart';
@@ -9,6 +12,7 @@ import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/presentatio
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_home_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_profile_mobile.dart';
 import 'package:xelex_esp/router/heart_tracker_path.dart';
+import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 
 class AthleteMainScreenMobile extends StatefulWidget {
   final Widget child;
@@ -19,9 +23,8 @@ class AthleteMainScreenMobile extends StatefulWidget {
 }
 
 class _AthleteMainScreenMobileState extends State<AthleteMainScreenMobile> {
-  // Process ke andar ek hi baar prompt try kare — har rebuild pe nahi.
-  // Persistent gate SharedPreferences flag mein hai (showIfNeeded ke andar).
   static bool _promptAttempted = false;
+  bool _feedbackSheetShowing = false;
 
   @override
   void initState() {
@@ -32,6 +35,15 @@ class _AthleteMainScreenMobileState extends State<AthleteMainScreenMobile> {
         if (mounted) BatteryOptimizationScreen.showIfNeeded(context);
       });
     }
+  }
+
+  Future<void> _showFeedbackSheet(BuildContext context, int taskId) async {
+    if (_feedbackSheetShowing) return;
+    _feedbackSheetShowing = true;
+    await SessionFeedbackSheet.show(context, taskId: taskId);
+    _feedbackSheetShowing = false;
+    if (!mounted) return;
+    sl<AthleteActivityCubit>().acknowledgeFeedbackPrompt();
   }
 
   static const List<_NavItem> _navItems = [
@@ -75,18 +87,59 @@ class _AthleteMainScreenMobileState extends State<AthleteMainScreenMobile> {
       if (cubitIdx != currentIndex) context.read<AthleteShellCubit>().changeTab(currentIndex);
     });
 
-    return BlocBuilder<AthleteShellCubit, int>(
-      builder: (context, state) => Scaffold(
-        body: IndexedStack(
-          index: currentIndex,
-          children: _pages.asMap().entries.map((e) =>
-            Navigator(
-              key: _navigatorKeys[e.key],
-              onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => e.value),
+    return BlocProvider.value(
+      value: sl<AthleteActivityCubit>(),
+      child: BlocBuilder<AthleteActivityCubit, AthleteActivityState>(
+        buildWhen: (prev, curr) =>
+            prev.pendingFeedbackTaskId != curr.pendingFeedbackTaskId,
+        builder: (context, activityState) {
+          final taskId = activityState.pendingFeedbackTaskId;
+
+          if (taskId != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              final still = sl<AthleteActivityCubit>().state.pendingFeedbackTaskId;
+              if (still == null) return;
+              _showFeedbackSheet(context, taskId);
+            });
+
+            return PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (didPop, _) {
+                if (!didPop) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please submit session feedback first.'),
+                      behavior: SnackBarBehavior.floating,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              child: Scaffold(
+                backgroundColor: AppColors.bg,
+                body: _FeedbackBlockingScreen(
+                  onOpenFeedback: () => _showFeedbackSheet(context, taskId),
+                ),
+              ),
+            );
+          }
+
+          return BlocBuilder<AthleteShellCubit, int>(
+            builder: (context, state) => Scaffold(
+              body: IndexedStack(
+                index: currentIndex,
+                children: _pages.asMap().entries.map((e) =>
+                  Navigator(
+                    key: _navigatorKeys[e.key],
+                    onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => e.value),
+                  ),
+                ).toList(),
+              ),
+              bottomNavigationBar: _buildBottomNav(context, currentIndex),
             ),
-          ).toList(),
-        ),
-        bottomNavigationBar: _buildBottomNav(context, currentIndex),
+          );
+        },
       ),
     );
   }
@@ -153,4 +206,75 @@ class _NavItem {
   final String label, path;
   final IconData icon, activeIcon;
   const _NavItem({required this.label, required this.icon, required this.activeIcon, required this.path});
+}
+
+class _FeedbackBlockingScreen extends StatelessWidget {
+  final VoidCallback onOpenFeedback;
+  const _FeedbackBlockingScreen({required this.onOpenFeedback});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.rate_review_rounded,
+                size: 48,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Session Feedback Required',
+              style: TextStyle(
+                color: AppColors.text,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Please submit your session feedback before continuing.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.subtext,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: onOpenFeedback,
+                icon: const Icon(Icons.edit_note),
+                label: const Text(
+                  'Submit Feedback',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 2,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -13,7 +13,9 @@ class ActiveSessionView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final type = typeFor(state.activeSession!.activityType);
+    final session = state.activeSession;
+    if (session == null) return const SizedBox.shrink();
+    final type = typeFor(session.activityType);
     final bleState = context.watch<HeartBleCubit>().state;
 
     return SafeArea(
@@ -102,8 +104,8 @@ class ActiveSessionView extends StatelessWidget {
               LiveStatCard(
                 icon: Icons.show_chart,
                 label: 'Avg HR',
-                value: state.activeSession!.avgHeartRate > 0
-                    ? '${state.activeSession!.avgHeartRate}'
+                value: session.avgHeartRate > 0
+                    ? '${session.avgHeartRate}'
                     : '--',
                 unit: 'bpm',
                 color: AppColors.vitalBP,
@@ -112,8 +114,8 @@ class ActiveSessionView extends StatelessWidget {
               LiveStatCard(
                 icon: Icons.trending_up,
                 label: 'Max HR',
-                value: state.activeSession!.maxHeartRate > 0
-                    ? '${state.activeSession!.maxHeartRate}'
+                value: session.maxHeartRate > 0
+                    ? '${session.maxHeartRate}'
                     : '--',
                 unit: 'bpm',
                 color: AppColors.warning,
@@ -161,7 +163,7 @@ class ActiveSessionView extends StatelessWidget {
           const SizedBox(height: 16),
 
           // ── Location
-          if (state.activeSession!.location.isNotEmpty)
+          if (session.location.isNotEmpty)
             Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -177,7 +179,7 @@ class ActiveSessionView extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      state.activeSession!.location,
+                      session.location,
                       style: const TextStyle(
                           color: AppColors.subtext, fontSize: 12),
                       overflow: TextOverflow.ellipsis,
@@ -190,11 +192,11 @@ class ActiveSessionView extends StatelessWidget {
           const SizedBox(height: 32),
 
           // ── HR Samples count
-          if (state.activeSession!.heartRateSamples.isNotEmpty)
+          if (session.heartRateSamples.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: Text(
-                '${state.activeSession!.heartRateSamples.length} heart rate readings recorded',
+                '${session.heartRateSamples.length} heart rate readings recorded',
                 style:
                     const TextStyle(color: AppColors.subtext, fontSize: 12),
               ),
@@ -441,3 +443,4 @@ class _SessionReconnectBanner extends StatelessWidget {
     );
   }
 }
+

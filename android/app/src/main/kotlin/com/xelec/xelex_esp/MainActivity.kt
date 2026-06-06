@@ -2,6 +2,8 @@ package com.xelec.xelex_esp
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -50,7 +52,7 @@ class MainActivity : FlutterActivity() {
                             result.error("BLUETOOTH_OFF", "Bluetooth is disabled", null)
                             return@setMethodCallHandler
                         }
-                        if (!isLocationEnabled()) {
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && !isLocationEnabled()) {
                             result.error("LOCATION_OFF", "Location is disabled", null)
                             try {
                                 startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
@@ -114,9 +116,18 @@ class MainActivity : FlutterActivity() {
                         result.success("Range sync started")
                     }
 
+                    "syncLatestSession" -> {
+                        if (!chileafHandler.isDeviceConnected) {
+                            result.error("NOT_CONNECTED", "No device connected", null)
+                            return@setMethodCallHandler
+                        }
+                        chileafHandler.syncLatestSession()
+                        result.success("Latest session sync started")
+                    }
+
                     "syncHistorySingleRecord" -> {
                         val args = call.arguments as? Map<*, *>
-                        val stamp = (args?.get("stamp") as? Long) ?: 0L
+                        val stamp = (args?.get("stamp") as? Number)?.toLong() ?: 0L
                         if (!chileafHandler.isDeviceConnected) {
                             result.error("NOT_CONNECTED", "No device connected", null)
                             return@setMethodCallHandler
@@ -149,10 +160,16 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun isBluetoothReady(): Boolean {
-        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return false
+        val adapter = (getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)
+            ?.adapter ?: return false
         if (!adapter.isEnabled) {
             try {
-                startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                } else {
+                    @Suppress("DEPRECATION")
+                    startActivity(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+                }
             } catch (e: Exception) {}
             return false
         }

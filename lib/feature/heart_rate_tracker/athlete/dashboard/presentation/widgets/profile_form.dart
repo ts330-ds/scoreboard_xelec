@@ -11,6 +11,7 @@ import 'profile_date_field.dart';
 import 'profile_device_info_section.dart';
 import 'profile_dropdown_field.dart';
 import 'profile_field.dart';
+import 'profile_delete_account_button.dart';
 import 'profile_logout_button.dart';
 import 'profile_save_bar.dart';
 import 'profile_section_card.dart';
@@ -318,6 +319,8 @@ class _ProfileFormState extends State<ProfileForm> {
                 const SizedBox(height: 12),
 
                 const ProfileLogoutButton(),
+                const SizedBox(height: 8),
+                const ProfileDeleteAccountButton(),
                 const SizedBox(height: 8),
               ],
             ),

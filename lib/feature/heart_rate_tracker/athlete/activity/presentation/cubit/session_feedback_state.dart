@@ -9,7 +9,7 @@ class SessionFeedbackState {
   final String? errorMessage;
 
   const SessionFeedbackState({
-    this.difficulty = 0,
+    this.difficulty = 1,
     this.notes = '',
     this.isSubmitting = false,
     this.isSubmitted = false,

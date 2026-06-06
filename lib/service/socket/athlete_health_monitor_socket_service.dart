@@ -97,7 +97,7 @@ class AthleteHealthMonitorSocketService {
   // MySQL DATETIME format: 'YYYY-MM-DD HH:MM:SS'
   // toIso8601String() deta hai 'YYYY-MM-DDTHH:MM:SS.microsecondsZ' jo MySQL reject karta hai
   String _mysqlTimestamp() {
-    final t = DateTime.now().toUtc();
+    final t = DateTime.now();
     final mm = t.month.toString().padLeft(2, '0');
     final dd = t.day.toString().padLeft(2, '0');
     final hh = t.hour.toString().padLeft(2, '0');

@@ -216,7 +216,7 @@ class _CompletedTaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = task.name ?? 'Task #${task.id ?? '-'}';
-    final duration = task.durationMinutes;
+    final duration = task.durationSeconds;
     final displayDate = task.displayDate;
     final fb = task.feedback;
 
@@ -296,7 +296,7 @@ class _CompletedTaskCard extends StatelessWidget {
                     if (duration != null)
                       _TaskChip(
                           icon: Icons.timer_outlined,
-                          text: _fmtMinutes(duration),
+                          text: _fmtSeconds(duration),
                           color: AppColors.primary),
                     if (byLabel != null)
                       _TaskChip(
@@ -315,7 +315,11 @@ class _CompletedTaskCard extends StatelessWidget {
           ),
 
           // ── Feedback block (if present)
-          if (hasFeedback) _FeedbackBlock(feedback: fb),
+          if (hasFeedback)
+            _FeedbackBlock(
+              feedback: fb,
+              sessionSeconds: duration,
+            ),
         ],
       ),
         ),
@@ -337,15 +341,17 @@ class _CompletedTaskCard extends StatelessWidget {
 
 class _FeedbackBlock extends StatelessWidget {
   final CompletedTaskFeedback feedback;
-  const _FeedbackBlock({required this.feedback});
+  final int? sessionSeconds;
+  const _FeedbackBlock({required this.feedback, this.sessionSeconds});
 
   @override
   Widget build(BuildContext context) {
     final rpe = feedback.rpe;
-    final session = feedback.sessionDurationMinutes;
+    final session = sessionSeconds;
     final note = feedback.note;
     final rpeColor = _rpeColor(rpe);
-    final load = (rpe != null && session != null) ? rpe * session : null;
+    final sessionMinutes = session != null ? (session / 60).round() : null;
+    final load = (rpe != null && sessionMinutes != null) ? rpe * sessionMinutes : null;
 
     return Container(
       width: double.infinity,
@@ -396,7 +402,7 @@ class _FeedbackBlock extends StatelessWidget {
                       _FbStat(
                         icon: Icons.timelapse,
                         label: 'Session',
-                        value: _fmtMinutes(session),
+                        value: _fmtSeconds(session),
                       ),
                   ],
                 ),
@@ -558,14 +564,12 @@ class _TaskChip extends StatelessWidget {
   }
 }
 
-String _fmtMinutes(int minutes) {
-  if (minutes < 60) return '$minutes min';
-  final h = minutes ~/ 60;
-  final m = minutes % 60;
-  if (h < 24) return m == 0 ? '${h}h' : '${h}h ${m}m';
-  final d = h ~/ 24;
-  final hh = h % 24;
-  return hh == 0 ? '${d}d' : '${d}d ${hh}h';
+String _fmtSeconds(int totalSeconds) {
+  final m = totalSeconds ~/ 60;
+  final s = totalSeconds % 60;
+  if (m == 0) return '${s}s';
+  if (s == 0) return '${m}m';
+  return '${m}m ${s}s';
 }
 
 String _fmtRelative(DateTime dt) {
@@ -836,7 +840,7 @@ class _HealthSection extends StatelessWidget {
                   _SectionHeader(
                       icon: Icons.favorite_rounded, title: 'Heart Rate Trend'),
                   const SizedBox(height: 10),
-                  _HRTrendCard(days: days),
+                  _HRTrendCard(days: days, athleteId: athleteId),
                   const SizedBox(height: 22),
                 ],
                 _SectionHeader(
@@ -864,15 +868,11 @@ class _OverviewStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    int totalReadings = 0;
     final hrVals = <double>[];
-    int sleepCount = 0;
 
     for (final d in days) {
       final health = d['health'];
       if (health is Map<String, dynamic>) {
-        final t = health['total_readings'];
-        if (t is num) totalReadings += t.toInt();
         final stats = health['aggregated_stats'];
         if (stats is Map<String, dynamic>) {
           final hr = stats['heart_rate'];
@@ -882,7 +882,6 @@ class _OverviewStats extends StatelessWidget {
           }
         }
       }
-      if (d['sleep'] != null) sleepCount++;
     }
 
     final overallHR = hrVals.isEmpty
@@ -985,11 +984,12 @@ class _OverviewTile extends StatelessWidget {
 
 class _HRTrendCard extends StatelessWidget {
   final List<Map<String, dynamic>> days;
-  const _HRTrendCard({required this.days});
+  final int athleteId;
+  const _HRTrendCard({required this.days, required this.athleteId});
 
   @override
   Widget build(BuildContext context) {
-    final entries = <_HRDay>[];
+    final entries = <MapEntry<Map<String, dynamic>, _HRDay>>[];
     for (final d in days) {
       final stats = _statsOfDay(d);
       final hr = stats['heart_rate'];
@@ -998,11 +998,14 @@ class _HRTrendCard extends StatelessWidget {
         final min = (hr['min'] as num?)?.toDouble();
         final max = (hr['max'] as num?)?.toDouble();
         if (avg != null) {
-          entries.add(_HRDay(
-            dateStr: d['date'] as String? ?? '',
-            avg: avg,
-            min: min ?? avg,
-            max: max ?? avg,
+          entries.add(MapEntry(
+            d,
+            _HRDay(
+              dateStr: d['date'] as String? ?? '',
+              avg: avg,
+              min: min ?? avg,
+              max: max ?? avg,
+            ),
           ));
         }
       }
@@ -1013,19 +1016,39 @@ class _HRTrendCard extends StatelessWidget {
     final maxSpots = <FlSpot>[];
     final minSpots = <FlSpot>[];
     for (var i = 0; i < entries.length; i++) {
-      avgSpots.add(FlSpot(i.toDouble(), entries[i].avg));
-      maxSpots.add(FlSpot(i.toDouble(), entries[i].max));
-      minSpots.add(FlSpot(i.toDouble(), entries[i].min));
+      avgSpots.add(FlSpot(i.toDouble(), entries[i].value.avg));
+      maxSpots.add(FlSpot(i.toDouble(), entries[i].value.max));
+      minSpots.add(FlSpot(i.toDouble(), entries[i].value.min));
     }
 
-    final allVals = entries.expand((e) => [e.min, e.max]);
+    final allVals = entries.expand((e) => [e.value.min, e.value.max]);
     final maxY = (allVals.reduce(math.max) + 12).roundToDouble();
-    final minY = (allVals.reduce(math.min) - 12).clamp(0.0, double.infinity);
+    final minY =
+        (allVals.reduce(math.min) - 12).clamp(0.0, double.infinity);
 
     final overallAvg =
-        entries.map((e) => e.avg).reduce((a, b) => a + b) / entries.length;
-    final overallMin = entries.map((e) => e.min).reduce(math.min);
-    final overallMax = entries.map((e) => e.max).reduce(math.max);
+        entries.map((e) => e.value.avg).reduce((a, b) => a + b) /
+            entries.length;
+    final overallMin = entries.map((e) => e.value.min).reduce(math.min);
+    final overallMax = entries.map((e) => e.value.max).reduce(math.max);
+
+    final yFloor = (minY / 20).floor() * 20.0;
+    final yCeil = (maxY / 20).ceil() * 20.0;
+    const double yInterval = 20;
+
+    final screenWidth = MediaQuery.of(context).size.width - 72;
+    const pxPerDay = 50.0;
+    final calculatedWidth = entries.length * pxPerDay;
+    final chartWidth = math.max(calculatedWidth, screenWidth);
+
+    final double labelInterval;
+    if (entries.length <= 10) {
+      labelInterval = 1;
+    } else if (entries.length <= 20) {
+      labelInterval = 2;
+    } else {
+      labelInterval = (entries.length / 8).ceilToDouble();
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -1076,120 +1099,236 @@ class _HRTrendCard extends StatelessWidget {
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.only(left: 8, right: 8, bottom: 4),
+            child: Row(
+              children: [
+                Icon(Icons.swipe_outlined,
+                    size: 12,
+                    color: AppColors.subtext.withValues(alpha: 0.6)),
+                const SizedBox(width: 4),
+                Text('Swipe to scroll • Tap to zoom',
+                    style: TextStyle(
+                        color: AppColors.subtext.withValues(alpha: 0.6),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
           SizedBox(
-            height: 180,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 10, 16, 12),
-              child: LineChart(
-                LineChartData(
-                  minY: minY,
-                  maxY: maxY,
-                  clipData: const FlClipData.all(),
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    horizontalInterval: 20,
-                    getDrawingHorizontalLine: (_) =>
-                        FlLine(color: AppColors.borderLight, strokeWidth: 1),
-                  ),
-                  borderData: FlBorderData(show: false),
-                  titlesData: FlTitlesData(
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 36,
-                        interval: 20,
-                        getTitlesWidget: (v, _) => Text('${v.toInt()}',
-                            style: const TextStyle(
-                                color: AppColors.subtext, fontSize: 10)),
-                      ),
-                    ),
-                    rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 32,
-                        interval: entries.length > 10
-                            ? (entries.length / 6).ceilToDouble()
-                            : 1,
-                        getTitlesWidget: (v, _) {
-                          final i = v.toInt();
-                          if (i < 0 ||
-                              i >= entries.length ||
-                              i.toDouble() != v) {
-                            return const SizedBox.shrink();
-                          }
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              _shortDate(entries[i].dateStr),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                  color: AppColors.subtext,
-                                  fontSize: 9,
-                                  height: 1.2),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: maxSpots,
-                      isCurved: true,
-                      curveSmoothness: 0.3,
-                      color: _hrColor.withValues(alpha: 0.25),
-                      barWidth: 1.5,
-                      dotData: const FlDotData(show: false),
-                      dashArray: [4, 4],
-                    ),
-                    LineChartBarData(
-                      spots: avgSpots,
-                      isCurved: true,
-                      curveSmoothness: 0.35,
-                      color: _hrColor,
-                      barWidth: 2.6,
-                      dotData: FlDotData(
-                        show: true,
-                        getDotPainter: (s, _, __, index) => FlDotCirclePainter(
-                          radius: index == avgSpots.length - 1 ? 5 : 2.6,
-                          color: _hrColor,
-                          strokeWidth: 2,
-                          strokeColor: Colors.white,
+            height: 200,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 40,
+                  child: LineChart(
+                    LineChartData(
+                      minY: yFloor,
+                      maxY: yCeil,
+                      minX: 0,
+                      maxX: 1,
+                      gridData: const FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      lineBarsData: [],
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 36,
+                            interval: yInterval,
+                            getTitlesWidget: (v, _) => Text(
+                                v.toStringAsFixed(0),
+                                style: const TextStyle(
+                                    color: AppColors.subtext,
+                                    fontSize: 10)),
+                          ),
+                        ),
+                        rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 32,
+                            getTitlesWidget: (_, __) =>
+                                const SizedBox.shrink(),
+                          ),
                         ),
                       ),
-                      belowBarData: BarAreaData(
-                        show: true,
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            _hrColor.withValues(alpha: 0.18),
-                            _hrColor.withValues(alpha: 0.0),
+                      lineTouchData: const LineTouchData(enabled: false),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24),
+                      child: SizedBox(
+                      width: chartWidth,
+                      child: LineChart(
+                        LineChartData(
+                          minY: yFloor,
+                          maxY: yCeil,
+                          minX: -0.3,
+                          maxX: (entries.length - 1).toDouble() + 0.3,
+                          clipData: const FlClipData.none(),
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: true,
+                            horizontalInterval: yInterval,
+                            verticalInterval: labelInterval,
+                            getDrawingHorizontalLine: (_) => FlLine(
+                                color: AppColors.borderLight,
+                                strokeWidth: 1),
+                            getDrawingVerticalLine: (_) => FlLine(
+                                color: AppColors.borderLight
+                                    .withValues(alpha: 0.5),
+                                strokeWidth: 0.5),
+                          ),
+                          borderData: FlBorderData(show: false),
+                          titlesData: FlTitlesData(
+                            leftTitles: const AxisTitles(
+                                sideTitles:
+                                    SideTitles(showTitles: false)),
+                            rightTitles: const AxisTitles(
+                                sideTitles:
+                                    SideTitles(showTitles: false)),
+                            topTitles: const AxisTitles(
+                                sideTitles:
+                                    SideTitles(showTitles: false)),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 32,
+                                interval: labelInterval,
+                                getTitlesWidget: (v, _) {
+                                  final i = v.toInt();
+                                  if (i < 0 ||
+                                      i >= entries.length ||
+                                      i.toDouble() != v) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Padding(
+                                    padding:
+                                        const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      _shortDate(
+                                          entries[i].value.dateStr),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                          color: AppColors.subtext,
+                                          fontSize: 9,
+                                          height: 1.2),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          lineTouchData: LineTouchData(
+                            touchCallback: (event, response) {
+                              if (event is FlTapUpEvent &&
+                                  response?.lineBarSpots != null &&
+                                  response!.lineBarSpots!.isNotEmpty) {
+                                final spot =
+                                    response.lineBarSpots!.first;
+                                final idx = spot.spotIndex;
+                                if (idx >= 0 &&
+                                    idx < entries.length) {
+                                  _openDayDetail(
+                                    context,
+                                    entries[idx].key,
+                                    entries[idx].value.dateStr,
+                                  );
+                                }
+                              }
+                            },
+                            touchTooltipData: LineTouchTooltipData(
+                              getTooltipItems: (touched) =>
+                                  touched.map((s) {
+                                final i = s.spotIndex;
+                                final e = entries[i].value;
+                                return LineTooltipItem(
+                                  '${e.avg.toStringAsFixed(0)} bpm\n↓${e.min.toStringAsFixed(0)} ↑${e.max.toStringAsFixed(0)}',
+                                  const TextStyle(
+                                      color: _hrColor,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: maxSpots,
+                              isCurved: true,
+                              curveSmoothness: 0.3,
+                              color:
+                                  _hrColor.withValues(alpha: 0.25),
+                              barWidth: 1.5,
+                              dotData: const FlDotData(show: false),
+                              dashArray: [4, 4],
+                            ),
+                            LineChartBarData(
+                              spots: avgSpots,
+                              isCurved: true,
+                              curveSmoothness: 0.35,
+                              color: _hrColor,
+                              barWidth: 2.6,
+                              dotData: FlDotData(
+                                show: true,
+                                getDotPainter:
+                                    (s, _, __, index) =>
+                                        FlDotCirclePainter(
+                                  radius: index ==
+                                          avgSpots.length - 1
+                                      ? 5
+                                      : 2.6,
+                                  color: _hrColor,
+                                  strokeWidth: 2,
+                                  strokeColor: Colors.white,
+                                ),
+                              ),
+                              belowBarData: BarAreaData(
+                                show: true,
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    _hrColor.withValues(
+                                        alpha: 0.18),
+                                    _hrColor.withValues(
+                                        alpha: 0.0),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            LineChartBarData(
+                              spots: minSpots,
+                              isCurved: true,
+                              curveSmoothness: 0.3,
+                              color:
+                                  _hrColor.withValues(alpha: 0.25),
+                              barWidth: 1.5,
+                              dotData: const FlDotData(show: false),
+                              dashArray: [4, 4],
+                            ),
                           ],
                         ),
                       ),
                     ),
-                    LineChartBarData(
-                      spots: minSpots,
-                      isCurved: true,
-                      curveSmoothness: 0.3,
-                      color: _hrColor.withValues(alpha: 0.25),
-                      barWidth: 1.5,
-                      dotData: const FlDotData(show: false),
-                      dashArray: [4, 4],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: Row(
               children: [
                 _Legend(color: _hrColor, label: 'Avg', solid: true),
@@ -1206,18 +1345,174 @@ class _HRTrendCard extends StatelessWidget {
     );
   }
 
+  void _openDayDetail(
+      BuildContext context, Map<String, dynamic> day, String dateStr) {
+    final health = day['health'] is Map<String, dynamic>
+        ? day['health'] as Map<String, dynamic>
+        : null;
+    final hours = (health?['hours'] as List?) ?? const [];
+    if (hours.isEmpty) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => BlocProvider.value(
+        value: context.read<AthleteHourRawCubit>(),
+        child: _DayHourlySheet(
+          dateStr: dateStr,
+          hours: hours,
+          athleteId: athleteId,
+          day: day,
+        ),
+      ),
+    );
+  }
+
   String _shortDate(String raw) {
     try {
       final d = DateTime.parse(raw).toLocal();
       const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       const mo = [
-        'Jan','Feb','Mar','Apr','May','Jun',
-        'Jul','Aug','Sep','Oct','Nov','Dec'
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
       ];
       return '${wd[d.weekday - 1]}\n${d.day} ${mo[d.month - 1]}';
     } catch (_) {
       return '';
     }
+  }
+}
+
+class _DayHourlySheet extends StatelessWidget {
+  final String dateStr;
+  final List hours;
+  final int athleteId;
+  final Map<String, dynamic> day;
+  const _DayHourlySheet({
+    required this.dateStr,
+    required this.hours,
+    required this.athleteId,
+    required this.day,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = _statsOfDay(day);
+    final hr = stats['heart_rate'] is Map<String, dynamic>
+        ? stats['heart_rate'] as Map<String, dynamic>
+        : null;
+    final hrAvg = (hr?['avg'] as num?)?.toDouble();
+    final hrMin = (hr?['min'] as num?)?.toDouble();
+    final hrMax = (hr?['max'] as num?)?.toDouble();
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.65,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      builder: (ctx, scrollCtrl) => Container(
+        decoration: const BoxDecoration(
+          color: AppColors.bg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: _hrColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.calendar_today_outlined,
+                        size: 18, color: _hrColor),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_fmtDate(dateStr),
+                            style: const TextStyle(
+                                color: AppColors.text,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700)),
+                        const Text(
+                          'Hourly Breakdown',
+                          style: TextStyle(
+                              color: AppColors.subtext,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (hrAvg != null)
+                    _PillBadge(
+                      icon: Icons.favorite,
+                      text: '${hrAvg.toStringAsFixed(0)} bpm',
+                      color: _hrColor,
+                    ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close, size: 20),
+                  ),
+                ],
+              ),
+            ),
+            if (hrAvg != null && hrMin != null && hrMax != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Row(
+                  children: [
+                    _SheetStat(
+                        label: 'Avg',
+                        value: hrAvg.toStringAsFixed(0),
+                        color: _hrColor),
+                    const SizedBox(width: 10),
+                    _SheetStat(
+                        label: 'Min',
+                        value: hrMin.toStringAsFixed(0),
+                        color: _hrColor),
+                    const SizedBox(width: 10),
+                    _SheetStat(
+                        label: 'Max',
+                        value: hrMax.toStringAsFixed(0),
+                        color: _hrColor),
+                  ].map((w) => Expanded(child: w)).toList(),
+                ),
+              ),
+            const Divider(height: 1, color: AppColors.border),
+            Expanded(
+              child: ListView(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                children: [
+                  _HourlyBreakdown(
+                    hours: hours,
+                    athleteId: athleteId,
+                    dateStr: dateStr,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -1765,7 +2060,8 @@ class _HourlyBreakdown extends StatelessWidget {
       if (hr is Map<String, dynamic>) {
         avg = (hr['avg'] as num?)?.toDouble();
       }
-      entries.add(_HourEntry(hour: hour, hrAvg: avg));
+      final time = h['time'] as String?;
+      entries.add(_HourEntry(hour: hour, hrAvg: avg, time: time));
     }
     entries.sort((a, b) => a.hour.compareTo(b.hour));
     if (entries.isEmpty) return const SizedBox.shrink();
@@ -1820,66 +2116,73 @@ class _HourlyBreakdown extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           SizedBox(
-            height: 110,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: entries.map((e) {
-                final pct = (maxHR > 0 && e.hrAvg != null)
-                    ? (e.hrAvg! / maxHR).clamp(0.0, 1.0)
-                    : 0.0;
-                final isHigh = e.hrAvg != null &&
-                    maxHR > minHR &&
-                    e.hrAvg! >= minHR + (maxHR - minHR) * 0.85;
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 1.5),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(4),
-                      onTap: () => _openZoom(context, e.hour),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          if (e.hrAvg != null)
-                            Text(e.hrAvg!.toStringAsFixed(0),
-                                style: TextStyle(
-                                    color: isHigh
-                                        ? _hrColor
-                                        : _hrColor.withValues(alpha: 0.65),
-                                    fontSize: 8,
-                                    fontWeight: FontWeight.w700)),
-                          const SizedBox(height: 2),
-                          Container(
-                            height: (74 * pct).clamp(2.0, 74.0),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: isHigh
-                                    ? [
-                                        _hrColor,
-                                        _hrColor.withValues(alpha: 0.5),
-                                      ]
-                                    : [
-                                        _hrColor.withValues(alpha: 0.7),
-                                        _hrColor.withValues(alpha: 0.2),
-                                      ],
+            height: 120,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: entries.map((e) {
+                  final pct = (maxHR > 0 && e.hrAvg != null)
+                      ? (e.hrAvg! / maxHR).clamp(0.0, 1.0)
+                      : 0.0;
+                  final isHigh = e.hrAvg != null &&
+                      maxHR > minHR &&
+                      e.hrAvg! >= minHR + (maxHR - minHR) * 0.85;
+                  final timeLabel = e.time ?? '${e.hour.toString().padLeft(2, '0')}:00';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: SizedBox(
+                      width: 42,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(4),
+                        onTap: () => _openZoom(context, e.hour),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (e.hrAvg != null)
+                              Text(e.hrAvg!.toStringAsFixed(0),
+                                  style: TextStyle(
+                                      color: isHigh
+                                          ? _hrColor
+                                          : _hrColor.withValues(alpha: 0.65),
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 2),
+                            Container(
+                              height: (74 * pct).clamp(2.0, 74.0),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: isHigh
+                                      ? [
+                                          _hrColor,
+                                          _hrColor.withValues(alpha: 0.5),
+                                        ]
+                                      : [
+                                          _hrColor.withValues(alpha: 0.7),
+                                          _hrColor.withValues(alpha: 0.2),
+                                        ],
+                                ),
+                                borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(3)),
                               ),
-                              borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(3)),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(e.hour.toString().padLeft(2, '0'),
-                              style: const TextStyle(
-                                  color: AppColors.subtext,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w600)),
-                        ],
+                            const SizedBox(height: 4),
+                            Text(timeLabel,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: AppColors.subtext,
+                                    fontSize: 7,
+                                    fontWeight: FontWeight.w600)),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                );
-              }).toList(),
+                  );
+                }).toList(),
+              ),
             ),
           ),
         ],
@@ -1909,7 +2212,8 @@ class _HourlyBreakdown extends StatelessWidget {
 class _HourEntry {
   final int hour;
   final double? hrAvg;
-  const _HourEntry({required this.hour, required this.hrAvg});
+  final String? time;
+  const _HourEntry({required this.hour, required this.hrAvg, this.time});
 }
 
 // ── Hour Raw Bottom Sheet (zoom-on-demand) ───────────────────────────────────
@@ -2099,6 +2403,7 @@ class _HourRawBody extends StatelessWidget {
             minY: ((hrMin ?? 0) - 5).clamp(0, double.infinity).toDouble(),
             maxY: (hrMax ?? 0) + 5,
             unit: 'bpm',
+            startEpochMs: firstEpoch,
           ),
         ],
       ],
@@ -2139,110 +2444,370 @@ class _SheetStat extends StatelessWidget {
   }
 }
 
-class _RawLineChart extends StatelessWidget {
+class _RawLineChart extends StatefulWidget {
   final List<FlSpot> spots;
   final Color color;
   final double minY, maxY;
   final String unit;
+
+  /// Epoch ms of the first data point — used to show real clock time on X-axis.
+  final int? startEpochMs;
+
   const _RawLineChart({
     required this.spots,
     required this.color,
     required this.minY,
     required this.maxY,
     required this.unit,
+    this.startEpochMs,
   });
 
   @override
+  State<_RawLineChart> createState() => _RawLineChartState();
+}
+
+class _RawLineChartState extends State<_RawLineChart> {
+  /// Zoom levels: px per second of data.
+  static const _zoomLevels = [0.3, 0.5, 1.0, 2.0, 4.0];
+  static const _zoomLabels = ['1x', '2x', '3x', '5x', '10x'];
+  int _zoomIndex = 1; // start at 0.5 px/sec
+
+  double get _pxPerSecond => _zoomLevels[_zoomIndex];
+
+  void _zoomIn() {
+    if (_zoomIndex < _zoomLevels.length - 1) {
+      setState(() => _zoomIndex++);
+    }
+  }
+
+  void _zoomOut() {
+    if (_zoomIndex > 0) {
+      setState(() => _zoomIndex--);
+    }
+  }
+
+  void _resetZoom() {
+    setState(() => _zoomIndex = 1);
+  }
+
+  /// X-axis label — short format for axis, detailed for tooltip.
+  String _xAxisLabel(double x, int? startEpochMs) {
+    if (startEpochMs != null) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(
+        startEpochMs + (x * 1000).toInt(),
+      ).toLocal();
+      final h = dt.hour.toString().padLeft(2, '0');
+      final m = dt.minute.toString().padLeft(2, '0');
+      return '$h:$m'; // compact: "14:05"
+    }
+    final sec = x.toInt();
+    final mm = (sec ~/ 60).toString().padLeft(2, '0');
+    final ss = (sec % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+
+  /// Tooltip label — includes seconds for precision.
+  String _tooltipLabel(double x, int? startEpochMs) {
+    if (startEpochMs != null) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(
+        startEpochMs + (x * 1000).toInt(),
+      ).toLocal();
+      final h = dt.hour.toString().padLeft(2, '0');
+      final m = dt.minute.toString().padLeft(2, '0');
+      final s = dt.second.toString().padLeft(2, '0');
+      return '$h:$m:$s'; // detailed: "14:05:30"
+    }
+    final sec = x.toInt();
+    final mm = (sec ~/ 60).toString().padLeft(2, '0');
+    final ss = (sec % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final spots = widget.spots;
+    final color = widget.color;
+    final unit = widget.unit;
     final maxX = spots.isEmpty ? 1.0 : spots.last.x;
+    final screenWidth = MediaQuery.of(context).size.width - 72;
+
+    // Chart width based on zoom level
+    const minChartWidth = 350.0;
+    final calculatedWidth =
+        (maxX * _pxPerSecond).clamp(minChartWidth, double.infinity);
+    final chartWidth = math.max(calculatedWidth, screenWidth);
+
+    // X-axis: smart intervals based on visible density
+    final visibleSeconds = chartWidth > 0 ? maxX / (chartWidth / screenWidth) : maxX;
+    final double labelInterval;
+    if (visibleSeconds <= 120) {
+      labelInterval = 15;
+    } else if (visibleSeconds <= 300) {
+      labelInterval = 30;
+    } else if (visibleSeconds <= 600) {
+      labelInterval = 60;
+    } else if (visibleSeconds <= 1800) {
+      labelInterval = 120;
+    } else if (visibleSeconds <= 3600) {
+      labelInterval = 300;
+    } else {
+      labelInterval = 600;
+    }
+
+    // Y-axis: round intervals (20 bpm steps)
+    final yFloor = (widget.minY / 20).floor() * 20.0;
+    final yCeil = (widget.maxY / 20).ceil() * 20.0;
+    const double yInterval = 20;
+
+    final canZoomIn = _zoomIndex < _zoomLevels.length - 1;
+    final canZoomOut = _zoomIndex > 0;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(4, 12, 16, 8),
+      padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
       ),
-      child: SizedBox(
-        height: 200,
-        child: LineChart(
-          LineChartData(
-            minY: minY,
-            maxY: maxY,
-            minX: 0,
-            maxX: maxX,
-            clipData: const FlClipData.all(),
-            gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              getDrawingHorizontalLine: (_) =>
-                  FlLine(color: AppColors.borderLight, strokeWidth: 1),
-            ),
-            borderData: FlBorderData(show: false),
-            titlesData: FlTitlesData(
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 36,
-                  getTitlesWidget: (v, _) => Text(v.toStringAsFixed(0),
-                      style: const TextStyle(
-                          color: AppColors.subtext, fontSize: 10)),
-                ),
-              ),
-              rightTitles:
-                  const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              topTitles:
-                  const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 26,
-                  interval: maxX > 0 ? (maxX / 6).ceilToDouble() : 1,
-                  getTitlesWidget: (v, _) {
-                    final sec = v.toInt();
-                    final mm = (sec ~/ 60).toString().padLeft(2, '0');
-                    final ss = (sec % 60).toString().padLeft(2, '0');
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text('$mm:$ss',
-                          style: const TextStyle(
-                              color: AppColors.subtext, fontSize: 9)),
-                    );
-                  },
-                ),
-              ),
-            ),
-            lineTouchData: LineTouchData(
-              touchTooltipData: LineTouchTooltipData(
-                getTooltipItems: (touched) => touched
-                    .map((s) => LineTooltipItem(
-                          '${s.y.toStringAsFixed(0)} $unit',
-                          TextStyle(
-                              color: color, fontWeight: FontWeight.w700),
-                        ))
-                    .toList(),
-              ),
-            ),
-            lineBarsData: [
-              LineChartBarData(
-                spots: spots,
-                isCurved: false,
-                color: color,
-                barWidth: 1.6,
-                dotData: const FlDotData(show: false),
-                belowBarData: BarAreaData(
-                  show: true,
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      color.withValues(alpha: 0.2),
-                      color.withValues(alpha: 0.0),
-                    ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Zoom controls ──
+          Padding(
+            padding: const EdgeInsets.only(left: 8, right: 8, bottom: 8),
+            child: Row(
+              children: [
+                Icon(Icons.swipe_outlined,
+                    size: 12,
+                    color: AppColors.subtext.withValues(alpha: 0.6)),
+                const SizedBox(width: 4),
+                Text(
+                  'Swipe to scroll',
+                  style: TextStyle(
+                    color: AppColors.subtext.withValues(alpha: 0.6),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              ),
-            ],
+                const Spacer(),
+                _ZoomButton(
+                  icon: Icons.remove,
+                  onTap: canZoomOut ? _zoomOut : null,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: GestureDetector(
+                    onTap: _resetZoom,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        _zoomLabels[_zoomIndex],
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                _ZoomButton(
+                  icon: Icons.add,
+                  onTap: canZoomIn ? _zoomIn : null,
+                ),
+              ],
+            ),
           ),
+
+          // ── Chart ──
+          SizedBox(
+            height: 200,
+            child: Row(
+              children: [
+                // ── Fixed Y-axis ──
+                SizedBox(
+                  width: 40,
+                  child: LineChart(
+                    LineChartData(
+                      minY: yFloor,
+                      maxY: yCeil,
+                      minX: 0,
+                      maxX: 1,
+                      gridData: const FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      lineBarsData: [],
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 36,
+                            interval: yInterval,
+                            getTitlesWidget: (v, _) => Text(
+                                v.toStringAsFixed(0),
+                                style: const TextStyle(
+                                    color: AppColors.subtext, fontSize: 10)),
+                          ),
+                        ),
+                        rightTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 26,
+                            getTitlesWidget: (_, __) =>
+                                const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                      lineTouchData: const LineTouchData(enabled: false),
+                    ),
+                  ),
+                ),
+
+                // ── Scrollable chart ──
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: SizedBox(
+                      width: chartWidth,
+                      child: LineChart(
+                        LineChartData(
+                          minY: yFloor,
+                          maxY: yCeil,
+                          minX: 0,
+                          maxX: maxX,
+                          clipData: const FlClipData.all(),
+                          gridData: FlGridData(
+                            show: true,
+                            drawVerticalLine: true,
+                            horizontalInterval: yInterval,
+                            verticalInterval: labelInterval,
+                            getDrawingHorizontalLine: (_) => FlLine(
+                                color: AppColors.borderLight,
+                                strokeWidth: 1),
+                            getDrawingVerticalLine: (_) => FlLine(
+                                color: AppColors.borderLight
+                                    .withValues(alpha: 0.5),
+                                strokeWidth: 0.5),
+                          ),
+                          borderData: FlBorderData(show: false),
+                          titlesData: FlTitlesData(
+                            leftTitles: const AxisTitles(
+                                sideTitles:
+                                    SideTitles(showTitles: false)),
+                            rightTitles: const AxisTitles(
+                                sideTitles:
+                                    SideTitles(showTitles: false)),
+                            topTitles: const AxisTitles(
+                                sideTitles:
+                                    SideTitles(showTitles: false)),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 26,
+                                interval: labelInterval,
+                                getTitlesWidget: (v, _) {
+                                  final label = _xAxisLabel(v, widget.startEpochMs);
+                                  return Padding(
+                                    padding:
+                                        const EdgeInsets.only(top: 4),
+                                    child: Text(label,
+                                        style: const TextStyle(
+                                            color: AppColors.subtext,
+                                            fontSize: 9)),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          lineTouchData: LineTouchData(
+                            touchTooltipData: LineTouchTooltipData(
+                              getTooltipItems: (touched) => touched
+                                  .map((s) {
+                                    final timeStr = _tooltipLabel(s.x, widget.startEpochMs);
+                                    return LineTooltipItem(
+                                      '${s.y.toStringAsFixed(0)} $unit\n$timeStr',
+                                      TextStyle(
+                                          color: color,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12),
+                                    );
+                                  })
+                                  .toList(),
+                            ),
+                          ),
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: spots,
+                              isCurved: false,
+                              color: color,
+                              barWidth: 1.6,
+                              dotData: const FlDotData(show: false),
+                              belowBarData: BarAreaData(
+                                show: true,
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    color.withValues(alpha: 0.2),
+                                    color.withValues(alpha: 0.0),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Zoom Button ─────────────────────────────────────────────────────────────
+
+class _ZoomButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  const _ZoomButton({required this.icon, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: enabled
+              ? AppColors.primary.withValues(alpha: 0.1)
+              : AppColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(
+            color: enabled
+                ? AppColors.primary.withValues(alpha: 0.3)
+                : AppColors.borderLight,
+          ),
+        ),
+        child: Icon(
+          icon,
+          size: 14,
+          color: enabled ? AppColors.primary : AppColors.subtext,
         ),
       ),
     );

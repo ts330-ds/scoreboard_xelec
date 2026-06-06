@@ -38,32 +38,7 @@ class SessionFeedbackSheet extends StatelessWidget {
           prev.errorMessage != curr.errorMessage,
       listener: (context, state) {
         if (state.isSubmitted) {
-          final result = state.result;
-          // Snackbar parent ScaffoldMessenger pe queue karo — sheet pop
-          // ho jane ke baad bhi user ko dikhega.
-          final messenger = ScaffoldMessenger.of(context);
           Navigator.of(context).pop(true);
-          if (result != null) {
-            messenger.showSnackBar(
-              SnackBar(
-                backgroundColor: AppColors.success,
-                content: Text(
-                  '${result.message} · Training Load: ${result.trainingLoad}',
-                  style: const TextStyle(color: Colors.white),
-                ),
-                duration: const Duration(seconds: 3),
-              ),
-            );
-          }
-          return;
-        }
-        if (state.errorMessage != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.errorMessage!),
-              backgroundColor: AppColors.error,
-            ),
-          );
         }
       },
       builder: (context, state) {
@@ -114,6 +89,37 @@ class SessionFeedbackSheet extends StatelessWidget {
                       enabled: !state.isSubmitting,
                       onChanged: cubit.setNotes,
                     ),
+                    if (state.errorMessage != null) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.error.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline,
+                                color: AppColors.error, size: 18),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                state.errorMessage!,
+                                style: const TextStyle(
+                                  color: AppColors.error,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -213,9 +219,9 @@ class _DifficultyCard extends StatelessWidget {
             ),
             child: Slider(
               value: value.toDouble(),
-              min: 0,
+              min: 1,
               max: 10,
-              divisions: 10,
+              divisions: 9,
               onChanged: (v) => onChanged(v.round()),
             ),
           ),

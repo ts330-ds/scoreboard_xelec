@@ -39,15 +39,19 @@ class ChileafWearHandler(
     // ── RSSI polling ─────────────────────────────────────────────────────────
     private var rssiRunnable: Runnable? = null
 
-    // ── Two-step accumulation: HR Record → HR Data ────────────────────────────
+    // ── Sequential fetch queue: HR Record → HR Data ────────────────────────────
     private val hrDataLock = Any()
-    private var pendingHrDataCount = 0
     private val accumulatedHrData = mutableListOf<HashMap<String, Any>>()
+    @Volatile private var hrSyncGen = 0L
+    private var hrFetchQueue = listOf<Long>()
+    private var hrFetchIndex = 0
 
-    // ── Two-step accumulation: RR Record → RR Data ────────────────────────────
+    // ── Sequential fetch queue: RR Record → RR Data ──────────────────────────
     private val rrDataLock = Any()
-    private var pendingRrDataCount = 0
     private val accumulatedRrData = mutableListOf<HashMap<String, Any>>()
+    @Volatile private var rrSyncGen = 0L
+    private var rrFetchQueue = listOf<Long>()
+    private var rrFetchIndex = 0
 
     // ── History range filter (0 / MAX = no filter, i.e. fetch everything) ────
     // Set via syncHistoryRange(); record-callbacks compare item.stamp against
@@ -61,8 +65,119 @@ class ChileafWearHandler(
     @Volatile private var rangeFromSec: Long = 0L
     @Volatile private var rangeToSec: Long = Long.MAX_VALUE
 
+    // When true, HR record callback picks only the single latest session (max stamp)
+    // instead of applying the rangeFromSec/rangeToSec filter. Reset after use.
+    @Volatile private var latestSessionOnly: Boolean = false
+
+    // When true, record callbacks skip the stampInRange filter and fetch ALL
+    // records' data. Data-level filter (in HR/RR data callbacks) still applies
+    // rangeFromSec/rangeToSec. Used by syncHistoryRange() because a record's
+    // stamp is its session-start, not its data timestamps.
+    @Volatile private var useSmartFilter: Boolean = false
+
     // 24 hours — covers any realistic single recording session on the device.
     private val SESSION_LOOKBACK_SEC = 24L * 60L * 60L
+
+    // ── Sync completion tracking ─────────────────────────────────────────────
+    // All three streams (HR, RR, Sleep) must complete before we send SYNC_COMPLETE.
+    @Volatile private var hrSyncDone = true
+    @Volatile private var rrSyncDone = true
+    @Volatile private var sleepSyncDone = true
+
+    // ── Per-record timeout tracking (so we can cancel stale timeouts) ────────
+    private var hrTimeoutRunnable: Runnable? = null
+    private var rrTimeoutRunnable: Runnable? = null
+
+    private fun fetchNextHr(gen: Long) {
+        val currentIndex: Int
+        synchronized(hrDataLock) {
+            if (hrSyncGen != gen) return
+            if (hrFetchIndex >= hrFetchQueue.size) {
+                Log.d(TAG, "[HR-DATA] all done — ${accumulatedHrData.size} total entries")
+                sendToFlutter("HISTORY_HR_DATA_DONE", accumulatedHrData.size)
+                hrSyncDone = true
+                checkSyncComplete()
+                return
+            }
+            currentIndex = hrFetchIndex
+            val stamp = hrFetchQueue[currentIndex]
+            Log.d(TAG, "[HR-DATA] fetching ${currentIndex + 1}/${hrFetchQueue.size} stamp=$stamp")
+        }
+        val stamp = hrFetchQueue[currentIndex]
+        mainHandler.post {
+            if (hrSyncGen != gen) return@post
+            try {
+                wearManager.getHistoryOfHRData(stamp)
+            } catch (e: Exception) {
+                Log.w(TAG, "[HR-DATA] fetch failed stamp=$stamp: ${e.message}")
+                synchronized(hrDataLock) {
+                    if (hrSyncGen != gen) return@synchronized
+                    hrFetchIndex++
+                    fetchNextHr(gen)
+                }
+            }
+        }
+        // Per-record timeout: if callback doesn't fire in 5s, skip this record.
+        // Cancel any previous timeout first to avoid stale runnables stacking up.
+        hrTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        val timeout = Runnable {
+            synchronized(hrDataLock) {
+                if (hrSyncGen != gen) return@synchronized
+                if (hrFetchIndex == currentIndex) {
+                    Log.w(TAG, "[HR-DATA] timeout on record stamp=$stamp, skipping")
+                    hrFetchIndex++
+                    fetchNextHr(gen)
+                }
+            }
+        }
+        hrTimeoutRunnable = timeout
+        mainHandler.postDelayed(timeout, 5_000L)
+    }
+
+    private fun fetchNextRr(gen: Long) {
+        val currentIndex: Int
+        synchronized(rrDataLock) {
+            if (rrSyncGen != gen) return
+            if (rrFetchIndex >= rrFetchQueue.size) {
+                Log.d(TAG, "[RR-DATA] all done — ${accumulatedRrData.size} total entries")
+                sendToFlutter("HISTORY_RR_DATA_DONE", accumulatedRrData.size)
+                rrSyncDone = true
+                checkSyncComplete()
+                return
+            }
+            currentIndex = rrFetchIndex
+            val stamp = rrFetchQueue[currentIndex]
+            Log.d(TAG, "[RR-DATA] fetching ${currentIndex + 1}/${rrFetchQueue.size} stamp=$stamp")
+        }
+        val stamp = rrFetchQueue[currentIndex]
+        mainHandler.post {
+            if (rrSyncGen != gen) return@post
+            try {
+                wearManager.getHistoryOfRRData(stamp)
+            } catch (e: Exception) {
+                Log.w(TAG, "[RR-DATA] fetch failed stamp=$stamp: ${e.message}")
+                synchronized(rrDataLock) {
+                    if (rrSyncGen != gen) return@synchronized
+                    rrFetchIndex++
+                    fetchNextRr(gen)
+                }
+            }
+        }
+        // Per-record timeout: cancel previous, then set new.
+        rrTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        val timeout = Runnable {
+            synchronized(rrDataLock) {
+                if (rrSyncGen != gen) return@synchronized
+                if (rrFetchIndex == currentIndex) {
+                    Log.w(TAG, "[RR-DATA] timeout on record stamp=$stamp, skipping")
+                    rrFetchIndex++
+                    fetchNextRr(gen)
+                }
+            }
+        }
+        rrTimeoutRunnable = timeout
+        mainHandler.postDelayed(timeout, 5_000L)
+    }
 
     private fun stampInRange(stamp: Long): Boolean {
         val fromWithBuffer = if (rangeFromSec > SESSION_LOOKBACK_SEC) {
@@ -73,6 +188,56 @@ class ChileafWearHandler(
         return stamp in fromWithBuffer..rangeToSec
     }
 
+    /**
+     * Smart filter for range fetch — picks only records whose data coverage
+     * could overlap with [rangeFromSec, rangeToSec].
+     *
+     * A record's data can have timestamps BEFORE or AFTER the record's own
+     * stamp. So we apply a 24-hour buffer on BOTH sides:
+     * - Include records whose stamp is up to 24h AFTER rangeTo
+     *   (data inside may have earlier timestamps)
+     * - Include records whose coverage (stamp → next stamp) reaches rangeFrom
+     *   (data inside may span into our range)
+     *
+     * The data-level filter (in HR/RR data callbacks) does the precise
+     * timestamp filtering — this is just to reduce BLE traffic.
+     *
+     * Example: 206 records on device, user picks a 1-hour window →
+     * only 2-4 records match instead of all 206.
+     */
+    private fun <T> smartFilterRecords(
+        list: List<T>,
+        stampOf: (T) -> Long
+    ): List<T> {
+        val buffer = SESSION_LOOKBACK_SEC // 24 hours
+        val sorted = list.sortedBy { stampOf(it) }
+        return sorted.filterIndexed { index, item ->
+            val recordStart = stampOf(item)
+            val coverEnd = if (index < sorted.size - 1) stampOf(sorted[index + 1]) else Long.MAX_VALUE
+            recordStart <= rangeToSec + buffer && coverEnd >= rangeFromSec
+        }
+    }
+
+
+    // ── Sync completion ─────────────────────────────────────────────────────
+    private fun checkSyncComplete() {
+        if (hrSyncDone && rrSyncDone && sleepSyncDone) {
+            Log.d(TAG, "[SYNC] All streams complete — sending SYNC_COMPLETE")
+            sendToFlutter("SYNC_COMPLETE", "all_done")
+            mainHandler.post { startRssiPolling() }
+        }
+    }
+
+    private fun resetSyncFlags() {
+        hrSyncDone = false
+        rrSyncDone = false
+        sleepSyncDone = false
+        latestSessionOnly = false
+        hrTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        rrTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        hrTimeoutRunnable = null
+        rrTimeoutRunnable = null
+    }
 
     // ── RSSI polling ──────────────────────────────────────────────────────────
     private fun startRssiPolling() {
@@ -197,6 +362,7 @@ class ChileafWearHandler(
         stopScan()
         isConnecting = true
         sendToFlutter("STATUS", "Connecting to ${device.name ?: address}...")
+        mainHandler.removeCallbacks(scanTimeoutRunnable)
         mainHandler.removeCallbacks(connectTimeoutRunnable)
         mainHandler.postDelayed(connectTimeoutRunnable, 20000)
         wearManager.connectDevice(device)
@@ -221,6 +387,9 @@ class ChileafWearHandler(
         // Log.d(TAG, ">>> syncAllHistory()")
         rangeFromSec = 0L
         rangeToSec = Long.MAX_VALUE
+        useSmartFilter = false
+        resetSyncFlags()
+        stopRssiPolling()
         sendToFlutter("HISTORY_SYNC_START", "syncing")
         try { wearManager.getHistoryOfHRRecord() } catch (e: Exception) { Log.w(TAG, "getHistoryOfHRRecord: ${e.message}") }
         // Stagger requests so they don't compete in the device's BLE queue
@@ -251,9 +420,17 @@ class ChileafWearHandler(
      * Flutter filters sleep data client-side.
      */
     fun syncHistoryRange(fromMs: Long, toMs: Long) {
-        rangeFromSec = if (fromMs > 0L) fromMs / 1000L else 0L
-        rangeToSec = if (toMs > 0L) toMs / 1000L else Long.MAX_VALUE
-        // Log.d(TAG, ">>> syncHistoryRange(from=$rangeFromSec to=$rangeToSec sec)")
+        var fSec = if (fromMs > 0L) fromMs / 1000L else 0L
+        var tSec = if (toMs > 0L) toMs / 1000L else Long.MAX_VALUE
+        if (fSec > tSec) { val tmp = fSec; fSec = tSec; tSec = tmp }
+        rangeFromSec = fSec
+        rangeToSec = tSec
+        // Fetch ALL records' data — record stamp = session-start, not data time.
+        // Data-level filter in HR/RR data callbacks does the precise filtering.
+        useSmartFilter = true
+        resetSyncFlags()
+        Log.d(TAG, ">>> syncHistoryRange(from=$rangeFromSec to=$rangeToSec sec) useSmartFilter=true")
+        stopRssiPolling()
         sendToFlutter("HISTORY_SYNC_START", "syncing")
         try { wearManager.getHistoryOfHRRecord() } catch (e: Exception) { Log.w(TAG, "getHistoryOfHRRecord: ${e.message}") }
         mainHandler.postDelayed({
@@ -262,6 +439,30 @@ class ChileafWearHandler(
         mainHandler.postDelayed({
             try { wearManager.getHistoryOfSleep() } catch (e: Exception) { Log.e(TAG, "getHistoryOfSleep FAILED: ${e.message}") }
         }, 3000L)
+    }
+
+    /**
+     * Fetches only the latest HR session from the device.
+     * All record headers are retrieved; only the one with the highest stamp
+     * triggers a data fetch. Flutter filters the received readings by duration.
+     */
+    fun syncLatestSession() {
+        rangeFromSec = 0L
+        rangeToSec = Long.MAX_VALUE
+        useSmartFilter = false
+        resetSyncFlags()
+        latestSessionOnly = true
+        // Only HR is fetched for latest session — mark RR & Sleep as done
+        rrSyncDone = true
+        sleepSyncDone = true
+        stopRssiPolling()
+        sendToFlutter("HISTORY_SYNC_START", "syncing")
+        try { wearManager.getHistoryOfHRRecord() } catch (e: Exception) {
+            latestSessionOnly = false
+            hrSyncDone = true
+            checkSyncComplete()
+            Log.w(TAG, "syncLatestSession getHistoryOfHRRecord: ${e.message}")
+        }
     }
 
     /** Single-record lookup by timestamp */
@@ -277,6 +478,8 @@ class ChileafWearHandler(
             stopRssiPolling()
             mainHandler.removeCallbacks(scanTimeoutRunnable)
             mainHandler.removeCallbacks(connectTimeoutRunnable)
+            hrTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+            rrTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
             wearManager.disconnectDevice()
         } catch (e: Exception) {
             // Log.w(TAG, "destroy error: ${e.message}")
@@ -686,9 +889,21 @@ class ChileafWearHandler(
 
         // ── History: HR Record (auto-chains to fetch HR data) ─────────────────
         wearManager.addHistoryOfHRRecordCallback { device, list ->
-            // Range filter — keep only headers within [rangeFromSec, rangeToSec].
-            // For unfiltered sync (defaults), this is a no-op.
-            val filtered = list.filter { stampInRange(it.stamp) }
+            // latestSessionOnly mode: pick only the record with the highest stamp.
+            // Otherwise apply the normal time-range filter.
+            val filtered = if (latestSessionOnly) {
+                latestSessionOnly = false
+                val latest = list.maxByOrNull { it.stamp }
+                if (latest != null) listOf(latest) else emptyList()
+            } else if (useSmartFilter) {
+                smartFilterRecords(list) { it.stamp }
+            } else {
+                list.filter { stampInRange(it.stamp) }
+            }
+            Log.d(TAG, "[HR-RECORD] total=${list.size} filtered=${filtered.size} rangeFrom=$rangeFromSec rangeTo=$rangeToSec fetchAll=$useSmartFilter")
+            if (list.isNotEmpty()) {
+                Log.d(TAG, "[HR-RECORD] first stamp=${list.first().stamp} last stamp=${list.last().stamp}")
+            }
             val records = filtered.map { item ->
                 val m = HashMap<String, Any>()
                 m["stamp"] = item.stamp
@@ -698,62 +913,61 @@ class ChileafWearHandler(
             sendToFlutter("HISTORY_HR_RECORD", records)
 
             if (filtered.isEmpty()) {
+                Log.d(TAG, "[HR-RECORD] ⚠ filtered is EMPTY — no HR data will be fetched!")
+                synchronized(hrDataLock) { accumulatedHrData.clear() }
                 sendToFlutter("HISTORY_HR_DATA", emptyList<Any>())
                 sendToFlutter("HISTORY_HR_DATA_DONE", 0)
+                hrSyncDone = true
+                checkSyncComplete()
             } else {
+                val myGen: Long
                 synchronized(hrDataLock) {
-                    pendingHrDataCount = filtered.size
+                    hrSyncGen++
+                    myGen = hrSyncGen
+                    hrFetchQueue = filtered.map { it.stamp }
+                    hrFetchIndex = 0
                     accumulatedHrData.clear()
                 }
-                filtered.forEachIndexed { index, item ->
-                    mainHandler.postDelayed({
-                        try { wearManager.getHistoryOfHRData(item.stamp) }
-                        catch (e: Exception) {
-                            synchronized(hrDataLock) {
-                                pendingHrDataCount--
-                                if (pendingHrDataCount <= 0) {
-                                    sendToFlutter("HISTORY_HR_DATA_DONE", accumulatedHrData.size)
-                                }
-                            }
-                        }
-                    }, (index * 300L) + 200L)
-                }
-                mainHandler.postDelayed({
-                    synchronized(hrDataLock) {
-                        if (pendingHrDataCount > 0) {
-                            pendingHrDataCount = 0
-                            sendToFlutter("HISTORY_HR_DATA_DONE", accumulatedHrData.size)
-                        }
-                    }
-                }, (filtered.size * 300L) + 30_000L)
+                fetchNextHr(myGen)
             }
         }
 
-        // ── History: HR Data — stream each chunk to Flutter immediately ────────
+        // ── History: HR Data — filter + stream each chunk to Flutter ─────────
         wearManager.addHistoryOfHRDataCallback { device, list ->
-            // Log.d(TAG, "[CB] History HR Data chunk: ${list.size} entries")
-            val chunk = list.map { item ->
+            val raw = list.map { item ->
                 val m = HashMap<String, Any>()
                 m["stamp"] = item.stamp
                 m["heartRate"] = item.heartRate
                 m
             }
-            // ★ Send chunk immediately so UI updates live
-            sendToFlutter("HISTORY_HR_DATA_CHUNK", chunk)
-
-            synchronized(hrDataLock) {
-                accumulatedHrData.addAll(chunk)
-                pendingHrDataCount--
-                if (pendingHrDataCount <= 0) {
-                    // Log.d(TAG, "[CB] HR Data complete: ${accumulatedHrData.size} total entries")
-                    sendToFlutter("HISTORY_HR_DATA_DONE", accumulatedHrData.size)
-                }
+            // ★ Data-level filter: drop readings whose stamp falls outside range
+            // Stamps can be seconds or milliseconds — normalize to seconds
+            val chunk = raw.filter { m ->
+                val s = (m["stamp"] as? Number)?.toLong() ?: 0L
+                val sSec = if (s > 9999999999L) s / 1000L else s
+                sSec in rangeFromSec..rangeToSec
             }
+            Log.d(TAG, "[HR-DATA] raw=${raw.size} filtered=${chunk.size} range=$rangeFromSec..$rangeToSec")
+            if (chunk.isNotEmpty()) {
+                sendToFlutter("HISTORY_HR_DATA_CHUNK", chunk)
+            }
+
+            val myGen: Long
+            synchronized(hrDataLock) {
+                myGen = hrSyncGen
+                accumulatedHrData.addAll(chunk)
+                hrFetchIndex++
+            }
+            fetchNextHr(myGen)
         }
 
         // ── History: RR Record (auto-chains to fetch RR data) ─────────────────
         wearManager.addHistoryOfRRRecordCallback { device, list ->
-            val filtered = list.filter { stampInRange(it.stamp) }
+            val filtered = if (useSmartFilter) {
+                smartFilterRecords(list) { it.stamp }
+            } else {
+                list.filter { stampInRange(it.stamp) }
+            }
             val records = filtered.map { item ->
                 val m = HashMap<String, Any>()
                 m["stamp"] = item.stamp
@@ -763,40 +977,26 @@ class ChileafWearHandler(
             sendToFlutter("HISTORY_RR_RECORD", records)
 
             if (filtered.isEmpty()) {
+                synchronized(rrDataLock) { accumulatedRrData.clear() }
                 sendToFlutter("HISTORY_RR_DATA_DONE", 0)
+                rrSyncDone = true
+                checkSyncComplete()
             } else {
+                val myGen: Long
                 synchronized(rrDataLock) {
-                    pendingRrDataCount = filtered.size
+                    rrSyncGen++
+                    myGen = rrSyncGen
+                    rrFetchQueue = filtered.map { it.stamp }
+                    rrFetchIndex = 0
                     accumulatedRrData.clear()
                 }
-                filtered.forEachIndexed { index, item ->
-                    mainHandler.postDelayed({
-                        try { wearManager.getHistoryOfRRData(item.stamp) }
-                        catch (e: Exception) {
-                            synchronized(rrDataLock) {
-                                pendingRrDataCount--
-                                if (pendingRrDataCount <= 0) {
-                                    sendToFlutter("HISTORY_RR_DATA_DONE", accumulatedRrData.size)
-                                }
-                            }
-                        }
-                    }, (index * 300L) + 200L)
-                }
-                mainHandler.postDelayed({
-                    synchronized(rrDataLock) {
-                        if (pendingRrDataCount > 0) {
-                            pendingRrDataCount = 0
-                            sendToFlutter("HISTORY_RR_DATA_DONE", accumulatedRrData.size)
-                        }
-                    }
-                }, (filtered.size * 300L) + 30_000L)
+                fetchNextRr(myGen)
             }
         }
 
-        // ── History: RR Data — stream each chunk to Flutter immediately ───────
+        // ── History: RR Data — filter + stream each chunk to Flutter ──────────
         wearManager.addHistoryOfRRDataCallback { device, list ->
-            // Log.d(TAG, "[CB] History RR Data chunk: ${list.size} entries")
-            val chunk = list.map { item ->
+            val raw = list.map { item ->
                 val m = HashMap<String, Any>()
                 m["stamp"] = item.stamp
                 // SDK names field `respiratoryRate` but per SDK changelog this actually
@@ -804,16 +1004,25 @@ class ChileafWearHandler(
                 m["value"] = item.respiratoryRate
                 m
             }
-            sendToFlutter("HISTORY_RR_DATA_CHUNK", chunk)
-
-            synchronized(rrDataLock) {
-                accumulatedRrData.addAll(chunk)
-                pendingRrDataCount--
-                if (pendingRrDataCount <= 0) {
-                    // Log.d(TAG, "[CB] RR Data complete: ${accumulatedRrData.size} total entries")
-                    sendToFlutter("HISTORY_RR_DATA_DONE", accumulatedRrData.size)
-                }
+            // ★ Data-level filter: drop readings outside range
+            // Stamps can be seconds or milliseconds — normalize to seconds
+            val chunk = raw.filter { m ->
+                val s = (m["stamp"] as? Number)?.toLong() ?: 0L
+                val sSec = if (s > 9999999999L) s / 1000L else s
+                sSec in rangeFromSec..rangeToSec
             }
+            Log.d(TAG, "[RR-DATA] raw=${raw.size} filtered=${chunk.size} range=$rangeFromSec..$rangeToSec")
+            if (chunk.isNotEmpty()) {
+                sendToFlutter("HISTORY_RR_DATA_CHUNK", chunk)
+            }
+
+            val myGen: Long
+            synchronized(rrDataLock) {
+                myGen = rrSyncGen
+                accumulatedRrData.addAll(chunk)
+                rrFetchIndex++
+            }
+            fetchNextRr(myGen)
         }
 
         // ── Sleep History ─────────────────────────────────────────────────────
@@ -835,6 +1044,19 @@ class ChileafWearHandler(
                 m
             }
             sendToFlutter("HISTORY_SLEEP", records)
+            sleepSyncDone = true
+            checkSyncComplete()
+        }
+
+        // ── Single Record Info ────────────────────────────────────────────────
+        wearManager.addHistoryOfSingleRecordCallback { device, v1, v2, v3, v4 ->
+            Log.d(TAG, "[SINGLE-RECORD] v1=$v1 v2=$v2 v3=$v3 v4=$v4")
+            val map = HashMap<String, Any>()
+            map["v1"] = v1
+            map["v2"] = v2
+            map["v3"] = v3
+            map["v4"] = v4
+            sendToFlutter("SINGLE_RECORD_INFO", map)
         }
 
         // ── Custom Data ───────────────────────────────────────────────────────

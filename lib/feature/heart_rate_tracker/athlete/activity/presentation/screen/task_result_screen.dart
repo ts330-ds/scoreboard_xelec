@@ -226,9 +226,7 @@ class _ResultBody extends StatelessWidget {
         (session['aggregated_stats'] as Map<String, dynamic>?) ?? {};
     final rawList = (session['raw_data'] as List?)
             ?.whereType<Map<String, dynamic>>()
-            .toList()
-            .reversed
-            .toList() ?? // oldest-first for chart
+            .toList() ??
         [];
 
     final hrStats = (stats['heart_rate'] as Map<String, dynamic>?) ?? {};

@@ -6,7 +6,8 @@ import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/push_status_event.dart';
 
 class PushNowButton extends StatefulWidget {
-  const PushNowButton({super.key});
+  final VoidCallback? onPushComplete;
+  const PushNowButton({super.key, this.onPushComplete});
 
   @override
   State<PushNowButton> createState() => _PushNowButtonState();
@@ -100,6 +101,10 @@ class _PushNowButtonState extends State<PushNowButton> {
         message = 'Could not build payload: $m';
         bg = AppColors.error;
         stillPushing = false;
+      case PushNotConnected():
+        message = 'Connect device first';
+        bg = AppColors.error;
+        stillPushing = false;
     }
 
     ScaffoldMessenger.of(context)
@@ -113,6 +118,7 @@ class _PushNowButtonState extends State<PushNowButton> {
 
     if (_pushing != stillPushing) {
       setState(() => _pushing = stillPushing);
+      if (!stillPushing) widget.onPushComplete?.call();
     }
   }
 
@@ -120,8 +126,7 @@ class _PushNowButtonState extends State<PushNowButton> {
     if (_pushing) return;
     setState(() => _pushing = true);
     try {
-      // ignore: unawaited_futures
-      context.read<HeartBleCubit>().pushHistoryBatch();
+      await context.read<HeartBleCubit>().syncAndPush();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -134,6 +139,12 @@ class _PushNowButtonState extends State<PushNowButton> {
         setState(() => _pushing = false);
       }
     }
+    // Safety: if no PushStatusEvent arrived to reset _pushing, reset after timeout
+    Future.delayed(const Duration(seconds: 30), () {
+      if (mounted && _pushing) {
+        setState(() => _pushing = false);
+      }
+    });
   }
 
   @override

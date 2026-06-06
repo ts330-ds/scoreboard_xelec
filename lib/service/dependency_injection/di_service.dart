@@ -1,4 +1,5 @@
 import 'package:get_it/get_it.dart';
+import 'package:hive/hive.dart';
 import 'package:xelex_esp/service/api/api_service.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,6 +25,7 @@ import 'package:xelex_esp/feature/bluetooth/mapper/football_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/hockey_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/kabaddi_ble_mapper.dart';
 import 'package:xelex_esp/feature/bluetooth/mapper/table_tennis_ble_mapper.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/ble_fetch_range/cubit/ble_fetch_range_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/main_screen/data/cubit/bluetooth_cubit.dart';
 import 'package:xelex_esp/feature/timing_gates/profile/data/repository/profile_repository.dart';
@@ -136,6 +138,7 @@ import '../../feature/heart_rate_tracker/athlete/activity/domain/usecase/get_tas
 import '../../feature/heart_rate_tracker/athlete/activity/domain/usecase/submit_feedback_usecase.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/my_tasks_cubit.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_result_submit_cubit.dart';
 import '../../feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
 import '../socket/coach_live_task_socket_service.dart';
 import '../../feature/heart_rate_tracker/coach/live_task/presentation/cubit/coach_live_task_cubit.dart';
@@ -283,14 +286,21 @@ void setupDI({required SharedPreferences sharedPreferences}) {
   sl.registerFactory<MyTasksCubit>(
     () => MyTasksCubit(getMyTasks: sl()),
   );
+  sl.registerFactory<TaskResultSubmitCubit>(
+    () => TaskResultSubmitCubit(
+      repository: sl<AthleteTaskRepository>(),
+      fetchCubit: sl<BleFetchRangeCubit>(),
+    ),
+  );
   // Socket services ab DI mein nahi — background isolate khud banata hai
   sl.registerLazySingleton<AthleteHealthMonitorCubit>(
     () => AthleteHealthMonitorCubit(prefs: sl()),
   );
-  sl.registerFactory<AthleteActivityCubit>(
+  sl.registerLazySingleton<AthleteActivityCubit>(
     () => AthleteActivityCubit(
       createTask: sl(),
       prefs: sl(),
+      bleCubit: sl<HeartBleCubit>(),
     ),
   );
 
@@ -656,7 +666,7 @@ void setupDI({required SharedPreferences sharedPreferences}) {
     () => SportRemoteDataSourceImpl(sl<ApiService>()),
   );
   sl.registerLazySingleton<SportLocalDataSource>(
-    () => SportLocalDataSourceImpl(sl()),
+    () => SportLocalDataSourceImpl(Hive.box('sports_cache')),
   );
   sl.registerLazySingleton<SportRepository>(
     () => SportRepositoryImpl(sl(), sl()),
@@ -670,6 +680,9 @@ void setupDI({required SharedPreferences sharedPreferences}) {
 
   sl.registerLazySingleton<HeartBleCubit>(
     () => HeartBleCubit(errorCubit: sl()));
+
+  sl.registerFactory<BleFetchRangeCubit>(
+    () => BleFetchRangeCubit(bleCubit: sl<HeartBleCubit>()));
 
   // Timing Gate — BLE
   sl.registerLazySingleton<TimingGateBleService>(() => TimingGateBleService());

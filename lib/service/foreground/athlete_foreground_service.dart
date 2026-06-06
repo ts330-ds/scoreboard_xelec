@@ -73,11 +73,11 @@ class AthleteForegroundService {
     FlutterForegroundTask.addTaskDataCallback(_onDataFromBackground);
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'xelex_athlete_channel',
-        channelName: 'Athlete Session',
-        channelDescription: 'Health monitoring active in background',
-        channelImportance: NotificationChannelImportance.LOW,
-        priority: NotificationPriority.LOW,
+        channelId: 'xelex_athlete_session_v2',
+        channelName: 'Active Session',
+        channelDescription: 'Shows while a training session is running',
+        channelImportance: NotificationChannelImportance.HIGH,
+        priority: NotificationPriority.HIGH,
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: false,
@@ -91,6 +91,13 @@ class AthleteForegroundService {
       ),
     );
   }
+
+  static Future<void> preWarmService() async {
+    await _ensureServiceRunning();
+    await _waitForBgReady();
+  }
+
+  static Future<void> stopIfIdle() => _stopServiceIfIdle();
 
   // Activity session start karo
   static Future<void> startActivitySession({
@@ -115,7 +122,15 @@ class AthleteForegroundService {
       'cmd': 'stop_activity',
       'task_id': taskId,
     });
-    await _stopServiceIfIdle();
+    // Service band mat karo abhi — server se `recording_stopped` event aana
+    // chahiye pehle. Cubit _endSession() ke baad cleanupAfterSessionEnd()
+    // call karega, ya 8s timeout pe khud end karega.
+  }
+
+  static Future<void> cleanupAfterSessionEnd() async {
+    if (!_activityActive) {
+      await _stopServiceIfIdle();
+    }
   }
 
   // BLE se nayi reading aayi — background handler ko batao

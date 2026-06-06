@@ -23,7 +23,6 @@ class CoachHomeMobile extends StatelessWidget {
     final prefs = sl<SharedPreferences>();
     final name = prefs.getString(PrefKeys.coachName) ?? 'Coach';
 
-    // On iOS keep system chrome light since CupertinoPageScaffold handles it
     if (!Platform.isIOS) {
       SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
