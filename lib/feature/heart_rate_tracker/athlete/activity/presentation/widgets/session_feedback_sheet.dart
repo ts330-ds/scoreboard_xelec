@@ -119,6 +119,20 @@ class SessionFeedbackSheet extends StatelessWidget {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      Center(
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: const Text(
+                            'Skip for now',
+                            style: TextStyle(
+                              color: AppColors.subtext,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ],
                 ),

@@ -139,6 +139,7 @@ import '../../feature/heart_rate_tracker/athlete/activity/domain/usecase/submit_
 import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/my_tasks_cubit.dart';
 import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_result_submit_cubit.dart';
+import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_cubit.dart';
 import '../../feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
 import '../socket/coach_live_task_socket_service.dart';
 import '../../feature/heart_rate_tracker/coach/live_task/presentation/cubit/coach_live_task_cubit.dart';
@@ -289,6 +290,11 @@ void setupDI({required SharedPreferences sharedPreferences}) {
   sl.registerFactory<TaskResultSubmitCubit>(
     () => TaskResultSubmitCubit(
       repository: sl<AthleteTaskRepository>(),
+      fetchCubit: sl<BleFetchRangeCubit>(),
+    ),
+  );
+  sl.registerFactory<TaskZipSubmitCubit>(
+    () => TaskZipSubmitCubit(
       fetchCubit: sl<BleFetchRangeCubit>(),
     ),
   );

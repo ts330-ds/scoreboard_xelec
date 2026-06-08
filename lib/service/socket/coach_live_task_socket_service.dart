@@ -3,7 +3,6 @@ import 'package:socket_io_client/socket_io_client.dart' as sio;
 
 class CoachLiveTaskSocketService {
   sio.Socket? _socket;
-  bool _isConnecting = false;
 
   // Callbacks — cubit set karega
   void Function()? onWatching;
@@ -27,14 +26,11 @@ class CoachLiveTaskSocketService {
       onConnected?.call();
       return;
     }
-    if (_isConnecting) return;
 
     if (_socket != null) {
       _socket!.dispose();
       _socket = null;
     }
-
-    _isConnecting = true;
     final url = _socketUrl(baseUrl);
 
     _socket = sio.io(
@@ -48,17 +44,14 @@ class CoachLiveTaskSocketService {
     );
 
     _socket!.onConnect((_) {
-      _isConnecting = false;
       onConnected?.call();
     });
 
     _socket!.onDisconnect((_) {
-      _isConnecting = false;
       onDisconnected?.call();
     });
 
     _socket!.onConnectError((err) {
-      _isConnecting = false;
       onError?.call('Socket connection failed');
       onDisconnected?.call();
     });
@@ -125,7 +118,6 @@ class CoachLiveTaskSocketService {
   }
 
   void disconnect() {
-    _isConnecting = false;
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;

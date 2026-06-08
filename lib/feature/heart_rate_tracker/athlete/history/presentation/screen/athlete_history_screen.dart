@@ -15,6 +15,7 @@ import '../widgets/last_push_info.dart';
 import '../widgets/push_now_button.dart';
 import '../widgets/sleep_from_hr.dart';
 import '../widgets/sleep_hr_chart.dart';
+import '../widgets/polling_status_banner.dart';
 import '../widgets/sync_button.dart';
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
@@ -201,6 +202,11 @@ class _HistoryShellState extends State<_HistoryShell> {
                     onPushComplete: () =>
                         _lastPushKey.currentState?.reload(),
                   ),
+                ),
+                // ── V3 Polling status banner ─────────────────────────
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  child: PollingStatusBanner(),
                 ),
                 // ── Content ───────────────────────────────────────────
                 Expanded(

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:device_info_plus/device_info_plus.dart';
@@ -60,6 +61,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   HeartBleCubit({required this.errorCubit}) : super(const HeartBleState()) {
     _hydrateFromDb();
     _listenToDeviceData();
+    _resumePollingIfNeeded();
   }
 
   /// Exposes DB-backed sync metadata for the UI (last sync time, data range,
@@ -781,7 +783,20 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
   /// Fetches the server-side last pushed HR timestamp for this athlete.
   /// Returns the timestamp (ms) or 0 on failure (caller falls back to local).
+  /// Caches the result for 30 seconds to avoid duplicate API calls
+  /// (syncNewFromDevice + pushHistoryBatch fire within seconds of each other).
+  int _cachedServerWatermark = 0;
+  int _watermarkFetchedAtMs = 0;
+  static const int _watermarkCacheTtlMs = 30 * 1000; // 30 seconds
+
   Future<int> _fetchServerWatermark() async {
+    // Return cached value if recently fetched
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (_cachedServerWatermark > 0 &&
+        (now - _watermarkFetchedAtMs) < _watermarkCacheTtlMs) {
+      return _cachedServerWatermark;
+    }
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(PrefKeys.userToken) ?? '';
@@ -793,7 +808,12 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       final data = response.data as Map<String, dynamic>? ?? {};
       if (data['success'] == true) {
         final inner = data['data'] as Map<String, dynamic>? ?? {};
-        return (inner['recorded_at'] as num?)?.toInt() ?? 0;
+        final stamp = (inner['recorded_at'] as num?)?.toInt() ?? 0;
+        if (stamp > 0) {
+          _cachedServerWatermark = stamp;
+          _watermarkFetchedAtMs = now;
+        }
+        return stamp;
       }
       return 0;
     } on DioException {
@@ -918,7 +938,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       _pendingRrCount = rrSampleCount;
 
       _pendingPayload = payload;
-      await _connectAndPush();
+      await _pushV3();
       // _pushingHistory cleared in _cleanupPush() — async lifecycle
     } catch (e) {
       // debugPrint('[HISTORY-PUSH] build failed: $e');
@@ -1002,6 +1022,340 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       _cleanupPush();
     }
   }
+
+  // ─── V3 Push: gzip .zip file + job polling ─────────────────────────────────
+
+  /// V3 push — payload ko in-memory gzip compress karke raw bytes
+  /// POST karo /athlete/health_metrics/v3 pe.
+  /// Response mein job_id milta hai — har 1s poll karo jab tak done/failed.
+  Future<void> _pushV3() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString(PrefKeys.userToken) ?? '';
+    if (token.isEmpty) {
+      _emitPushEvent(const PushMissingAuth());
+      _cleanupPush();
+      return;
+    }
+
+    final payload = _pendingPayload;
+    if (payload == null) {
+      _cleanupPush();
+      return;
+    }
+
+    _emitPushEvent(PushUploading(
+      hrCount: _pendingHrCount,
+      rrCount: _pendingRrCount,
+      sleepCount: _pendingSleepCount,
+    ));
+
+    try {
+      // 1. JSON encode → gzip compress (in-memory)
+      final jsonString = jsonEncode(payload);
+      final jsonBytes = utf8.encode(jsonString);
+      final gzipBytes = gzip.encode(jsonBytes);
+      debugPrint('[V3-PUSH] JSON size: ${jsonBytes.length} bytes → Gzip size: ${gzipBytes.length} bytes (${(gzipBytes.length * 100 / jsonBytes.length).toStringAsFixed(1)}% ratio)');
+
+      // 2. POST raw gzip bytes via dart:io HttpClient
+      // Dio ka transformer List<int>/Uint8List ko JSON array [31,139,8,...] bana
+      // deta hai — isliye direct HttpClient use karo for guaranteed raw bytes.
+      final baseUrl = ApiService.instance.dio.options.baseUrl;
+      final uri = Uri.parse('$baseUrl/athlete/health_metrics/v3');
+
+      debugPrint('[V3-PUSH] ═══════════════════════════════════════════');
+      debugPrint('[V3-PUSH] POST $uri');
+      debugPrint('[V3-PUSH] Headers:');
+      debugPrint('[V3-PUSH]   Content-Type: application/json');
+      debugPrint('[V3-PUSH]   Content-Encoding: gzip');
+      debugPrint('[V3-PUSH]   Content-Length: ${gzipBytes.length}');
+      debugPrint('[V3-PUSH]   Authorization: Bearer ${token.substring(0, 20)}...');
+      debugPrint('[V3-PUSH] Gzip magic bytes: ${gzipBytes.take(4).toList()}');
+      debugPrint('[V3-PUSH] Sending ${gzipBytes.length} raw bytes...');
+
+      final stopwatch = Stopwatch()..start();
+
+      final httpClient = HttpClient();
+      httpClient.connectionTimeout = const Duration(seconds: 60);
+
+      final request = await httpClient.postUrl(uri);
+      request.headers.set('Authorization', 'Bearer $token');
+      request.headers.set('Content-Type', 'application/json');
+      request.headers.set('Content-Encoding', 'gzip');
+      request.headers.contentLength = gzipBytes.length;
+      request.add(gzipBytes);
+
+      final httpResponse = await request.close();
+      final responseBody = await httpResponse.transform(utf8.decoder).join();
+      httpClient.close();
+
+      stopwatch.stop();
+
+      debugPrint('[V3-PUSH] ───────────────────────────────────────────');
+      debugPrint('[V3-PUSH] Status: ${httpResponse.statusCode} ${httpResponse.reasonPhrase}');
+      debugPrint('[V3-PUSH] Time: ${stopwatch.elapsedMilliseconds} ms');
+      debugPrint('[V3-PUSH] Response headers:');
+      httpResponse.headers.forEach((name, values) {
+        debugPrint('[V3-PUSH]   $name: ${values.join(', ')}');
+      });
+      debugPrint('[V3-PUSH] Body: $responseBody');
+      debugPrint('[V3-PUSH] ═══════════════════════════════════════════');
+
+      final responseData = jsonDecode(responseBody) as Map<String, dynamic>? ?? {};
+      final data = responseData['data'] as Map<String, dynamic>? ?? {};
+      final statusCode = httpResponse.statusCode;
+
+      // Auth check
+      if (statusCode == 401 || statusCode == 403) {
+        final msg = _extractServerMessage(responseData) ?? 'Auth failed';
+        _emitPushEvent(PushAuthFailed(msg));
+        return;
+      }
+
+      // V3 returns 202 Accepted — anything else is unexpected
+      if (statusCode != 202) {
+        final msg = _extractServerMessage(responseData) ??
+            'Server error ($statusCode)';
+        _emitPushEvent(PushFailed(msg));
+        return;
+      }
+
+      final jobId = data['job_id']?.toString() ?? '';
+      if (jobId.isEmpty) {
+        _emitPushEvent(const PushFailed('No job_id in server response'));
+        return;
+      }
+
+      // Invalidate watermark cache — push ke baad server watermark badal jaayega
+      _cachedServerWatermark = 0;
+      _watermarkFetchedAtMs = 0;
+
+      // 3. Persist polling state — survives app kill
+      await _savePollingState(jobId);
+      emit(state.copyWith(
+        isPolling: true,
+        pollingJobId: jobId,
+        pollingMessage: 'Processing on server…',
+      ));
+
+      // 4. Poll job status every 1 second
+      _emitPushEvent(PushPolling(jobId));
+      final pollResult = await _pollJobStatus(jobId);
+
+      // 5. Clear polling state regardless of result
+      await _clearPollingState();
+      emit(state.copyWith(
+        isPolling: false,
+        pollingJobId: '',
+        pollingMessage: '',
+      ));
+
+      if (pollResult == null) {
+        _emitPushEvent(const PushFailed('Job timed out or failed on server'));
+        return;
+      }
+      if (pollResult['error'] != null) {
+        _emitPushEvent(PushFailed(pollResult['error'].toString()));
+        return;
+      }
+
+      // 4. Commit watermarks — V3 job result wraps counts inside result
+      // Response: { data: { job_id, status, result: { health_count, sleep_count, rr_count, ... } } }
+      final wm = await HistoryWatermarkStore.create();
+      await _commitV3Watermark(wm, pollResult, payload);
+      await wm.commitPushAtNow();
+      _emitPushEvent(PushSucceeded(pollResult));
+    } on SocketException catch (e) {
+      debugPrint('[V3-PUSH] ✖ SocketException: $e');
+      _emitPushEvent(const PushFailed('No internet connection'));
+    } on HttpException catch (e) {
+      debugPrint('[V3-PUSH] ✖ HttpException: ${e.message}');
+      _emitPushEvent(PushFailed('HTTP error: ${e.message}'));
+    } on TimeoutException {
+      debugPrint('[V3-PUSH] ✖ TimeoutException');
+      _emitPushEvent(const PushTimedOut());
+    } catch (e) {
+      debugPrint('[V3-PUSH] ✖ Unexpected error: $e');
+      _emitPushEvent(PushFailed(e.toString()));
+    } finally {
+      _cleanupPush();
+    }
+  }
+
+  /// Poll GET /athlete/ingestion/job/:jobId every 1 second.
+  /// Returns the result map on "done", null on timeout,
+  /// or {'error': '...'} on server-side failure.
+  Future<Map<String, dynamic>?> _pollJobStatus(String jobId) async {
+    const maxAttempts = 60; // 60 seconds max
+    int consecutiveErrors = 0;
+    const maxConsecutiveErrors = 5;
+
+    for (int i = 0; i < maxAttempts; i++) {
+      await Future.delayed(const Duration(seconds: 1));
+      try {
+        final response = await ApiService.instance.dio.get(
+          '/athlete/ingestion/job/$jobId',
+        );
+        consecutiveErrors = 0; // Reset on success
+
+        final respData = response.data as Map<String, dynamic>? ?? {};
+        final data = respData['data'] as Map<String, dynamic>? ?? {};
+        final status = data['status']?.toString() ?? '';
+
+        if (status == 'done') {
+          return data['result'] as Map<String, dynamic>? ?? data;
+        }
+        if (status == 'failed') {
+          final reason = data['error']?.toString() ??
+              data['message']?.toString() ??
+              'Job failed on server';
+          return <String, dynamic>{'error': reason};
+        }
+        // queued / processing — continue polling
+      } on DioException catch (e) {
+        consecutiveErrors++;
+        // Auth error — stop immediately, no point retrying
+        final code = e.response?.statusCode ?? 0;
+        if (code == 401 || code == 403) {
+          return <String, dynamic>{'error': 'Auth expired during polling'};
+        }
+        // Too many consecutive network errors — give up
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          return <String, dynamic>{'error': 'Network error during polling'};
+        }
+      } catch (_) {
+        consecutiveErrors++;
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          return <String, dynamic>{'error': 'Unexpected error during polling'};
+        }
+      }
+    }
+    return null; // Timed out after 60s
+  }
+
+  // ─── Polling State Persistence ──────────────────────────────────────────────
+
+  /// Save polling state to SharedPrefs — survives app kill.
+  Future<void> _savePollingState(String jobId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(PrefKeys.pollingActive, true);
+    await prefs.setString(PrefKeys.pollingJobId, jobId);
+    await prefs.setInt(
+        PrefKeys.pollingStartedAt, DateTime.now().millisecondsSinceEpoch);
+  }
+
+  /// Clear polling state from SharedPrefs — called on done/failed/timeout.
+  Future<void> _clearPollingState() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(PrefKeys.pollingActive, false);
+    await prefs.remove(PrefKeys.pollingJobId);
+    await prefs.remove(PrefKeys.pollingStartedAt);
+  }
+
+  /// App reopen pe check karo — agar polling chal rahi thi toh resume karo.
+  /// Stale check: 2 min se purana toh skip (server job already done/failed).
+  static const int _pollingMaxAgeMs = 4 * 60 * 1000; // 4 minutes
+
+  Future<void> _resumePollingIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final active = prefs.getBool(PrefKeys.pollingActive) ?? false;
+    if (!active) return;
+
+    final jobId = prefs.getString(PrefKeys.pollingJobId) ?? '';
+    final startedAt = prefs.getInt(PrefKeys.pollingStartedAt) ?? 0;
+    if (jobId.isEmpty || startedAt <= 0) {
+      await _clearPollingState();
+      return;
+    }
+
+    // Stale check — 2 min se purana toh skip
+    final elapsed = DateTime.now().millisecondsSinceEpoch - startedAt;
+    if (elapsed > _pollingMaxAgeMs) {
+      await _clearPollingState();
+      return;
+    }
+
+    // Resume polling
+    emit(state.copyWith(
+      isPolling: true,
+      pollingJobId: jobId,
+      pollingMessage: 'Resuming server processing…',
+    ));
+    _emitPushEvent(PushPolling(jobId));
+
+    final pollResult = await _pollJobStatus(jobId);
+    await _clearPollingState();
+    emit(state.copyWith(
+      isPolling: false,
+      pollingJobId: '',
+      pollingMessage: '',
+    ));
+
+    if (pollResult == null) {
+      _emitPushEvent(const PushFailed('Job timed out or failed on server'));
+      return;
+    }
+    if (pollResult['error'] != null) {
+      _emitPushEvent(PushFailed(pollResult['error'].toString()));
+      return;
+    }
+
+    // Success — commit watermarks
+    // Note: original payload not available after app kill, so we rely on
+    // server's watermark update. Invalidate cache to force fresh fetch.
+    _cachedServerWatermark = 0;
+    _watermarkFetchedAtMs = 0;
+    final wm = await HistoryWatermarkStore.create();
+    await wm.commitPushAtNow();
+    _emitPushEvent(PushSucceeded(pollResult));
+  }
+
+  /// V3 watermark commit — job result se counts & timestamps nikal ke
+  /// local watermarks advance karo.
+  /// V3 result: { health_count, sleep_count, rr_count, ... }
+  /// (V2 had nested `data` wrapper — V3 result comes directly from poll)
+  Future<void> _commitV3Watermark(
+    HistoryWatermarkStore wm,
+    Map<String, dynamic> result,
+    Map<String, dynamic> payload,
+  ) async {
+    try {
+      final hrCount = (result['health_count'] as num?)?.toInt() ?? 0;
+      final sleepCount = (result['sleep_count'] as num?)?.toInt() ?? 0;
+      final rrCount = (result['rr_count'] as num?)?.toInt() ?? 0;
+
+      // HR watermark — payload se max timestamp nikalo
+      if (hrCount > 0) {
+        final hrList = payload['health_metrics'] as List? ?? [];
+        final maxHrStamp = hrList
+            .whereType<Map>()
+            .map((r) => (r['timestamp'] as num?)?.toInt() ?? 0)
+            .fold(0, (a, b) => a > b ? a : b);
+        if (maxHrStamp > 0) await wm.commitHr(maxHrStamp);
+      }
+
+      // RR watermark
+      if (rrCount > 0) {
+        final rrList = payload['rr_interval'] as List? ?? [];
+        final maxRrStamp = rrList
+            .whereType<Map>()
+            .map((r) => (r['sessionStamp'] as num?)?.toInt() ?? 0)
+            .fold(0, (a, b) => a > b ? a : b);
+        if (maxRrStamp > 0) await wm.commitRr(maxRrStamp);
+      }
+
+      // Sleep watermark
+      if (sleepCount > 0) {
+        final sleepList = payload['sleep_metrics'] as List? ?? [];
+        final maxUtc = sleepList
+            .whereType<Map>()
+            .map((r) => (r['utc'] as num?)?.toInt() ?? 0)
+            .fold(0, (a, b) => a > b ? a : b);
+        if (maxUtc > 0) await wm.commitSleep(maxUtc);
+      }
+    } catch (_) {}
+  }
+
+  // ─── V2 Push (legacy — chunked, kept for reference) ────────────────────────
 
   // Payload ko 15-minute time windows mein split karta hai, phir har window
   // ko max _maxRowsPerChunk rows mein sub-chunk karta hai taaki "data too

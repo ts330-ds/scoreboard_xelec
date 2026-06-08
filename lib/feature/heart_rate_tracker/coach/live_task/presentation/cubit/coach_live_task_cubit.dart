@@ -52,10 +52,18 @@ class CoachLiveTaskCubit extends Cubit<CoachLiveTaskState>
 
   void _onAppResumed() {
     final taskId = _currentTaskId;
-    if (taskId == null) return;
+    if (taskId == null || state.isAuthFailure) return;
     if (!_socketService.isConnected) {
       debugPrint('[LIFECYCLE] Coach socket dropped — reconnecting for task $taskId');
-      startWatching(taskId);
+      // startWatching nahi — woh state wipe kar deta hai (readings, vitals sab gayab).
+      // Sirf socket reconnect karo, existing data preserve rakhke.
+      _reconnect.reset();
+      emit(state.copyWith(
+        status: CoachLiveTaskStatus.reconnecting,
+        isReconnectExhausted: false,
+        reconnectAttempt: 0,
+      ));
+      _connectAndWatch(taskId);
     }
   }
 

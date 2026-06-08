@@ -10,8 +10,8 @@ import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/data/model/activity_session_model.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/entity/athlete_task_entity.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/usecase/create_athlete_task_usecase.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_result_submit_cubit.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_result_submit_state.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_state.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
 import 'package:xelex_esp/service/foreground/athlete_foreground_service.dart';
@@ -54,25 +54,26 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
 
   /// Active upload cubits — kept alive so uploads continue even if
   /// the user navigates away. Cleaned up when upload completes.
-  final List<TaskResultSubmitCubit> _activeUploads = [];
+  final List<TaskZipSubmitCubit> _activeUploads = [];
 
   /// Creates a new upload cubit for a session, keeps reference alive.
-  TaskResultSubmitCubit createUploadCubit(TaskResultSubmitCubit cubit) {
+  TaskZipSubmitCubit createUploadCubit(TaskZipSubmitCubit cubit) {
     _activeUploads.add(cubit);
-    late final StreamSubscription<TaskResultSubmitState> sub;
+    late final StreamSubscription<TaskZipSubmitState> sub;
     sub = cubit.stream.listen((uploadState) {
       if (isClosed) return;
-      // Sirf success pe hi tear-down karo. Error pe upload screen yahi cubit
-      // ko Retry button ke liye (resumeUpload → emit) zinda rakhta hai —
-      // yahan close karne se agle emit pe crash hoga. Errored/abandoned
-      // cubits parent close() me cleanup ho jaate hain.
-      if (uploadState.status == TaskSubmitStatus.complete) {
+      if (uploadState.status == TaskZipStatus.complete) {
         _activeUploads.remove(cubit);
         sub.cancel();
         cubit.close();
       }
     });
     return cubit;
+  }
+
+  void cleanupUploadCubit(TaskZipSubmitCubit cubit) {
+    _activeUploads.remove(cubit);
+    cubit.close();
   }
 
   StreamSubscription<Map<String, dynamic>>? _bgSub;
@@ -136,6 +137,8 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
 
       case 'activity_recording_stopped':
         debugPrint('[CUBIT] recording_stopped — ending session');
+        _stopTimeoutTimer?.cancel();
+        _stopTimeoutTimer = null;
         _endSession();
 
       case 'activity_disconnected':
@@ -214,25 +217,14 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       case AppLifecycleState.resumed:
         _onAppResumed();
       case AppLifecycleState.detached:
-        // App process khatam ho rahi hai (swipe-kill / system kill).
-        // Minimize / screen-off / phone call pe yeh fire nahi hota —
-        // wahan paused/inactive hota hai. Yahan tak pahunchne ka matlab:
-        // app genuinely band ho rahi hai → server ko bata do session stop.
-        // Android me stopWithTask=true se BG service ka onDestroy bhi
-        // yahi kaam karta hai (defense-in-depth). iOS pe Flutter side hi
-        // sole option hai.
-        _onAppDetached();
+        // Swipe-kill / system kill pe BG handler ka onDestroy server ko
+        // stop bhejta hai — yahan kuch karne ki zaroorat nahi.
+        // NOTE: kuch OEMs (Vivo/Xiaomi/Samsung) pe detached wrongly fire
+        // hota hai on background/minimize, jo session auto-stop kar deta tha.
+        break;
       default:
         break;
     }
-  }
-
-  void _onAppDetached() {
-    if (!state.isSessionActive) return;
-    final taskId = state.activeTaskId;
-    if (taskId == null) return;
-    debugPrint('[LIFECYCLE] detached — stopping active task $taskId');
-    AthleteForegroundService.stopActivitySession(taskId);
   }
 
   void _onAppPaused() {
@@ -248,6 +240,12 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   }
 
   void _onAppResumed() {
+    // Upload cubits ko resume signal do — agar iOS ne suspend kiya tha
+    // to stuck uploads auto-retry honge.
+    for (final cubit in _activeUploads) {
+      cubit.onAppResumed();
+    }
+
     if (isClosed || !state.isSessionActive) return;
 
     if (_pausedAt != null) {

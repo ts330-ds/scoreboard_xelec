@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_result_submit_cubit.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_result_submit_state.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_state.dart';
 
 /// Full-screen overlay shown after session ends.
 ///
 /// Flow:
 ///   1. Fetching data from BLE device
-///   2. Uploading chunks to server (with progress)
-///   3. Complete → pops back; main screen handles feedback sheet
+///   2. Compressing with gzip
+///   3. Uploading to server (single request)
+///   4. Polling job status
+///   5. Complete → pops back; main screen handles feedback sheet
 ///
 /// User cannot dismiss this screen while work is in progress.
 class SessionUploadScreen extends StatefulWidget {
-  final TaskResultSubmitCubit submitCubit;
+  final TaskZipSubmitCubit submitCubit;
   final int taskId;
   final DateTime sessionStart;
   final DateTime sessionEnd;
@@ -85,11 +87,11 @@ class _SessionUploadScreenState extends State<SessionUploadScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<TaskResultSubmitCubit, TaskResultSubmitState>(
+    return BlocConsumer<TaskZipSubmitCubit, TaskZipSubmitState>(
       bloc: widget.submitCubit,
       listenWhen: (prev, curr) => prev.status != curr.status,
       listener: (context, state) {
-        if (state.status == TaskSubmitStatus.complete) {
+        if (state.status == TaskZipStatus.complete) {
           _finishAndPop();
         }
       },
@@ -153,16 +155,38 @@ class _SessionUploadScreenState extends State<SessionUploadScreen> {
 
                           const SizedBox(height: 32),
 
-                          if (state.status == TaskSubmitStatus.uploading)
-                            _UploadProgress(state: state),
+                          if (state.status == TaskZipStatus.fetching)
+                            const _WorkingIndicator(
+                              icon: Icons.bluetooth_searching,
+                              label: 'Communicating with device...',
+                            ),
 
-                          if (state.status == TaskSubmitStatus.fetching)
-                            const _FetchingIndicator(),
+                          if (state.status == TaskZipStatus.compressing)
+                            const _WorkingIndicator(
+                              icon: Icons.compress,
+                              label: 'Compressing data...',
+                            ),
 
-                          if (state.status == TaskSubmitStatus.error)
+                          if (state.status == TaskZipStatus.uploading)
+                            const _WorkingIndicator(
+                              icon: Icons.cloud_upload_outlined,
+                              label: 'Sending to server...',
+                            ),
+
+                          if (state.status == TaskZipStatus.polling)
+                            const _WorkingIndicator(
+                              icon: Icons.hourglass_top,
+                              label: 'Processing on server...',
+                            ),
+
+                          if (state.status == TaskZipStatus.error)
                             _ErrorActions(
                               onRetry: () {
-                                widget.submitCubit.resumeUpload(widget.taskId);
+                                widget.submitCubit.retryUpload(
+                                  taskId: widget.taskId,
+                                  sessionStartMs: widget.sessionStart.millisecondsSinceEpoch,
+                                  sessionEndMs: widget.sessionEnd.millisecondsSinceEpoch,
+                                );
                               },
                               onSkip: _finishAndPop,
                             ),
@@ -174,36 +198,9 @@ class _SessionUploadScreenState extends State<SessionUploadScreen> {
                   ),
 
                   if (isWorking)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: AppColors.warningBg,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.warning.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.info_outline,
-                                color: AppColors.warning, size: 18),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Upload will continue in the background even if you leave.',
-                                style: TextStyle(
-                                  color: AppColors.warning,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
+                      child: _StayOnScreenBanner(),
                     ),
                 ],
               ),
@@ -214,32 +211,40 @@ class _SessionUploadScreenState extends State<SessionUploadScreen> {
     );
   }
 
-  String _titleFor(TaskSubmitStatus status) {
+  String _titleFor(TaskZipStatus status) {
     switch (status) {
-      case TaskSubmitStatus.idle:
+      case TaskZipStatus.idle:
         return 'Preparing...';
-      case TaskSubmitStatus.fetching:
+      case TaskZipStatus.fetching:
         return 'Fetching Session Data';
-      case TaskSubmitStatus.uploading:
+      case TaskZipStatus.compressing:
+        return 'Compressing Data';
+      case TaskZipStatus.uploading:
         return 'Uploading to Server';
-      case TaskSubmitStatus.complete:
+      case TaskZipStatus.polling:
+        return 'Processing on Server';
+      case TaskZipStatus.complete:
         return 'Upload Complete!';
-      case TaskSubmitStatus.error:
+      case TaskZipStatus.error:
         return 'Upload Failed';
     }
   }
 
-  String _subtitleFor(TaskResultSubmitState state) {
+  String _subtitleFor(TaskZipSubmitState state) {
     switch (state.status) {
-      case TaskSubmitStatus.idle:
+      case TaskZipStatus.idle:
         return 'Getting ready...';
-      case TaskSubmitStatus.fetching:
+      case TaskZipStatus.fetching:
         return 'Retrieving heart rate data from your device.\nThis may take a moment.';
-      case TaskSubmitStatus.uploading:
-        return 'Sending ${state.totalReadings} readings to server.\nChunk ${state.currentChunk} of ${state.totalChunks}';
-      case TaskSubmitStatus.complete:
+      case TaskZipStatus.compressing:
+        return 'Compressing ${state.totalReadings} readings for upload.';
+      case TaskZipStatus.uploading:
+        return 'Sending ${state.totalReadings} compressed readings to server.';
+      case TaskZipStatus.polling:
+        return 'Server is processing your data.\nThis may take a moment.';
+      case TaskZipStatus.complete:
         return '${state.totalReadings} readings uploaded successfully.';
-      case TaskSubmitStatus.error:
+      case TaskZipStatus.error:
         return state.errorMessage ?? 'Something went wrong. Please try again.';
     }
   }
@@ -248,7 +253,7 @@ class _SessionUploadScreenState extends State<SessionUploadScreen> {
 // ── Status Icon ────────────────────────────────────────────────────────────
 
 class _StatusIcon extends StatefulWidget {
-  final TaskSubmitStatus status;
+  final TaskZipStatus status;
   const _StatusIcon({required this.status});
 
   @override
@@ -275,9 +280,11 @@ class _StatusIconState extends State<_StatusIcon>
   @override
   void didUpdateWidget(_StatusIcon old) {
     super.didUpdateWidget(old);
-    final shouldAnimate = widget.status == TaskSubmitStatus.fetching ||
-        widget.status == TaskSubmitStatus.uploading ||
-        widget.status == TaskSubmitStatus.idle;
+    final shouldAnimate = widget.status == TaskZipStatus.fetching ||
+        widget.status == TaskZipStatus.compressing ||
+        widget.status == TaskZipStatus.uploading ||
+        widget.status == TaskZipStatus.polling ||
+        widget.status == TaskZipStatus.idle;
     if (shouldAnimate && !_controller.isAnimating) {
       _controller.repeat(reverse: true);
     } else if (!shouldAnimate && _controller.isAnimating) {
@@ -298,17 +305,23 @@ class _StatusIconState extends State<_StatusIcon>
     final Color color;
 
     switch (widget.status) {
-      case TaskSubmitStatus.idle:
-      case TaskSubmitStatus.fetching:
+      case TaskZipStatus.idle:
+      case TaskZipStatus.fetching:
         icon = Icons.bluetooth_searching;
         color = AppColors.primary;
-      case TaskSubmitStatus.uploading:
+      case TaskZipStatus.compressing:
+        icon = Icons.compress;
+        color = AppColors.primary;
+      case TaskZipStatus.uploading:
         icon = Icons.cloud_upload_outlined;
         color = AppColors.primary;
-      case TaskSubmitStatus.complete:
+      case TaskZipStatus.polling:
+        icon = Icons.hourglass_top;
+        color = AppColors.primary;
+      case TaskZipStatus.complete:
         icon = Icons.check_circle;
         color = AppColors.success;
-      case TaskSubmitStatus.error:
+      case TaskZipStatus.error:
         icon = Icons.error_outline;
         color = AppColors.error;
     }
@@ -328,72 +341,12 @@ class _StatusIconState extends State<_StatusIcon>
   }
 }
 
-// ── Upload Progress ────────────────────────────────────────────────────────
+// ── Working Indicator ─────────────────────────────────────────────────────
 
-class _UploadProgress extends StatelessWidget {
-  final TaskResultSubmitState state;
-  const _UploadProgress({required this.state});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderLight),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Chunk ${state.currentChunk} of ${state.totalChunks}',
-                style: const TextStyle(
-                  color: AppColors.subtext,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Text(
-                '${(state.progress * 100).toInt()}%',
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: state.progress,
-              minHeight: 8,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '${state.uploadedReadings} / ${state.totalReadings} readings',
-            style: const TextStyle(
-              color: AppColors.subtext,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Fetching Indicator ─────────────────────────────────────────────────────
-
-class _FetchingIndicator extends StatelessWidget {
-  const _FetchingIndicator();
+class _WorkingIndicator extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _WorkingIndicator({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -404,9 +357,9 @@ class _FetchingIndicator extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.borderLight),
       ),
-      child: const Column(
+      child: Column(
         children: [
-          SizedBox(
+          const SizedBox(
             width: 40,
             height: 40,
             child: CircularProgressIndicator(
@@ -414,10 +367,10 @@ class _FetchingIndicator extends StatelessWidget {
               color: AppColors.primary,
             ),
           ),
-          SizedBox(height: 14),
+          const SizedBox(height: 14),
           Text(
-            'Communicating with device...',
-            style: TextStyle(
+            label,
+            style: const TextStyle(
               color: AppColors.subtext,
               fontSize: 13,
             ),
@@ -470,6 +423,57 @@ class _ErrorActions extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Stay-on-screen Banner ─────────────────────────────────────────────────
+
+class _StayOnScreenBanner extends StatelessWidget {
+  const _StayOnScreenBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.warningBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.phone_android,
+                  color: AppColors.warning, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Please stay on this screen',
+                  style: TextStyle(
+                    color: AppColors.warning,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Don\'t close the app, go back, or switch to another app '
+            'while your data is being uploaded.',
+            style: TextStyle(
+              color: AppColors.warning.withValues(alpha: 0.8),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

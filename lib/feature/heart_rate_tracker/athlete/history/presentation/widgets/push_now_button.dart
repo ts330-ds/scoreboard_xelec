@@ -105,6 +105,11 @@ class _PushNowButtonState extends State<PushNowButton> {
         message = 'Connect device first';
         bg = AppColors.error;
         stillPushing = false;
+      case PushPolling():
+        message = 'Processing on server…';
+        stillPushing = true;
+        // Polling 60s tak chal sakti hai — snackbar tab tak dikhe
+        duration = const Duration(seconds: 60);
     }
 
     ScaffoldMessenger.of(context)
@@ -140,7 +145,8 @@ class _PushNowButtonState extends State<PushNowButton> {
       }
     }
     // Safety: if no PushStatusEvent arrived to reset _pushing, reset after timeout
-    Future.delayed(const Duration(seconds: 30), () {
+    // V3 polling can take up to 60s — keep safety timeout above that
+    Future.delayed(const Duration(seconds: 75), () {
       if (mounted && _pushing) {
         setState(() => _pushing = false);
       }

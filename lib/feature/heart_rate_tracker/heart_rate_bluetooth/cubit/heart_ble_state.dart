@@ -66,6 +66,11 @@ class HeartBleState extends Equatable {
   final List<int> rrBuffer;   // rolling accumulator across notifications
   final double hrv;            // RMSSD in ms, 0.0 if unavailable
 
+  // ── V3 Polling State ──
+  final bool isPolling;
+  final String pollingJobId;
+  final String pollingMessage;
+
   // ── History Data ──
   final List<Map<dynamic, dynamic>> historySport;
   final List<Map<dynamic, dynamic>> historyHrRecord;
@@ -119,6 +124,9 @@ class HeartBleState extends Equatable {
     this.rrIntervals = const [],
     this.rrBuffer = const [],
     this.hrv = 0.0,
+    this.isPolling = false,
+    this.pollingJobId = '',
+    this.pollingMessage = '',
     this.historySport = const [],
     this.historyHrRecord = const [],
     this.historyHrData = const [],
@@ -206,6 +214,9 @@ class HeartBleState extends Equatable {
     List<int>? rrIntervals,
     List<int>? rrBuffer,
     double? hrv,
+    bool? isPolling,
+    String? pollingJobId,
+    String? pollingMessage,
     List<Map<dynamic, dynamic>>? historySport,
     List<Map<dynamic, dynamic>>? historyHrRecord,
     List<Map<dynamic, dynamic>>? historyHrData,
@@ -258,6 +269,9 @@ class HeartBleState extends Equatable {
       rrIntervals: rrIntervals ?? this.rrIntervals,
       rrBuffer: rrBuffer ?? this.rrBuffer,
       hrv: hrv ?? this.hrv,
+      isPolling: isPolling ?? this.isPolling,
+      pollingJobId: pollingJobId ?? this.pollingJobId,
+      pollingMessage: pollingMessage ?? this.pollingMessage,
       historySport: historySport ?? this.historySport,
       historyHrRecord: historyHrRecord ?? this.historyHrRecord,
       historyHrData: historyHrData ?? this.historyHrData,
@@ -283,7 +297,8 @@ class HeartBleState extends Equatable {
     hardwareVersion, softwareVersion, serialNumber, systemId, vendorName, 
     steps, distance, calorie, bodySensorLocation, bondingStatus, spo2, 
     systolic, diastolic, stressLevel, bodyTemp1, bodyTemp2, bodyTemp3, 
-    hrMax, rrIntervals, rrBuffer, hrv, historySport, historyHrRecord, historyHrData, historyRrRecord,
+    hrMax, rrIntervals, rrBuffer, hrv, isPolling, pollingJobId, pollingMessage,
+    historySport, historyHrRecord, historyHrData, historyRrRecord,
     historyRrData, historyStepRecord, historyStepData, historySleep, 
     historySingleRecord, history3D, tempHistory3D, intervalSteps, 
     singleTapRecords, customData,

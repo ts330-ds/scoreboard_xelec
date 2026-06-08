@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/failure.dart';
 import 'package:xelex_esp/service/api/api_service.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
@@ -92,6 +93,34 @@ class CoachAuthCubit extends Cubit<CoachAuthState> {
         emit(state.copyWith(status: CoachAuthStatus.loggedOut));
       },
     );
+  }
+
+  Future<void> deleteAccount() async {
+    emit(state.copyWith(status: CoachAuthStatus.loggingOut));
+
+    try {
+      final api = sl<ApiService>();
+      final response = await api.dio.delete('/coach/delete_account');
+      final data = response.data as Map<String, dynamic>? ?? {};
+
+      if (data['success'] == true) {
+        api.clearAuthToken();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.clear();
+        emit(state.copyWith(status: CoachAuthStatus.loggedOut));
+      } else {
+        final msg = data['message']?.toString() ?? 'Delete failed';
+        emit(state.copyWith(
+          status: CoachAuthStatus.error,
+          errorMessage: msg,
+        ));
+      }
+    } catch (e) {
+      emit(state.copyWith(
+        status: CoachAuthStatus.error,
+        errorMessage: 'Failed to delete account: $e',
+      ));
+    }
   }
 
   void _handleLoginFailure(Failure failure) {

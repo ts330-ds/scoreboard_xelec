@@ -5,7 +5,8 @@ import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/entity/athlete_task_entity.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_state.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_result_submit_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_state.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/screen/session_upload_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/active_session_view.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/pending_task_view.dart';
@@ -62,11 +63,13 @@ class _AthleteTaskDetailScreenState extends State<AthleteTaskDetailScreen> {
               return;
             }
 
-            // Create a fresh cubit for this session's upload.
-            // Registered in activityCubit so reference stays alive even
-            // if user navigates away — upload continues in background.
+            // Feedback pehle — stop ke turant baad, isi screen pe mandatory form.
+            if (!mounted) return;
+            await SessionFeedbackSheet.show(context, taskId: taskId);
+
+            // Feedback done — ab upload screen pe bhejo.
             final submitCubit = widget.activityCubit
-                .createUploadCubit(sl<TaskResultSubmitCubit>());
+                .createUploadCubit(sl<TaskZipSubmitCubit>());
 
             if (!mounted) return;
             await Navigator.of(context).push(
@@ -80,12 +83,12 @@ class _AthleteTaskDetailScreenState extends State<AthleteTaskDetailScreen> {
               ),
             );
 
-            // Upload done — now show feedback form
-            if (!mounted) return;
-            await SessionFeedbackSheet.show(context, taskId: taskId);
+            // Upload screen pop hua — agar complete nahi hua (user ne skip kiya)
+            // to cubit cleanup karo taaki memory leak na ho.
+            if (submitCubit.state.status != TaskZipStatus.complete) {
+              widget.activityCubit.cleanupUploadCubit(submitCubit);
+            }
 
-            // Clear pending feedback BEFORE popping, so the main screen
-            // doesn't see a stale pendingFeedbackTaskId and open a second sheet.
             widget.activityCubit.acknowledgeFeedbackPrompt();
             if (!mounted) return;
             context.pop();

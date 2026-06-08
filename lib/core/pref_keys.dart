@@ -42,4 +42,9 @@ abstract class PrefKeys {
   // Last successful server push — used by 1h cooldown gate so we don't
   // spam the server on every sync. force=true bypasses.
   static const String lastHistoryPushAtPrefix = 'last_history_push_at_';
+
+  // V3 job polling state — persisted so polling can resume after app kill
+  static const String pollingActive = 'v3_polling_active';
+  static const String pollingJobId = 'v3_polling_job_id';
+  static const String pollingStartedAt = 'v3_polling_started_at';
 }

@@ -178,14 +178,13 @@ class AthleteBackgroundHandler extends TaskHandler {
     debugPrint('[BG HANDLER] onDestroy — cleaning up');
     _reconnectTimer?.cancel();
     _stopDeliveryTimer?.cancel();
-    // App swipe-kill / system kill scenario: agar active session abhi tak
-    // explicitly stop nahi hui (user ne "Stop" nahi dabaaya), to server ko
-    // bata do taki session "in progress" stuck na rahe.
-    final taskId = _activeTaskId ?? _pendingStopTaskId;
+    // Swipe-kill / system kill: sirf tab stop bhejo jab user ne explicitly
+    // stop nahi kiya tha. Agar _pendingStopTaskId set hai, matlab stop already
+    // bheja ja chuka hai / deliver ho raha hai — dobara bhejne ki zaroorat nahi.
+    final taskId = _activeTaskId;
     if (taskId != null && _taskSocket.isConnected) {
       debugPrint('[BG HANDLER] onDestroy — stopping active task $taskId');
       _taskSocket.stopTask(taskId);
-      // Socket buffer flush ka thoda time do
       await Future.delayed(const Duration(milliseconds: 400));
     }
     _activeTaskId = null;

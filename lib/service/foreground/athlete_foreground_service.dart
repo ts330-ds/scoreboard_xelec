@@ -117,20 +117,17 @@ class AthleteForegroundService {
   }
 
   static Future<void> stopActivitySession(int taskId) async {
-    _activityActive = false;
     FlutterForegroundTask.sendDataToTask({
       'cmd': 'stop_activity',
       'task_id': taskId,
     });
-    // Service band mat karo abhi — server se `recording_stopped` event aana
-    // chahiye pehle. Cubit _endSession() ke baad cleanupAfterSessionEnd()
-    // call karega, ya 8s timeout pe khud end karega.
+    // _activityActive abhi false mat karo — server confirm hone tak BLE data
+    // flow chalta rahe. cleanupAfterSessionEnd() mein false hoga.
   }
 
   static Future<void> cleanupAfterSessionEnd() async {
-    if (!_activityActive) {
-      await _stopServiceIfIdle();
-    }
+    _activityActive = false;
+    await _stopServiceIfIdle();
   }
 
   // BLE se nayi reading aayi — background handler ko batao

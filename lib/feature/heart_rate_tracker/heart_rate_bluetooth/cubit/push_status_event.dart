@@ -95,3 +95,9 @@ class PushCooldownActive extends PushStatusEvent {
 class PushNotConnected extends PushStatusEvent {
   const PushNotConnected();
 }
+
+/// V3: Server accepted the batch — polling job status.
+class PushPolling extends PushStatusEvent {
+  final String jobId;
+  const PushPolling(this.jobId);
+}
