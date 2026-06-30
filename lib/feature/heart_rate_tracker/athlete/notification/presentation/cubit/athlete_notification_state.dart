@@ -8,8 +8,9 @@ class AthleteNotificationState extends Equatable {
   final List<CoachRequestEntity> requests;
   final String? errorMessage;
   final bool isResponding;
+
+  /// One-shot signals — set on a single emit, then cleared on the next.
   final String? responseError;
-  final int? respondedRequestId;
   final String? successMessage;
 
   const AthleteNotificationState({
@@ -18,7 +19,6 @@ class AthleteNotificationState extends Equatable {
     this.errorMessage,
     this.isResponding = false,
     this.responseError,
-    this.respondedRequestId,
     this.successMessage,
   });
 
@@ -28,7 +28,6 @@ class AthleteNotificationState extends Equatable {
     String? errorMessage,
     bool? isResponding,
     String? responseError,
-    int? respondedRequestId,
     String? successMessage,
   }) =>
       AthleteNotificationState(
@@ -36,8 +35,8 @@ class AthleteNotificationState extends Equatable {
         requests: requests ?? this.requests,
         errorMessage: errorMessage ?? this.errorMessage,
         isResponding: isResponding ?? this.isResponding,
+        // One-shot: not carried over unless explicitly passed.
         responseError: responseError,
-        respondedRequestId: respondedRequestId ?? this.respondedRequestId,
         successMessage: successMessage,
       );
 
@@ -48,7 +47,6 @@ class AthleteNotificationState extends Equatable {
         errorMessage,
         isResponding,
         responseError,
-        respondedRequestId,
         successMessage,
       ];
 }

@@ -104,6 +104,10 @@ class AthleteAuthCubit extends Cubit<AthleteAuthState> {
     if (bleCubit.state.isConnected) {
       await bleCubit.disconnect();
     }
+    // Local health history (Hive + SQL + in-memory) ko wipe karo — warna next
+    // login pe doosre athlete ko pichle user ka data dikh jata (store sirf
+    // timestamp se key hote hain, per-user partition nahi hai).
+    await bleCubit.clearPersistedHistory();
 
     final result = await _logout().run();
     result.fold(
@@ -125,6 +129,7 @@ class AthleteAuthCubit extends Cubit<AthleteAuthState> {
     if (bleCubit.state.isConnected) {
       await bleCubit.disconnect();
     }
+    await bleCubit.clearPersistedHistory();
 
     try {
       final api = sl<ApiService>();

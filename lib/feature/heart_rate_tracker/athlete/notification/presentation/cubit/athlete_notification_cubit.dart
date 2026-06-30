@@ -48,7 +48,6 @@ class AthleteNotificationCubit extends Cubit<AthleteNotificationState> {
       (message) {
         _safeEmit(state.copyWith(
           isResponding: false,
-          respondedRequestId: requestId,
           successMessage: message,
         ));
         fetchRequests();
@@ -67,7 +66,6 @@ class AthleteNotificationCubit extends Cubit<AthleteNotificationState> {
       (message) {
         _safeEmit(state.copyWith(
           isResponding: false,
-          respondedRequestId: requestId,
           successMessage: message,
         ));
         fetchRequests();

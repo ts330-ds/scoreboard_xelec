@@ -47,7 +47,7 @@ class SportRemoteDataSourceImpl implements SportRemoteDataSource {
   Future<_SportsPage> _fetchPage(int page) async {
     final response = await _apiService.dio.get(
       '/common/sports',
-      queryParameters: {'page': page},
+      queryParameters: {'page': page,'limit': 100},
     );
     final data = response.data['data'] as Map<String, dynamic>;
     final sportsData = data['sports'] as List<dynamic>;

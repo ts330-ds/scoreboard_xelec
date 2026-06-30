@@ -32,6 +32,8 @@ abstract class HeartTrackerPaths {
 
   // ── Coach Live Now ────────────────────────────────────────────────────────
   static const String coachLiveNow = '/coach-live-now';
+  // ── Coach Whole Team (real-time grid) ─────────────────────────────────────
+  static const String coachTeamLive = '/coach-team-live';
 
   // ── Coach Dashboard (ShellRoute tabs) ────────────────────────────────────
   static const String coachHome    = '/coach-home';

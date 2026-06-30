@@ -10,6 +10,9 @@ class MyAthletesState extends Equatable {
   final int currentPage;
   final int totalRecords;
   final bool hasMore;
+  // Error that happened while loading the *next* page (loadMore). Kept separate
+  // from [errorMessage] so a failed page fetch doesn't wipe the loaded list.
+  final String? loadMoreError;
 
   const MyAthletesState({
     this.status = MyAthletesStatus.initial,
@@ -18,6 +21,7 @@ class MyAthletesState extends Equatable {
     this.currentPage = 1,
     this.totalRecords = 0,
     this.hasMore = false,
+    this.loadMoreError,
   });
 
   MyAthletesState copyWith({
@@ -27,6 +31,8 @@ class MyAthletesState extends Equatable {
     int? currentPage,
     int? totalRecords,
     bool? hasMore,
+    String? loadMoreError,
+    bool clearLoadMoreError = false,
   }) =>
       MyAthletesState(
         status: status ?? this.status,
@@ -35,9 +41,18 @@ class MyAthletesState extends Equatable {
         currentPage: currentPage ?? this.currentPage,
         totalRecords: totalRecords ?? this.totalRecords,
         hasMore: hasMore ?? this.hasMore,
+        loadMoreError:
+            clearLoadMoreError ? null : (loadMoreError ?? this.loadMoreError),
       );
 
   @override
-  List<Object?> get props =>
-      [status, athletes, errorMessage, currentPage, totalRecords, hasMore];
+  List<Object?> get props => [
+        status,
+        athletes,
+        errorMessage,
+        currentPage,
+        totalRecords,
+        hasMore,
+        loadMoreError,
+      ];
 }

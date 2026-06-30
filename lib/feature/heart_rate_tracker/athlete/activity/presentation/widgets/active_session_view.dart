@@ -2,9 +2,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
+import 'package:xelex_esp/core/widgets/ecg_waveform.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_state.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
 import 'activity_constants.dart';
 
 class ActiveSessionView extends StatelessWidget {
@@ -30,6 +32,12 @@ class ActiveSessionView extends StatelessWidget {
                   state.isReconnectExhausted ||
                   state.isAuthFailure))
             const _SessionReconnectBanner(),
+
+          // ── BLE disconnect banner — band off / out of range. Session rukti
+          // nahi (band wapas aate hi resume), par athlete ko batao ki abhi HR
+          // capture nahi ho raha taaki wo band on/paas kar sake.
+          if (state.isSessionActive && !bleState.isConnected)
+            const _BleDisconnectBanner(),
 
           // ── Activity Type Badge
           Container(
@@ -94,7 +102,7 @@ class ActiveSessionView extends StatelessWidget {
               LiveStatCard(
                 icon: Icons.favorite,
                 label: 'Heart Rate',
-                value: bleState.isConnected && bleState.heartRate > 0
+                value: bleState.heartRate > 0
                     ? '${bleState.heartRate}'
                     : '--',
                 unit: 'bpm',
@@ -131,7 +139,7 @@ class ActiveSessionView extends StatelessWidget {
               LiveStatCard(
                 icon: Icons.monitor_heart_outlined,
                 label: 'HRV (RMSSD)',
-                value: bleState.isConnected && bleState.hrv > 0
+                value: bleState.hrv > 0
                     ? bleState.hrv.toStringAsFixed(1)
                     : '--',
                 unit: 'ms',
@@ -141,7 +149,7 @@ class ActiveSessionView extends StatelessWidget {
               LiveStatCard(
                 icon: Icons.timeline,
                 label: 'Last RR',
-                value: bleState.isConnected && bleState.rrIntervals.isNotEmpty
+                value: bleState.rrIntervals.isNotEmpty
                     ? '${bleState.rrIntervals.last}'
                     : '--',
                 unit: 'ms',
@@ -151,13 +159,36 @@ class ActiveSessionView extends StatelessWidget {
               LiveStatCard(
                 icon: Icons.format_list_numbered,
                 label: 'RR Count',
-                value: bleState.isConnected && bleState.rrIntervals.isNotEmpty
+                value: bleState.rrIntervals.isNotEmpty
                     ? '${bleState.rrIntervals.length}'
                     : '--',
                 unit: 'beats',
                 color: AppColors.success,
               ),
             ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Live ECG-style waveform (sirf heart rate se driven)
+          Row(
+            children: [
+              const Icon(Icons.monitor_heart_outlined,
+                  size: 16, color: AppColors.heartRed),
+              const SizedBox(width: 6),
+              Text('Live Monitor',
+                  style: TextStyle(
+                      color: AppColors.subtext,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          EcgWaveform(
+            bpm: bleState.heartRate,
+            active: state.isSessionActive && bleState.heartRate > 0,
+            height: 110,
+            lineColor: AppColors.heartRed,
           ),
 
           const SizedBox(height: 16),
@@ -436,6 +467,56 @@ class _SessionReconnectBanner extends StatelessWidget {
                     ),
                   ),
                 ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── BLE Disconnect Banner ─────────────────────────────────────────────────────
+// Session ke beech band off / out-of-range ho jaaye to athlete ko visible
+// feedback do. Session rukti nahi — band wapas aate hi HR resume ho jaata hai
+// aur reading band ki apni memory me bhi safe rehti hai (upload pe mil jaati).
+class _BleDisconnectBanner extends StatelessWidget {
+  const _BleDisconnectBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<HeartBleCubit, HeartBleState>(
+      buildWhen: (prev, curr) => prev.isConnected != curr.isConnected,
+      builder: (context, bleState) {
+        if (bleState.isConnected) return const SizedBox.shrink();
+
+        final color = Colors.orange.shade700;
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.10),
+            border: Border.all(color: color.withOpacity(0.35)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2, color: color),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Device disconnected — reconnecting…',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ],
           ),
         );

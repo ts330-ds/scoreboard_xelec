@@ -94,7 +94,7 @@ class CoachHomeMobile extends StatelessWidget {
                           title: 'Live Now',
                           subtitle: 'Active sessions',
                           onTap: () =>
-                              context.push(HeartTrackerPaths.coachLiveNow),
+                              context.push(HeartTrackerPaths.coachTeamLive),
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -112,6 +112,29 @@ class CoachHomeMobile extends StatelessWidget {
                               .push(HeartTrackerPaths.coachAthleteSearch),
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // ── Single Live Now — active sessions list → tap → single athlete
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _NavCard(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF0D47A1), Color(0xFF1976D2)],
+                          ),
+                          icon: Icons.monitor_heart_rounded,
+                          title: 'Single Live Now',
+                          subtitle: 'One athlete at a time',
+                          onTap: () =>
+                              context.push(HeartTrackerPaths.coachLiveNow),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(child: SizedBox()),
                     ],
                   ),
                 ],

@@ -1,0 +1,27 @@
+lib/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart:888:      final response = await ApiService.instance.dio.get(
+lib/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart:1064:        final response = await ApiService.instance.dio.post(
+lib/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart:1141:      final baseUrl = ApiService.instance.dio.options.baseUrl;
+lib/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart:1274:        final response = await ApiService.instance.dio.get(
+lib/feature/heart_rate_tracker/coach/auth/presentation/cubit/coach_auth_cubit.dart:103:      final response = await api.dio.delete('/coach/delete_account');
+lib/feature/heart_rate_tracker/common/sport/data/source/sport_remote_datasource.dart:48:    final response = await _apiService.dio.get(
+lib/feature/heart_rate_tracker/athlete/auth/presentation/cubit/athlete_auth_cubit.dart:136:      final response = await api.dio.delete('/athlete/delete_account');
+lib/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_cubit.dart:296:      final baseUrl = ApiService.instance.dio.options.baseUrl;
+lib/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_cubit.dart:353:        final response = await ApiService.instance.dio.get(
+lib/feature/heart_rate_tracker/athlete/profile/data/repository/athlete_profile_repository_impl.dart:8:  final AthleteProfileRemoteDataSource _dataSource;
+lib/feature/heart_rate_tracker/athlete/profile/data/datasource/athlete_profile_remote_datasource.dart:8:abstract interface class AthleteProfileRemoteDataSource {
+lib/feature/heart_rate_tracker/athlete/profile/data/datasource/athlete_profile_remote_datasource.dart:28:class AthleteProfileRemoteDataSourceImpl
+lib/feature/heart_rate_tracker/athlete/profile/data/datasource/athlete_profile_remote_datasource.dart:29:    implements AthleteProfileRemoteDataSource {
+lib/feature/heart_rate_tracker/athlete/profile/data/datasource/athlete_profile_remote_datasource.dart:33:  const AthleteProfileRemoteDataSourceImpl(this._dio, this._prefs);
+lib/service/dependency_injection/di_service.dart:200:    () => AthleteAuthRemoteDataSourceImpl(sl<ApiService>().dio),
+lib/service/dependency_injection/di_service.dart:222:  sl.registerLazySingleton<AthleteProfileRemoteDataSource>(
+lib/service/dependency_injection/di_service.dart:223:    () => AthleteProfileRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+lib/service/dependency_injection/di_service.dart:240:    () => AthleteNotificationRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+lib/service/dependency_injection/di_service.dart:264:    () => AthleteTaskRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+lib/service/dependency_injection/di_service.dart:281:    () => FeedbackRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+lib/service/dependency_injection/di_service.dart:317:    () => CoachAuthRemoteDataSourceImpl(sl<ApiService>().dio),
+lib/service/dependency_injection/di_service.dart:365:    () => ActiveTasksRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+lib/service/dependency_injection/di_service.dart:382:    () => CoachProfileRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+lib/service/dependency_injection/di_service.dart:399:    () => MyAthletesRemoteDataSourceImpl(sl<ApiService>().dio, sl()),
+lib/service/dependency_injection/di_service.dart:440:    () => CoachRequestRemoteDataSourceImpl(sl<ApiService>().dio, sl<SharedPreferences>()),
+=====DI files=====
+lib/service/dependency_injection/di_service.dart

@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/coach/live_now/domain/entity/active_task_entity.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/coach/live_task/presentation/screen/coach_live_task_screen.dart';
-import '../screen/coach_task_result_screen.dart';
 import '../cubit/coach_live_now_cubit.dart';
 import '../cubit/coach_live_now_state.dart';
 
@@ -14,53 +13,44 @@ class CoachLiveNowMobile extends StatefulWidget {
   State<CoachLiveNowMobile> createState() => _CoachLiveNowMobileState();
 }
 
-class _CoachLiveNowMobileState extends State<CoachLiveNowMobile>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-
-  static const _tabs = ['in_progress', 'completed'];
+class _CoachLiveNowMobileState extends State<CoachLiveNowMobile> {
+  final _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabs.length, vsync: this);
     context.read<CoachLiveNowCubit>().loadActiveTasks(status: 'in_progress');
 
-    _tabController.addListener(() {
-      if (_tabController.indexIsChanging) return;
-      context
-          .read<CoachLiveNowCubit>()
-          .loadActiveTasks(status: _tabs[_tabController.index]);
+    // When user scrolls near the bottom → trigger loadMore
+    _scrollController.addListener(() {
+      final pos = _scrollController.position;
+      if (pos.pixels >= pos.maxScrollExtent - 200) {
+        context.read<CoachLiveNowCubit>().loadMore();
+      }
     });
-  }
-
-  Future<void> _openTask(ActiveTaskEntity task) async {
-    final Widget screen = task.status == 'completed'
-        ? CoachTaskResultScreen(
-            taskId: task.taskId,
-            athleteName: task.athleteName,
-            taskName: task.taskName,
-          )
-        : CoachLiveTaskScreen(
-            taskId: task.taskId,
-            athleteName: task.athleteName,
-            taskName: task.taskName,
-          );
-
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => screen),
-    );
-    if (mounted) {
-      context.read<CoachLiveNowCubit>().loadActiveTasks(
-            status: _tabs[_tabController.index],
-          );
-    }
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _openTask(ActiveTaskEntity task) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CoachLiveTaskScreen(
+          taskId: task.taskId,
+          athleteName: task.athleteName,
+          taskName: task.taskName,
+        ),
+      ),
+    );
+    if (mounted) {
+      context
+          .read<CoachLiveNowCubit>()
+          .loadActiveTasks(status: 'in_progress');
+    }
   }
 
   @override
@@ -79,24 +69,11 @@ class _CoachLiveNowMobileState extends State<CoachLiveNowMobile>
               onPressed: state.status == CoachLiveNowStatus.loading
                   ? null
                   : () => context.read<CoachLiveNowCubit>().loadActiveTasks(
-                        status: _tabs[_tabController.index],
+                        status: 'in_progress',
                       ),
             ),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          labelStyle: const TextStyle(
-              fontSize: 13, fontWeight: FontWeight.w700),
-          unselectedLabelStyle: const TextStyle(fontSize: 13),
-          tabs: const [
-            Tab(text: 'In Progress'),
-            Tab(text: 'Completed'),
-          ],
-        ),
       ),
       body: BlocBuilder<CoachLiveNowCubit, CoachLiveNowState>(
         builder: (context, state) {
@@ -110,7 +87,7 @@ class _CoachLiveNowMobileState extends State<CoachLiveNowMobile>
             return _ErrorView(
               message: state.errorMessage ?? 'Something went wrong',
               onRetry: () => context.read<CoachLiveNowCubit>().loadActiveTasks(
-                    status: _tabs[_tabController.index],
+                    status: 'in_progress',
                   ),
             );
           }
@@ -119,19 +96,57 @@ class _CoachLiveNowMobileState extends State<CoachLiveNowMobile>
             return const _EmptyView();
           }
 
+          // Bug-guard: if the loaded page doesn't fill the viewport there's
+          // nothing to scroll, so the scroll listener would never fire
+          // loadMore. After layout, fetch the next page if there are more
+          // records but the list isn't scrollable yet.
+          if (state.hasMore &&
+              state.status != CoachLiveNowStatus.loadingMore &&
+              state.loadMoreError == null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!_scrollController.hasClients) return;
+              if (_scrollController.position.maxScrollExtent <= 0) {
+                context.read<CoachLiveNowCubit>().loadMore();
+              }
+            });
+          }
+
+          final isLoadingMore =
+              state.status == CoachLiveNowStatus.loadingMore;
+          final hasFooter = isLoadingMore || state.loadMoreError != null;
+
           return RefreshIndicator(
             color: AppColors.primary,
             onRefresh: () => context.read<CoachLiveNowCubit>().loadActiveTasks(
-                  status: _tabs[_tabController.index],
+                  status: 'in_progress',
                 ),
             child: ListView.separated(
+              controller: _scrollController,
               padding: const EdgeInsets.all(16),
-              itemCount: state.tasks.length,
+              itemCount: state.tasks.length + (hasFooter ? 1 : 0),
               separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) => _ActiveTaskCard(
-                task: state.tasks[index],
-                onTap: () => _openTask(state.tasks[index]),
-              ),
+              itemBuilder: (context, index) {
+                if (index == state.tasks.length) {
+                  if (state.loadMoreError != null) {
+                    return _LoadMoreError(
+                      message: state.loadMoreError!,
+                      onRetry: () =>
+                          context.read<CoachLiveNowCubit>().retryLoadMore(),
+                    );
+                  }
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(
+                      child:
+                          CircularProgressIndicator(color: AppColors.primary),
+                    ),
+                  );
+                }
+                return _ActiveTaskCard(
+                  task: state.tasks[index],
+                  onTap: () => _openTask(state.tasks[index]),
+                );
+              },
             ),
           );
         },
@@ -229,59 +244,39 @@ class _ActiveTaskCard extends StatelessWidget {
             ),
 
             // ── Status badge
-            if (task.status == 'in_progress')
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.success.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: AppColors.success.withOpacity(0.4)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
-                        color: AppColors.success,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    const Text(
-                      'LIVE',
-                      style: TextStyle(
-                        color: AppColors.success,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.subtext.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: AppColors.subtext.withOpacity(0.3)),
-                ),
-                child: const Text(
-                  'Done',
-                  style: TextStyle(
-                    color: AppColors.subtext,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppColors.success.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: AppColors.success.withOpacity(0.4)),
               ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: AppColors.success,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  const Text(
+                    'LIVE',
+                    style: TextStyle(
+                      color: AppColors.success,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
             const SizedBox(width: 8),
             const Icon(Icons.chevron_right, color: AppColors.subtext, size: 20),
@@ -300,6 +295,43 @@ class _ActiveTaskCard extends StatelessWidget {
     } catch (_) {
       return isoString;
     }
+  }
+}
+
+// ── Inline "load more failed" footer with retry ───────────────────────────────
+
+class _LoadMoreError extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _LoadMoreError({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        children: [
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.subtext, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Retry'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

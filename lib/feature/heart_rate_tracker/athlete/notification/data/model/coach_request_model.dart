@@ -14,14 +14,14 @@ class CoachRequestModel extends CoachRequestEntity {
 
   factory CoachRequestModel.fromJson(Map<String, dynamic> json) {
     return CoachRequestModel(
-      requestId: json['request_id'] as int,
-      coachId: json['coach_id'] as int,
-      coachName: json['coach_name'] as String,
-      coachEmail: json['coach_email'] as String,
-      requestStatus: json['request_status'] as String,
-      requestDate: json['request_date'] as String,
-      coachSport: json['coach_sport'] as String,
-      coachOrganization: json['coach_organization'] as String,
+      requestId: (json['request_id'] as num?)?.toInt() ?? 0,
+      coachId: (json['coach_id'] as num?)?.toInt() ?? 0,
+      coachName: json['coach_name']?.toString() ?? 'Unknown coach',
+      coachEmail: json['coach_email']?.toString() ?? '',
+      requestStatus: json['request_status']?.toString() ?? 'pending',
+      requestDate: json['request_date']?.toString() ?? '',
+      coachSport: json['coach_sport']?.toString() ?? '—',
+      coachOrganization: json['coach_organization']?.toString() ?? '—',
     );
   }
 }

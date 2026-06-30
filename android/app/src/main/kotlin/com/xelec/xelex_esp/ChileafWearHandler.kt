@@ -36,6 +36,25 @@ class ChileafWearHandler(
     /** Exposed so MainActivity can guard sync calls */
     val isDeviceConnected: Boolean get() = wearManager.isConnected
 
+    /**
+     * Replays the CURRENT connection state to Flutter. Called from
+     * MainActivity.onListen the moment Dart (re)subscribes to the EventChannel —
+     * because STATUS:"Connected" is a one-shot event, a fresh Dart engine that
+     * attaches after the device is already connected would otherwise never learn
+     * it's connected (continuous HR/BATTERY events keep flowing, so the UI shows
+     * live data while the connection flags stay false). This closes that gap.
+     */
+    fun emitCurrentState() {
+        if (!wearManager.isConnected) return
+        sendToFlutter("STATUS", "Connected")
+        val dev = lastConnectedDevice ?: return
+        sendToFlutter("LAST_DEVICE_ADDRESS", dev.address ?: "")
+        try {
+            val name = dev.name
+            if (!name.isNullOrEmpty()) sendToFlutter("LAST_DEVICE_NAME", name)
+        } catch (e: SecurityException) { /* name needs BLUETOOTH_CONNECT */ }
+    }
+
     // ── RSSI polling ─────────────────────────────────────────────────────────
     private var rssiRunnable: Runnable? = null
 
@@ -88,6 +107,36 @@ class ChileafWearHandler(
     private var hrTimeoutRunnable: Runnable? = null
     private var rrTimeoutRunnable: Runnable? = null
 
+    // Ek record ka data fetch hone ke liye max wait. Pehle 5s tha — bada record
+    // (long session → ek record me hazaron readings) 5s me transfer na ho paaye
+    // to skip ho jata tha aur uska data permanently chhut jata tha. Ab 25s:
+    // bade records ke liye ~5x headroom, par Flutter ke 60s idle/safety timers
+    // se safely neeche (record transfer ke dauraan koi chunk nahi jata, isliye
+    // ye per-record wait us 60s se kam rehna chahiye).
+    private val perRecordTimeoutMs = 25_000L
+
+    // HR/RR record callback fallback. Sleep ki tarah HR/RR record callback bhi
+    // device ke paas us stream ka data na hone par fire nahi hota → us stream ka
+    // *SyncDone false reh jaata → SYNC_COMPLETE atak jaata → Dart 60s idle tail.
+    // Ye runnables tab us stream ko done maan lete hain (sirf jab record callback
+    // bilkul na aaya ho — *RecordFired flag se guard).
+    private var hrRecordTimeoutRunnable: Runnable? = null
+    private var rrRecordTimeoutRunnable: Runnable? = null
+    @Volatile private var hrRecordFired = false
+    @Volatile private var rrRecordFired = false
+    private val recordCallbackTimeoutMs = 10_000L
+
+    // Sleep ek one-shot callback hai (HR/RR jaisa per-record chaining nahi).
+    // Agar device ke paas sleep data nahi hai to callback fire nahi hota aur
+    // sleepSyncDone false reh jaata — SYNC_COMPLETE kabhi nahi jaata aur push
+    // Dart ke 30s safety timer pe atak jaata tha. Ye timeout sleep ko force
+    // complete karke turant SYNC_COMPLETE allow karta hai.
+    private var sleepTimeoutRunnable: Runnable? = null
+
+    // SYNC_COMPLETE ek hi baar bheje — flags multiple raaston se true ho sakte
+    // hain (real callback + timeout dono), idempotency guard.
+    @Volatile private var syncCompleteSent = false
+
     private fun fetchNextHr(gen: Long) {
         val currentIndex: Int
         synchronized(hrDataLock) {
@@ -131,7 +180,7 @@ class ChileafWearHandler(
             }
         }
         hrTimeoutRunnable = timeout
-        mainHandler.postDelayed(timeout, 5_000L)
+        mainHandler.postDelayed(timeout, perRecordTimeoutMs)
     }
 
     private fun fetchNextRr(gen: Long) {
@@ -176,7 +225,7 @@ class ChileafWearHandler(
             }
         }
         rrTimeoutRunnable = timeout
-        mainHandler.postDelayed(timeout, 5_000L)
+        mainHandler.postDelayed(timeout, perRecordTimeoutMs)
     }
 
     private fun stampInRange(stamp: Long): Boolean {
@@ -221,11 +270,66 @@ class ChileafWearHandler(
 
     // ── Sync completion ─────────────────────────────────────────────────────
     private fun checkSyncComplete() {
+        if (syncCompleteSent) return
         if (hrSyncDone && rrSyncDone && sleepSyncDone) {
+            syncCompleteSent = true
+            sleepTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+            sleepTimeoutRunnable = null
             Log.d(TAG, "[SYNC] All streams complete — sending SYNC_COMPLETE")
             sendToFlutter("SYNC_COMPLETE", "all_done")
             mainHandler.post { startRssiPolling() }
         }
+    }
+
+    // getHistoryOfSleep() ke turant baad call karo — agar timeout ke andar sleep
+    // callback na aaye to sleep ko done maan ke SYNC_COMPLETE allow karo.
+    private fun armSleepTimeout() {
+        sleepTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        val r = Runnable {
+            if (!sleepSyncDone) {
+                Log.w(TAG, "[SLEEP] no callback within timeout — marking sleep done")
+                sleepSyncDone = true
+                checkSyncComplete()
+            }
+        }
+        sleepTimeoutRunnable = r
+        mainHandler.postDelayed(r, 6_000L)
+    }
+
+    // getHistoryOfHRRecord() ke turant baad arm karo — agar HR record callback
+    // bilkul na aaye (device ke paas HR history nahi) to HR ko done maan ke
+    // SYNC_COMPLETE allow karo. hrRecordFired true ho (callback aa gaya, data
+    // fetch chal raha) to kuch mat karo — wo fetch chain khud complete hogi.
+    private fun armHrRecordTimeout() {
+        hrRecordTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        val r = Runnable {
+            if (!hrRecordFired && !hrSyncDone) {
+                Log.w(TAG, "[HR-RECORD] no callback within timeout — marking HR done")
+                synchronized(hrDataLock) { accumulatedHrData.clear() }
+                sendToFlutter("HISTORY_HR_DATA", emptyList<Any>())
+                sendToFlutter("HISTORY_HR_DATA_DONE", 0)
+                hrSyncDone = true
+                checkSyncComplete()
+            }
+        }
+        hrRecordTimeoutRunnable = r
+        mainHandler.postDelayed(r, recordCallbackTimeoutMs)
+    }
+
+    // getHistoryOfRRRecord() ke turant baad arm karo (HR jaisa hi).
+    private fun armRrRecordTimeout() {
+        rrRecordTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        val r = Runnable {
+            if (!rrRecordFired && !rrSyncDone) {
+                Log.w(TAG, "[RR-RECORD] no callback within timeout — marking RR done")
+                synchronized(rrDataLock) { accumulatedRrData.clear() }
+                sendToFlutter("HISTORY_RR_DATA_DONE", 0)
+                rrSyncDone = true
+                checkSyncComplete()
+            }
+        }
+        rrRecordTimeoutRunnable = r
+        mainHandler.postDelayed(r, recordCallbackTimeoutMs)
     }
 
     private fun resetSyncFlags() {
@@ -233,10 +337,19 @@ class ChileafWearHandler(
         rrSyncDone = false
         sleepSyncDone = false
         latestSessionOnly = false
+        syncCompleteSent = false
+        hrRecordFired = false
+        rrRecordFired = false
         hrTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         rrTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        sleepTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        hrRecordTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        rrRecordTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         hrTimeoutRunnable = null
         rrTimeoutRunnable = null
+        sleepTimeoutRunnable = null
+        hrRecordTimeoutRunnable = null
+        rrRecordTimeoutRunnable = null
     }
 
     // ── RSSI polling ──────────────────────────────────────────────────────────
@@ -313,7 +426,10 @@ class ChileafWearHandler(
         } catch (e: Exception) {
             // Log.w(TAG, "Pre-init disconnect failed (safe to ignore): ${e.message}")
         }
-        wearManager.setDebug(true)
+        // SDK internal debug logging OFF — true karne pe WearManager + andar ki
+        // Nordic BLE library har notification (HR/PPG har few ms) ko logcat me
+        // flood karti hai. Diagnose karte waqt hi temporarily true karna.
+        wearManager.setDebug(false)
         setupConnectionCallbacks()
         registerDataCallbacks()
     }
@@ -369,6 +485,31 @@ class ChileafWearHandler(
         return true
     }
 
+    /**
+     * Reconnect using a saved MAC address — no prior scan needed.
+     * Used when athlete comes back in BLE range after a long time.
+     */
+    @SuppressLint("MissingPermission")
+    fun reconnectByAddress(address: String): Boolean {
+        if (wearManager.isConnected || isConnecting) return false
+        val adapter = android.bluetooth.BluetoothManager::class.java
+            .cast(context.getSystemService(Context.BLUETOOTH_SERVICE))
+            ?.adapter ?: return false
+        val device = try { adapter.getRemoteDevice(address) } catch (_: Exception) { return false }
+        isConnecting = true
+        sendToFlutter("STATUS", "Reconnecting...")
+        mainHandler.removeCallbacks(connectTimeoutRunnable)
+        mainHandler.postDelayed(connectTimeoutRunnable, 20000)
+        try {
+            wearManager.connectDevice(device)
+        } catch (e: Exception) {
+            isConnecting = false
+            sendToFlutter("STATUS", "Disconnected")
+            return false
+        }
+        return true
+    }
+
     fun disconnect() {
         userInitiatedDisconnect = true
         lastConnectedDevice = null
@@ -392,12 +533,14 @@ class ChileafWearHandler(
         stopRssiPolling()
         sendToFlutter("HISTORY_SYNC_START", "syncing")
         try { wearManager.getHistoryOfHRRecord() } catch (e: Exception) { Log.w(TAG, "getHistoryOfHRRecord: ${e.message}") }
+        armHrRecordTimeout()
         // Stagger requests so they don't compete in the device's BLE queue
         mainHandler.postDelayed({
             try {
                 // Log.d(TAG, ">>> calling getHistoryOfRRRecord()")
                 wearManager.getHistoryOfRRRecord()
             } catch (e: Exception) { Log.w(TAG, "getHistoryOfRRRecord: ${e.message}") }
+            armRrRecordTimeout()
         }, 1500L)
         mainHandler.postDelayed({
             try {
@@ -405,6 +548,7 @@ class ChileafWearHandler(
                 wearManager.getHistoryOfSleep()
                 // Log.d(TAG, ">>> getHistoryOfSleep() called OK")
             } catch (e: Exception) { Log.e(TAG, "getHistoryOfSleep FAILED: ${e.message}") }
+            armSleepTimeout()
         }, 3000L)
     }
 
@@ -433,11 +577,14 @@ class ChileafWearHandler(
         stopRssiPolling()
         sendToFlutter("HISTORY_SYNC_START", "syncing")
         try { wearManager.getHistoryOfHRRecord() } catch (e: Exception) { Log.w(TAG, "getHistoryOfHRRecord: ${e.message}") }
+        armHrRecordTimeout()
         mainHandler.postDelayed({
             try { wearManager.getHistoryOfRRRecord() } catch (e: Exception) { Log.w(TAG, "getHistoryOfRRRecord: ${e.message}") }
+            armRrRecordTimeout()
         }, 1500L)
         mainHandler.postDelayed({
             try { wearManager.getHistoryOfSleep() } catch (e: Exception) { Log.e(TAG, "getHistoryOfSleep FAILED: ${e.message}") }
+            armSleepTimeout()
         }, 3000L)
     }
 
@@ -457,7 +604,10 @@ class ChileafWearHandler(
         sleepSyncDone = true
         stopRssiPolling()
         sendToFlutter("HISTORY_SYNC_START", "syncing")
-        try { wearManager.getHistoryOfHRRecord() } catch (e: Exception) {
+        try {
+            wearManager.getHistoryOfHRRecord()
+            armHrRecordTimeout()
+        } catch (e: Exception) {
             latestSessionOnly = false
             hrSyncDone = true
             checkSyncComplete()
@@ -480,6 +630,9 @@ class ChileafWearHandler(
             mainHandler.removeCallbacks(connectTimeoutRunnable)
             hrTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
             rrTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+            sleepTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+            hrRecordTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+            rrRecordTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
             wearManager.disconnectDevice()
         } catch (e: Exception) {
             // Log.w(TAG, "destroy error: ${e.message}")
@@ -548,8 +701,27 @@ class ChileafWearHandler(
                 lastConnectedDevice = device
                 sendToFlutter("STATUS", "Connected")
                 sendToFlutter("LAST_DEVICE_ADDRESS", device.address ?: "")
+                try {
+                    val name = device.name
+                    if (!name.isNullOrEmpty()) sendToFlutter("LAST_DEVICE_NAME", name)
+                } catch (e: SecurityException) { /* name needs BLUETOOTH_CONNECT */ }
                 startRssiPolling()
                 try { wearManager.setUTCTime() } catch (e: Exception) { Log.w(TAG, "setUTCTime: ${e.message}") }
+
+                // ── TEST (temporary): PPG raw stream enable karne ki koshish.
+                // PPG callback register hai par device ko kabhi START nahi bola
+                // gaya, isliye PPG_DATA aata hi nahi. SDK me explicit setPPGEnabled
+                // nahi hai — isliye sabse probable triggers bhej rahe hain. Jo bhi
+                // PPG_DATA flow shuru kare wahi sahi enable hai. Test ke baad hata denge.
+                try {
+                    wearManager.setBloodOxygen(1) // SpO2/PPG measurement start (PPG isi ke saath aata hai)
+                    Log.d(TAG, "[PPG-TEST] setBloodOxygen(1) sent")
+                } catch (e: Exception) { Log.w(TAG, "[PPG-TEST] setBloodOxygen failed: ${e.message}") }
+                try {
+                    wearManager.set3DFrequency(25)
+                    wearManager.set3DEnabled(true) // raw sensor channel on
+                    Log.d(TAG, "[PPG-TEST] set3DEnabled(true) sent")
+                } catch (e: Exception) { Log.w(TAG, "[PPG-TEST] set3DEnabled failed: ${e.message}") }
             }
 
             override fun onRssiRead(device: BluetoothDevice, rssi: Int) {
@@ -889,6 +1061,10 @@ class ChileafWearHandler(
 
         // ── History: HR Record (auto-chains to fetch HR data) ─────────────────
         wearManager.addHistoryOfHRRecordCallback { device, list ->
+            // Record callback aa gaya — fallback timeout cancel karo (ab data
+            // fetch chain hi completion handle karegi).
+            hrRecordFired = true
+            hrRecordTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
             // latestSessionOnly mode: pick only the record with the highest stamp.
             // Otherwise apply the normal time-range filter.
             val filtered = if (latestSessionOnly) {
@@ -963,6 +1139,9 @@ class ChileafWearHandler(
 
         // ── History: RR Record (auto-chains to fetch RR data) ─────────────────
         wearManager.addHistoryOfRRRecordCallback { device, list ->
+            // Record callback aa gaya — fallback timeout cancel karo.
+            rrRecordFired = true
+            rrRecordTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
             val filtered = if (useSmartFilter) {
                 smartFilterRecords(list) { it.stamp }
             } else {

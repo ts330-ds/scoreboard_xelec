@@ -10,7 +10,21 @@ class BleFetchRangeCubit extends Cubit<BleFetchRangeState> {
   final HeartBleCubit _bleCubit;
 
   StreamSubscription<HeartBleState>? _bleSub;
-  Timer? _timeoutTimer;
+
+  // Idle timer: device se jab tak naya data aata rahe, ye reset hota rahega.
+  // Sirf tab fire hoga jab device 60s tak kuch na bheje (stall/disconnect).
+  Timer? _idleTimer;
+
+  // Absolute safety cap: last-resort backstop taaki fetch kabhi anant tak na
+  // atke. Ye PRIMARY completion mechanism NAHI hai — wo kaam idle timer karta
+  // hai (60s tak naya data na aaye to finalize). Pehle ye 10 min tha jo bade
+  // (e.g. 24-ghante) session ka transfer beech me hi kaat deta tha — chahe data
+  // abhi aa raha ho. Ab itna lamba hai ki real transfer kabhi na kate; sirf tab
+  // fire hoga jab data lagataar 2 ghante tak aata rahe (practically asambhav).
+  Timer? _maxTimer;
+
+  static const _idleTimeout = Duration(seconds: 60);
+  static const _maxTimeout = Duration(hours: 2);
 
   DateTime? _fromDate;
   DateTime? _toDate;
@@ -49,6 +63,9 @@ class BleFetchRangeCubit extends Cubit<BleFetchRangeState> {
       if (hrNow != lastHrLen || rrNow != lastRrLen) {
         lastHrLen = hrNow;
         lastRrLen = rrNow;
+        // Naya data aaya — idle timer reset karo taaki transfer chalte rehne
+        // tak fetch timeout na ho.
+        _resetIdleTimer();
         emit(state.copyWith(
           hrCount: hrNow,
           rrCount: rrNow,
@@ -77,11 +94,33 @@ class BleFetchRangeCubit extends Cubit<BleFetchRangeState> {
     });
 
     debugPrint('[FETCH-RANGE] from=$from to=$to');
-    await _bleCubit.syncHistoryRange(from: from, to: to);
 
-    // Safety timeout only — should never hit if sequential fetch works
-    _timeoutTimer = Timer(const Duration(seconds: 90), () {
+    // Idle timer abhi se arm kar do — agar device pehla record hi 60s tak na
+    // bheje (e.g. connect to hua par sync start na hua) tab bhi clean fail ho.
+    _resetIdleTimer();
+
+    // Absolute safety cap — last-resort anti-hang backstop (2h). Normal case me
+    // idle timer (60s no-data) pehle hi finalize kar deta hai; ye yahan tak
+    // pahunchta hi nahi jab tak data 2 ghante lagataar na aaye.
+    _maxTimer = Timer(_maxTimeout, () {
       if (state.status == FetchRangeStatus.syncing) {
+        debugPrint('[FETCH-RANGE] absolute max timeout hit (${_maxTimeout.inMinutes}min) '
+            '— transfer abhi bhi chal raha tha, force finalize');
+        _finalize(timedOut: true);
+      }
+    });
+
+    await _bleCubit.syncHistoryRange(from: from, to: to);
+  }
+
+  /// Idle timer ko cancel karke dobara start karta hai. Jab tak device naya
+  /// data bhejta rahega, ye baar-baar reset hota rahega aur fire nahi karega.
+  void _resetIdleTimer() {
+    _idleTimer?.cancel();
+    _idleTimer = Timer(_idleTimeout, () {
+      if (state.status == FetchRangeStatus.syncing) {
+        debugPrint('[FETCH-RANGE] idle timeout — ${_idleTimeout.inSeconds}s '
+            'tak koi naya data nahi aaya, finalize kar rahe hain');
         _finalize(timedOut: true);
       }
     });
@@ -91,7 +130,8 @@ class BleFetchRangeCubit extends Cubit<BleFetchRangeState> {
     if (state.status != FetchRangeStatus.syncing) return;
 
     _bleSub?.cancel();
-    _timeoutTimer?.cancel();
+    _idleTimer?.cancel();
+    _maxTimer?.cancel();
 
     final from = _fromDate;
     final to = _toDate;
@@ -146,7 +186,8 @@ class BleFetchRangeCubit extends Cubit<BleFetchRangeState> {
 
   void _cancelAll() {
     _bleSub?.cancel();
-    _timeoutTimer?.cancel();
+    _idleTimer?.cancel();
+    _maxTimer?.cancel();
   }
 
   @override

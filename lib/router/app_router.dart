@@ -15,7 +15,8 @@ import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentati
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/usecase/get_task_result_usecase.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_activity_mobile.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/presentation/screen/athlete_history_screen.dart';
+// SQL-backed history screen (revert: swap to athlete_history_screen.dart / AthleteHistoryScreen).
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history_sql/presentation/screen/athlete_history_sql_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_home_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_profile_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/screen/athlete_main_screen.dart';
@@ -36,6 +37,7 @@ import 'package:xelex_esp/feature/heart_rate_tracker/coach/my_athletes/presentat
 import 'package:xelex_esp/feature/heart_rate_tracker/coach/my_athletes/presentation/screen/my_athletes_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/coach/request/domain/entity/athlete_search_entity.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/coach/live_now/presentation/screen/coach_live_now_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/coach/team_live/presentation/screen/coach_team_live_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/coach/request/presentation/screen/coach_athlete_search_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/coach/request/presentation/screen/coach_send_request_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/presentation/screen/heart_rate_ble_selection_screen.dart';
@@ -671,7 +673,7 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: HeartTrackerPaths.athleteHistory,
           pageBuilder: (context, state) =>
-              adaptivePage(state: state, child: const AthleteHistoryScreen()),
+              adaptivePage(state: state, child: const AthleteHistorySqlScreen()),
         ),
       ],
     ),
@@ -735,6 +737,13 @@ final GoRouter appRouter = GoRouter(
       path: HeartTrackerPaths.coachLiveNow,
       pageBuilder: (context, state) =>
           adaptivePage(state: state, child: const CoachLiveNowScreen()),
+    ),
+
+    /// ── Coach Whole Team (real-time grid) ────────────────────────────────────
+    GoRoute(
+      path: HeartTrackerPaths.coachTeamLive,
+      pageBuilder: (context, state) =>
+          adaptivePage(state: state, child: const CoachTeamLiveScreen()),
     ),
 
     /// ── Coach Dashboard (ShellRoute with bottom nav) ────────────────────────

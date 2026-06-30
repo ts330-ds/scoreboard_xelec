@@ -10,6 +10,14 @@ class ProfileDeviceInfoSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<HeartBleCubit, HeartBleState>(
+      // HeartBleState har HR/RR/step reading pe badalta hai (per-second).
+      // Ye card sirf in 4 fields ko dikhata hai — baaki changes pe rebuild
+      // mat karo, warna scroll ke dauraan constant rebuild se lag aata hai.
+      buildWhen: (prev, curr) =>
+          prev.isConnected != curr.isConnected ||
+          prev.modelName != curr.modelName ||
+          prev.serialNumber != curr.serialNumber ||
+          prev.firmwareVersion != curr.firmwareVersion,
       builder: (context, ble) {
         final isConnected = ble.isConnected;
         final model = ble.modelName.isNotEmpty ? ble.modelName : null;

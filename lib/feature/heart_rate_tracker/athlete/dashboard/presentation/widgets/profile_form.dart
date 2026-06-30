@@ -9,6 +9,7 @@ import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/
 import 'profile_avatar_header.dart';
 import 'profile_date_field.dart';
 import 'profile_device_info_section.dart';
+import 'profile_logs_button.dart';
 import 'profile_dropdown_field.dart';
 import 'profile_field.dart';
 import 'profile_delete_account_button.dart';
@@ -317,6 +318,9 @@ class _ProfileFormState extends State<ProfileForm> {
 
                 const ProfileDeviceInfoSection(),
                 const SizedBox(height: 12),
+
+                const ProfileLogsButton(),
+                const SizedBox(height: 8),
 
                 const ProfileLogoutButton(),
                 const SizedBox(height: 8),

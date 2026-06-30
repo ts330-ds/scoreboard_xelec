@@ -82,6 +82,7 @@ class _MyAthletesMobileState extends State<MyAthletesMobile> {
                           state.status == MyAthletesStatus.loadingMore,
                       hasMore: state.hasMore,
                       totalRecords: state.totalRecords,
+                      loadMoreError: state.loadMoreError,
                     ),
                 };
               },
@@ -148,6 +149,7 @@ class _AthleteList extends StatelessWidget {
   final bool isLoadingMore;
   final bool hasMore;
   final int totalRecords;
+  final String? loadMoreError;
 
   const _AthleteList({
     required this.athletes,
@@ -155,10 +157,27 @@ class _AthleteList extends StatelessWidget {
     required this.isLoadingMore,
     required this.hasMore,
     required this.totalRecords,
+    required this.loadMoreError,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Bug-fix: if the loaded page doesn't fill the viewport there's nothing to
+    // scroll, so the scroll listener would never fire loadMore and the rest of
+    // the records stay unreachable. After layout, fetch the next page if there
+    // are more records but the list isn't scrollable yet.
+    if (hasMore && !isLoadingMore && loadMoreError == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!scrollController.hasClients) return;
+        if (scrollController.position.maxScrollExtent <= 0) {
+          context.read<MyAthletesCubit>().loadMore();
+        }
+      });
+    }
+
+    // Footer item: spinner while loading, or an inline retry on error.
+    final hasFooter = isLoadingMore || loadMoreError != null;
+
     return Column(
       children: [
         // Record count header
@@ -180,11 +199,18 @@ class _AthleteList extends StatelessWidget {
           child: ListView.builder(
             controller: scrollController,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            // +1 for the loading indicator at the bottom
-            itemCount: athletes.length + (isLoadingMore ? 1 : 0),
+            // +1 for the footer (loading spinner / retry) at the bottom
+            itemCount: athletes.length + (hasFooter ? 1 : 0),
             itemBuilder: (_, i) {
               if (i == athletes.length) {
-                // Last item — show spinner while fetching next page
+                if (loadMoreError != null) {
+                  return _LoadMoreError(
+                    message: loadMoreError!,
+                    onRetry: () =>
+                        context.read<MyAthletesCubit>().retryLoadMore(),
+                  );
+                }
+                // Show spinner while fetching next page
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
                   child: Center(
@@ -206,6 +232,43 @@ class _AthleteList extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Inline "load more failed" footer with retry ───────────────────────────────
+
+class _LoadMoreError extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _LoadMoreError({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Column(
+        children: [
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppColors.subtext, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Retry'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

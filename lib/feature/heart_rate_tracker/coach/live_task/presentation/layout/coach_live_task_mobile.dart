@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
+import 'package:xelex_esp/core/widgets/ecg_waveform.dart';
 import 'package:xelex_esp/service/socket/coach_live_task_socket_service.dart';
 import '../cubit/coach_live_task_cubit.dart';
 import '../cubit/coach_live_task_state.dart';
@@ -462,84 +463,6 @@ class _AthleteOfflineBannerState extends State<_AthleteOfflineBanner>
   }
 }
 
-// ── Debug Socket Status Bar ───────────────────────────────────────────────────
-
-class _DebugSocketStatusBar extends StatelessWidget {
-  final CoachLiveTaskState state;
-  const _DebugSocketStatusBar({required this.state});
-
-  @override
-  Widget build(BuildContext context) {
-    final coachConnected = state.status == CoachLiveTaskStatus.watching ||
-        state.status == CoachLiveTaskStatus.athleteStopped;
-    final coachReconnecting = state.status == CoachLiveTaskStatus.reconnecting;
-
-    final coachColor = coachConnected
-        ? Colors.greenAccent
-        : coachReconnecting
-            ? Colors.orangeAccent
-            : Colors.redAccent;
-
-    final coachLabel = coachConnected
-        ? 'Connected'
-        : coachReconnecting
-            ? 'Reconnecting${state.reconnectAttempt > 0 ? ' #${state.reconnectAttempt}' : ''}'
-            : state.status == CoachLiveTaskStatus.connecting
-                ? 'Connecting'
-                : 'Disconnected';
-
-    final athleteColor =
-        state.isAthleteConnectionLost ? Colors.redAccent : Colors.greenAccent;
-    final athleteLabel =
-        state.isAthleteConnectionLost ? 'Offline' : 'Online';
-
-    return Container(
-      width: double.infinity,
-      color: Colors.black87,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      child: Row(
-        children: [
-          const Text('DEBUG  ',
-              style: TextStyle(
-                  color: Colors.white38,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1)),
-          _StatusDot(color: coachColor, label: 'Coach: $coachLabel'),
-          const SizedBox(width: 16),
-          _StatusDot(color: athleteColor, label: 'Athlete: $athleteLabel'),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusDot extends StatelessWidget {
-  final Color color;
-  final String label;
-  const _StatusDot({required this.color, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 5),
-        Text(label,
-            style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 11,
-                fontWeight: FontWeight.w500)),
-      ],
-    );
-  }
-}
-
 // ── Live View ─────────────────────────────────────────────────────────────────
 
 class _LiveView extends StatelessWidget {
@@ -575,7 +498,6 @@ class _LiveView extends StatelessWidget {
 
     return Column(
       children: [
-        _DebugSocketStatusBar(state: state),
         if (showReconnectBanner)
           _ReconnectingBanner(
             attempt: state.reconnectAttempt,
@@ -597,20 +519,22 @@ class _LiveView extends StatelessWidget {
                   minBpm: _minBpm,
                   maxBpm: _maxBpm,
                   avgBpm: _avgBpm,
-                  totalReadings: state.totalReadings,
                 ),
                 const SizedBox(height: 16),
 
-                // ── Vitals
-                if (state.latestSpo2 != null ||
-                    state.latestSugarLevel != null ||
-                    state.latestStressLevel != null) ...[
-                  _SectionHeader(
-                      icon: Icons.monitor_heart_outlined, title: 'Vitals'),
-                  const SizedBox(height: 10),
-                  _VitalsGrid(state: state),
-                  const SizedBox(height: 16),
-                ],
+                // ── Live ECG-style monitor (sirf heart rate se driven)
+                _SectionHeader(
+                    icon: Icons.monitor_heart_outlined, title: 'Live Monitor'),
+                const SizedBox(height: 10),
+                EcgWaveform(
+                  bpm: state.latestBpm,
+                  active: !state.isAthleteStopped &&
+                      !state.isAthleteConnectionLost &&
+                      state.latestBpm > 0,
+                  height: 120,
+                  lineColor: AppColors.heartRed,
+                ),
+                const SizedBox(height: 16),
 
                 // ── Heart Rate Chart
                 if (state.readings.length >= 2) ...[
@@ -681,14 +605,12 @@ class _BpmHeroCard extends StatefulWidget {
   final int minBpm;
   final int maxBpm;
   final int avgBpm;
-  final int totalReadings;
   const _BpmHeroCard({
     required this.bpm,
     required this.isStopped,
     required this.minBpm,
     required this.maxBpm,
     required this.avgBpm,
-    required this.totalReadings,
   });
 
   @override
@@ -840,7 +762,7 @@ class _BpmHeroCardState extends State<_BpmHeroCard>
           // ── Divider
           Divider(height: 1, color: AppColors.border),
 
-          // ── Min / Avg / Max + Readings
+          // ── Min / Avg / Max
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
             child: Row(
@@ -861,12 +783,6 @@ class _BpmHeroCardState extends State<_BpmHeroCard>
                   label: 'Max',
                   value: widget.maxBpm > 0 ? '${widget.maxBpm}' : '--',
                   color: AppColors.error,
-                ),
-                _VerticalDivider(),
-                _BpmStat(
-                  label: 'Readings',
-                  value: '${widget.totalReadings}',
-                  color: AppColors.subtext,
                 ),
               ],
             ),
@@ -909,155 +825,6 @@ class _VerticalDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
         width: 1, height: 32, color: AppColors.border);
-  }
-}
-
-// ── Vitals Grid ───────────────────────────────────────────────────────────────
-
-class _VitalsGrid extends StatelessWidget {
-  final CoachLiveTaskState state;
-  const _VitalsGrid({required this.state});
-
-  @override
-  Widget build(BuildContext context) {
-    final items = <_VitalData>[];
-
-    if (state.latestSpo2 != null) {
-      items.add(_VitalData(
-        icon: Icons.water_drop_rounded,
-        label: 'SpO2',
-        value: '${state.latestSpo2!.toStringAsFixed(1)}%',
-        color: AppColors.vitalOxygen,
-        subtitle: _spo2Status(state.latestSpo2!),
-      ));
-    }
-    if (state.latestSugarLevel != null) {
-      items.add(_VitalData(
-        icon: Icons.monitor_heart_outlined,
-        label: 'HRV',
-        value: state.latestSugarLevel!.toStringAsFixed(1),
-        color: const Color(0xFF40C4FF),
-        subtitle: 'ms RMSSD',
-      ));
-    }
-    if (state.latestStressLevel != null) {
-      items.add(_VitalData(
-        icon: Icons.psychology_outlined,
-        label: 'Stress',
-        value: '${state.latestStressLevel}',
-        color: AppColors.vitalStress,
-        subtitle: _stressLabel(state.latestStressLevel!),
-      ));
-    }
-
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      children: [
-        for (var i = 0; i < items.length; i += 2)
-          Padding(
-            padding: EdgeInsets.only(bottom: i + 2 < items.length ? 10 : 0),
-            child: Row(
-              children: [
-                Expanded(child: _VitalCard(data: items[i])),
-                if (i + 1 < items.length) ...[
-                  const SizedBox(width: 10),
-                  Expanded(child: _VitalCard(data: items[i + 1])),
-                ] else
-                  const Expanded(child: SizedBox()),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  String _spo2Status(double spo2) {
-    if (spo2 >= 95) return 'Normal';
-    if (spo2 >= 90) return 'Low';
-    return 'Critical';
-  }
-
-  String _stressLabel(int level) {
-    if (level <= 25) return 'Relaxed';
-    if (level <= 50) return 'Moderate';
-    if (level <= 75) return 'High';
-    return 'Very High';
-  }
-}
-
-class _VitalData {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-  final String subtitle;
-  const _VitalData({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.subtitle,
-  });
-}
-
-class _VitalCard extends StatelessWidget {
-  final _VitalData data;
-  const _VitalCard({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: data.color.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: data.color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(data.icon, color: data.color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(data.label,
-                    style: const TextStyle(
-                        color: AppColors.subtext,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500)),
-                const SizedBox(height: 2),
-                Text(data.value,
-                    style: TextStyle(
-                        color: data.color,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        height: 1)),
-                Text(data.subtitle,
-                    style: const TextStyle(
-                        color: AppColors.textHint, fontSize: 10)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

@@ -16,11 +16,6 @@ import 'package:xelex_esp/feature/timing_gates/session/data/model/athlete_model.
 import 'package:xelex_esp/feature/timing_gates/session/data/model/athlete_result_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/test_session_model.dart';
 import 'package:xelex_esp/feature/timing_gates/session/data/model/trial_result_model.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/hr_reading_hive.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/rr_sample_hive.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/sleep_session_hive.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/sync_meta_hive.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/history_local_store.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/data/local/task_upload_record.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/data/local/task_upload_store.dart';
 import 'package:xelex_esp/router/app_path.dart';
@@ -33,11 +28,15 @@ import 'package:xelex_esp/feature/heart_rate_tracker/athlete/health_monitor/pres
 import 'package:xelex_esp/service/foreground/athlete_foreground_service.dart';
 import 'package:xelex_esp/service/network/network_reconnect_notifier.dart';
 import 'package:xelex_esp/utility/theme.dart';
+import 'package:xelex_esp/core/logging/file_logger.dart';
 
 import 'feature/bluetooth/presentation/cubit/ble/ble_cubit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // File logger sabse pehle init karo taaki app ke baaki saare logs file me jaayein.
+  await FileLogger.instance.init();
+  _installGlobalLogCapture();
   // flutter_foreground_task v8.x ke liye MANDATORY — iske bina BG isolate
   // ka sendDataToMain main tak nahi pahunchta (events silently drop ho jate hain).
   FlutterForegroundTask.initCommunicationPort();
@@ -50,16 +49,11 @@ void main() async {
   Hive.registerAdapter(TestSessionModelAdapter());
   Hive.registerAdapter(ProfileRoleAdapter());
   Hive.registerAdapter(TimingGateProfileModelAdapter());
-  Hive.registerAdapter(HrReadingHiveAdapter());
-  Hive.registerAdapter(RrSampleHiveAdapter());
-  Hive.registerAdapter(SleepSessionHiveAdapter());
-  Hive.registerAdapter(SyncMetaHiveAdapter());
   Hive.registerAdapter(TaskUploadRecordAdapter());
   await Hive.openBox<AthleteModel>('athletes');
   await Hive.openBox<TestSessionModel>('sessions');
   await Hive.openBox<TimingGateProfileModel>('timing_gate_profile');
   await Hive.openBox('sports_cache');
-  await HistoryLocalStore.instance.open();
   await TaskUploadStore.instance.open();
 
   final sharedPreferences = await SharedPreferences.getInstance();
@@ -108,6 +102,30 @@ void main() async {
   //     );
   //   },
   // ));
+}
+
+/// Saare existing `debugPrint(...)` calls (BLE, TASK-ZIP compression, API logs)
+/// ko bina refactor kiye file me mirror karta hai, aur uncaught/framework
+/// errors ko bhi log file me capture karta hai.
+void _installGlobalLogCapture() {
+  installDebugPrintCapture();
+
+  // Flutter framework errors (widget build/layout exceptions).
+  final originalOnError = FlutterError.onError;
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FileLogger.instance.log(
+      '${details.exceptionAsString()}\n${details.stack}',
+      tag: 'FLUTTER',
+      level: 'ERROR',
+    );
+    originalOnError?.call(details);
+  };
+
+  // Uncaught async errors (platform dispatcher).
+  WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
+    FileLogger.instance.log('$error\n$stack', tag: 'UNCAUGHT', level: 'ERROR');
+    return false; // default handling chalne do
+  };
 }
 
 class MyApp extends StatefulWidget {

@@ -35,6 +35,10 @@ class MainActivity : FlutterActivity() {
             .setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
                     chileafHandler.dataSink = events
+                    // Replay current connection state so a freshly-attached Dart
+                    // engine learns it's already connected (one-shot STATUS event
+                    // may have fired before this subscription existed).
+                    chileafHandler.emitCurrentState()
                 }
                 override fun onCancel(arguments: Any?) {
                     chileafHandler.dataSink = null
@@ -93,6 +97,18 @@ class MainActivity : FlutterActivity() {
                     "disconnect" -> {
                         chileafHandler.disconnect()
                         result.success("Disconnect Command Sent")
+                    }
+
+                    "reconnectByAddress" -> {
+                        val args = call.arguments as? Map<*, *>
+                        val address = args?.get("address") as? String
+                        if (address.isNullOrEmpty()) {
+                            result.error("INVALID_ARGS", "address missing", null)
+                            return@setMethodCallHandler
+                        }
+                        val started = chileafHandler.reconnectByAddress(address)
+                        if (started) result.success("Reconnecting...")
+                        else result.success("Already connected or invalid address")
                     }
 
                     "syncAllHistory" -> {

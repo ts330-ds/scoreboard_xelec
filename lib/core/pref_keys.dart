@@ -43,8 +43,26 @@ abstract class PrefKeys {
   // spam the server on every sync. force=true bypasses.
   static const String lastHistoryPushAtPrefix = 'last_history_push_at_';
 
+  // Server is the single source of truth for "last synced". These mirror the
+  // /last_timestamp API response into local so the UI can render without a
+  // network call. Updated only via the single choke-point (refreshServerWatermark).
+  //   serverLastStamp = newest reading timestamp the server has (epoch millis)
+  //   serverCheckedAt = wall-clock of last successful server reach (epoch millis)
+  static const String serverLastStampPrefix = 'server_last_stamp_ms_';
+  static const String serverCheckedAtPrefix = 'server_checked_at_ms_';
+
   // V3 job polling state — persisted so polling can resume after app kill
   static const String pollingActive = 'v3_polling_active';
   static const String pollingJobId = 'v3_polling_job_id';
   static const String pollingStartedAt = 'v3_polling_started_at';
+
+  // Active activity session — disk pe persist hoti hai taaki process death
+  // (phone off / app swipe-kill) ke baad app dobara khulne par recover ho sake.
+  // startSession pe set, _endSession pe clear. Launch pe attemptSessionRecovery()
+  // inhe padh ke server status verify karta hai (resume / upload / discard).
+  static const String activeSessionTaskId = 'active_session_task_id';
+  static const String activeSessionStartMs = 'active_session_start_ms';
+  static const String activeSessionTargetMin = 'active_session_target_min';
+  static const String activeSessionActivity = 'active_session_activity';
+  static const String activeSessionLocation = 'active_session_location';
 }

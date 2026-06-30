@@ -6,9 +6,20 @@ import 'package:xelex_esp/core/pref_keys.dart';
 import '../../domain/entity/coach_task_result_entity.dart';
 import '../model/active_task_model.dart';
 
+class ActiveTasksResult {
+  final List<ActiveTaskModel> tasks;
+  final int totalRecords;
+
+  const ActiveTasksResult({
+    required this.tasks,
+    required this.totalRecords,
+  });
+}
+
 abstract interface class ActiveTasksRemoteDataSource {
-  TaskEither<Failure, List<ActiveTaskModel>> getActiveTasks({
+  TaskEither<Failure, ActiveTasksResult> getActiveTasks({
     String status = 'in_progress',
+    int page = 1,
   });
 
   TaskEither<Failure, CoachTaskResultEntity> getAthleteTaskResult(int taskId);
@@ -23,8 +34,9 @@ class ActiveTasksRemoteDataSourceImpl implements ActiveTasksRemoteDataSource {
   String? get _token => _prefs.getString(PrefKeys.coachToken);
 
   @override
-  TaskEither<Failure, List<ActiveTaskModel>> getActiveTasks({
+  TaskEither<Failure, ActiveTasksResult> getActiveTasks({
     String status = 'in_progress',
+    int page = 1,
   }) =>
       TaskEither(() async {
         final token = _token;
@@ -35,19 +47,23 @@ class ActiveTasksRemoteDataSourceImpl implements ActiveTasksRemoteDataSource {
         try {
           final response = await _dio.get(
             '/coach/my_athletes/active_tasks',
-            queryParameters: {'status': status},
+            queryParameters: {'status': status, 'page': page},
             options: Options(headers: {'Authorization': 'Bearer $token'}),
           );
 
+          // data: { athletes: [...], totalRecords: N, showPagination: [...] }
           final body = response.data;
-          final List raw = (body['data']?['athletes'] as List?) ?? [];
+          final data = body['data'];
+          final List raw = (data?['athletes'] as List?) ?? [];
+          final int total = (data?['totalRecords'] as num?)?.toInt() ?? 0;
 
-          return right(
-            raw
+          return right(ActiveTasksResult(
+            tasks: raw
                 .whereType<Map<String, dynamic>>()
                 .map(ActiveTaskModel.fromJson)
                 .toList(),
-          );
+            totalRecords: total,
+          ));
         } on DioException catch (e) {
           return left(ServerFailure(
             e.response?.data?['message'] ??

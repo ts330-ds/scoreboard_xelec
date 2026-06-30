@@ -29,6 +29,9 @@ class AthleteTaskDetailScreen extends StatefulWidget {
 }
 
 class _AthleteTaskDetailScreenState extends State<AthleteTaskDetailScreen> {
+  // Guard — async listener dobara fire na ho jab feedback/upload flow chal raha ho.
+  bool _handlingSessionEnd = false;
+
   @override
   void initState() {
     super.initState();
@@ -56,9 +59,14 @@ class _AthleteTaskDetailScreenState extends State<AthleteTaskDetailScreen> {
               return;
             }
 
+            // Guard — agar pehle se feedback/upload flow chal raha hai to skip.
+            if (_handlingSessionEnd) return;
+            _handlingSessionEnd = true;
+
             final sessionStart = state.completedSessionStart;
             final sessionEnd = state.completedSessionEnd;
             if (sessionStart == null || sessionEnd == null) {
+              _handlingSessionEnd = false;
               if (mounted) context.pop();
               return;
             }
@@ -90,6 +98,7 @@ class _AthleteTaskDetailScreenState extends State<AthleteTaskDetailScreen> {
             }
 
             widget.activityCubit.acknowledgeFeedbackPrompt();
+            _handlingSessionEnd = false;
             if (!mounted) return;
             context.pop();
           },

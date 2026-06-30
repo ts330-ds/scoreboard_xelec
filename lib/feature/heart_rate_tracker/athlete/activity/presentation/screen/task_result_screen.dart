@@ -1,8 +1,12 @@
+import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/entity/athlete_task_entity.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/screen/session_upload_screen.dart';
+import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 import '../cubit/task_result_cubit.dart';
 import '../cubit/task_result_state.dart';
 
@@ -71,7 +75,7 @@ class TaskResultScreen extends StatelessWidget {
                 )
               else if (state.status == TaskResultStatus.loaded &&
                   state.result != null)
-                _ResultBody(raw: state.result!.raw)
+                _ResultBody(raw: state.result!.raw, task: task)
               else
                 const SliverFillRemaining(child: _EmptyView()),
             ],
@@ -183,7 +187,8 @@ class _AppBar extends StatelessWidget {
 
 class _ResultBody extends StatelessWidget {
   final Map<String, dynamic> raw;
-  const _ResultBody({required this.raw});
+  final AthleteTaskEntity task;
+  const _ResultBody({required this.raw, required this.task});
 
   @override
   Widget build(BuildContext context) {
@@ -204,7 +209,7 @@ class _ResultBody extends StatelessWidget {
         widgets.add(_SessionHeader(index: i + 1));
         widgets.add(const SizedBox(height: 12));
       }
-      widgets.addAll(_buildSession(session));
+      widgets.addAll(_buildSession(context, session));
       if (i < results.length - 1) {
         widgets.add(const SizedBox(height: 24));
         widgets.add(const Divider(color: AppColors.border, height: 1));
@@ -221,7 +226,7 @@ class _ResultBody extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildSession(Map<String, dynamic> session) {
+  List<Widget> _buildSession(BuildContext context, Map<String, dynamic> session) {
     final stats =
         (session['aggregated_stats'] as Map<String, dynamic>?) ?? {};
     final rawList = (session['raw_data'] as List?)
@@ -241,6 +246,19 @@ class _ResultBody extends StatelessWidget {
         endedAt != null ? DateTime.tryParse(endedAt) : null;
     if (sessionStart != null && sessionEnd != null) {
       duration = sessionEnd.difference(sessionStart);
+    }
+
+    if (rawList.isEmpty) {
+      return [
+        _SessionInfoCard(
+            startedAt: startedAt, endedAt: endedAt, duration: duration),
+        const SizedBox(height: 14),
+        _UploadSessionButton(
+          taskId: task.id,
+          sessionStart: sessionStart,
+          sessionEnd: sessionEnd,
+        ),
+      ];
     }
 
     // X-axis anchor = session.started_at (preferred) — labels real clock time
@@ -499,29 +517,25 @@ class _HeartRateHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) + 10;
-    final minY =
-        (spots.map((s) => s.y).reduce((a, b) => a < b ? a : b) - 10)
-            .clamp(0.0, double.infinity);
+    final dataMax = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    final dataMin = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
+    const double yInterval = 10;
+    final yFloor = (((dataMin - 5) / yInterval).floor() * 10.0).clamp(0.0, double.infinity);
+    final yCeil = ((dataMax + 5) / yInterval).ceil() * 10.0;
     final double maxX = totalSeconds > 0
         ? totalSeconds
         : (spots.last.x > 0 ? spots.last.x : 1.0);
-    // 4 intervals → 5 ticks max
-    final tickInterval = maxX / 4;
 
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0D47A1), Color(0xFF1565C0)],
-        ),
-        borderRadius: BorderRadius.circular(24),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-              color: const Color(0xFF0D47A1).withValues(alpha: 0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 8))
+              color: AppColors.heartRed.withValues(alpha: 0.06),
+              blurRadius: 14,
+              offset: const Offset(0, 4))
         ],
       ),
       child: Stack(
@@ -531,7 +545,7 @@ class _HeartRateHeroCard extends StatelessWidget {
             child: Container(
               width: 100, height: 100,
               decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.06),
+                  color: AppColors.heartRed.withValues(alpha: 0.04),
                   shape: BoxShape.circle),
             ),
           ),
@@ -545,15 +559,15 @@ class _HeartRateHeroCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
+                        color: AppColors.heartRed.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12)),
                     child: const Icon(Icons.favorite,
-                        color: Color(0xFFEF9A9A), size: 18),
+                        color: AppColors.heartRed, size: 18),
                   ),
                   const SizedBox(width: 10),
                   const Text('Heart Rate',
                       style: TextStyle(
-                          color: Colors.white,
+                          color: AppColors.text,
                           fontSize: 15,
                           fontWeight: FontWeight.w700)),
                   const Spacer(),
@@ -561,7 +575,7 @@ class _HeartRateHeroCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                        color: _zoneColor.withValues(alpha: 0.25),
+                        color: _zoneColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(20)),
                     child: Text(_zoneLabel,
                         style: TextStyle(
@@ -579,7 +593,7 @@ class _HeartRateHeroCard extends StatelessWidget {
                   children: [
                     Text(avg.toStringAsFixed(0),
                         style: const TextStyle(
-                            color: Colors.white,
+                            color: AppColors.text,
                             fontSize: 52,
                             fontWeight: FontWeight.w800,
                             height: 1)),
@@ -587,109 +601,245 @@ class _HeartRateHeroCard extends StatelessWidget {
                       padding: EdgeInsets.only(bottom: 8, left: 4),
                       child: Text('bpm',
                           style: TextStyle(
-                              color: Colors.white70, fontSize: 16)),
+                              color: AppColors.subtext, fontSize: 16)),
                     ),
                     const Spacer(),
-                    Text('avg',
+                    const Text('avg',
                         style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.55),
+                            color: AppColors.subtext,
                             fontSize: 12)),
                   ],
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
-                // Chart
-                SizedBox(
-                  height: 140,
-                  child: LineChart(
-                    LineChartData(
-                      minX: 0,
-                      maxX: maxX,
-                      minY: minY,
-                      maxY: maxY,
-                      gridData: FlGridData(
-                        show: true,
-                        drawVerticalLine: false,
-                        getDrawingHorizontalLine: (_) => FlLine(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            strokeWidth: 1),
-                      ),
-                      borderData: FlBorderData(show: false),
-                      titlesData: FlTitlesData(
-                        rightTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false)),
-                        topTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false)),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 22,
-                            interval: tickInterval,
-                            getTitlesWidget: (v, meta) {
-                              // Edge labels skip karte hain to overlap na ho
-                              if (v < 0 || v > maxX) return const SizedBox.shrink();
-                              return Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: Text(
-                                  anchor != null
-                                      ? _fmtClock(anchor!, v.toInt())
-                                      : _fmtElapsed(v.toInt()),
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.55),
-                                    fontSize: 9,
+                Row(children: [
+                  Icon(Icons.swipe_outlined,
+                      size: 12,
+                      color: AppColors.subtext.withValues(alpha: 0.6)),
+                  const SizedBox(width: 4),
+                  Text('Swipe to scroll',
+                      style: TextStyle(
+                          color: AppColors.subtext.withValues(alpha: 0.6),
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600)),
+                ]),
+                const SizedBox(height: 8),
+
+                // Chart with fixed y-axis + scrollable area
+                Builder(builder: (context) {
+                  final screenWidth =
+                      MediaQuery.of(context).size.width - 92;
+                  const pxPerMinute = 100.0;
+                  final calculatedWidth = (maxX / 60) * pxPerMinute;
+                  final chartWidth =
+                      math.max(calculatedWidth, screenWidth);
+
+                  final double labelInterval;
+                  if (maxX <= 300) {
+                    labelInterval = 30;
+                  } else if (maxX <= 1800) {
+                    labelInterval = 60;
+                  } else {
+                    labelInterval = 300;
+                  }
+
+                  return SizedBox(
+                    height: 170,
+                    child: Row(
+                      children: [
+                        // Fixed y-axis
+                        SizedBox(
+                          width: 36,
+                          child: LineChart(
+                            LineChartData(
+                              minY: yFloor,
+                              maxY: yCeil,
+                              minX: 0,
+                              maxX: 1,
+                              gridData: const FlGridData(show: false),
+                              borderData: FlBorderData(show: false),
+                              lineBarsData: [],
+                              titlesData: FlTitlesData(
+                                leftTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 32,
+                                    interval: yInterval,
+                                    getTitlesWidget: (v, _) => Text(
+                                      v.toInt().toString(),
+                                      style: const TextStyle(
+                                          color: AppColors.subtext,
+                                          fontSize: 9),
+                                    ),
                                   ),
                                 ),
-                              );
-                            },
-                          ),
-                        ),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            reservedSize: 28,
-                            getTitlesWidget: (v, _) => Text(
-                              v.toInt().toString(),
-                              style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.5),
-                                  fontSize: 9),
+                                rightTitles: const AxisTitles(
+                                    sideTitles:
+                                        SideTitles(showTitles: false)),
+                                topTitles: const AxisTitles(
+                                    sideTitles:
+                                        SideTitles(showTitles: false)),
+                                bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 22,
+                                    getTitlesWidget: (_, __) =>
+                                        const SizedBox.shrink(),
+                                  ),
+                                ),
+                              ),
+                              lineTouchData:
+                                  const LineTouchData(enabled: false),
                             ),
                           ),
                         ),
-                      ),
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: spots,
-                          isCurved: true,
-                          curveSmoothness: 0.3,
-                          color: const Color(0xFFEF9A9A),
-                          barWidth: 2.5,
-                          dotData: const FlDotData(show: false),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            color: const Color(0xFFEF9A9A)
-                                .withValues(alpha: 0.15),
+                        // Scrollable chart
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16),
+                              child: SizedBox(
+                                width: chartWidth,
+                                child: LineChart(
+                                  LineChartData(
+                                    minX: -0.3,
+                                    maxX: maxX + 0.3,
+                                    minY: yFloor,
+                                    maxY: yCeil,
+                                    clipData: const FlClipData.none(),
+                                    gridData: FlGridData(
+                                      show: true,
+                                      drawVerticalLine: true,
+                                      horizontalInterval: yInterval,
+                                      verticalInterval: labelInterval,
+                                      getDrawingHorizontalLine: (_) =>
+                                          FlLine(
+                                              color: AppColors.borderLight,
+                                              strokeWidth: 1),
+                                      getDrawingVerticalLine: (_) =>
+                                          FlLine(
+                                              color: AppColors.borderLight
+                                                  .withValues(alpha: 0.5),
+                                              strokeWidth: 0.5),
+                                    ),
+                                    borderData:
+                                        FlBorderData(show: false),
+                                    titlesData: FlTitlesData(
+                                      leftTitles: const AxisTitles(
+                                          sideTitles: SideTitles(
+                                              showTitles: false)),
+                                      rightTitles: const AxisTitles(
+                                          sideTitles: SideTitles(
+                                              showTitles: false)),
+                                      topTitles: const AxisTitles(
+                                          sideTitles: SideTitles(
+                                              showTitles: false)),
+                                      bottomTitles: AxisTitles(
+                                        sideTitles: SideTitles(
+                                          showTitles: true,
+                                          reservedSize: 22,
+                                          interval: labelInterval,
+                                          getTitlesWidget: (v, _) {
+                                            if (v < 0 || v > maxX) {
+                                              return const SizedBox
+                                                  .shrink();
+                                            }
+                                            return Padding(
+                                              padding:
+                                                  const EdgeInsets.only(
+                                                      top: 4),
+                                              child: Text(
+                                                anchor != null
+                                                    ? _fmtClock(
+                                                        anchor!,
+                                                        v.toInt())
+                                                    : _fmtElapsed(
+                                                        v.toInt()),
+                                                style: const TextStyle(
+                                                  color: AppColors.subtext,
+                                                  fontSize: 9,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    lineBarsData: [
+                                      LineChartBarData(
+                                        spots: spots,
+                                        isCurved: true,
+                                        curveSmoothness: 0.35,
+                                        color: AppColors.heartRed,
+                                        barWidth: 2.5,
+                                        dotData: FlDotData(
+                                          show: true,
+                                          getDotPainter:
+                                              (s, _, __, index) =>
+                                                  FlDotCirclePainter(
+                                            radius:
+                                                index ==
+                                                        spots.length - 1
+                                                    ? 4
+                                                    : 0,
+                                            color:
+                                                AppColors.heartRed,
+                                            strokeWidth: 2,
+                                            strokeColor: AppColors.surface,
+                                          ),
+                                        ),
+                                        belowBarData: BarAreaData(
+                                          show: true,
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              AppColors.heartRed
+                                                  .withValues(
+                                                      alpha: 0.18),
+                                              AppColors.heartRed
+                                                  .withValues(
+                                                      alpha: 0.0),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    lineTouchData: LineTouchData(
+                                      touchTooltipData:
+                                          LineTouchTooltipData(
+                                        getTooltipColor: (_) =>
+                                            AppColors.text,
+                                        getTooltipItems: (touched) =>
+                                            touched
+                                                .map((s) =>
+                                                    LineTooltipItem(
+                                                      '${s.y.toInt()} bpm  •  ${anchor != null ? _fmtClockSec(anchor!, s.x.toInt()) : _fmtElapsed(s.x.toInt())}',
+                                                      const TextStyle(
+                                                          color: Colors
+                                                              .white,
+                                                          fontSize: 11,
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .w600),
+                                                    ))
+                                                .toList(),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ],
-                      lineTouchData: LineTouchData(
-                        touchTooltipData: LineTouchTooltipData(
-                          getTooltipColor: (_) =>
-                              const Color(0xFF0D47A1),
-                          getTooltipItems: (spots) => spots
-                              .map((s) => LineTooltipItem(
-                                    '${s.y.toInt()} bpm  •  ${anchor != null ? _fmtClockSec(anchor!, s.x.toInt()) : _fmtElapsed(s.x.toInt())}',
-                                    const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600),
-                                  ))
-                              .toList(),
-                        ),
-                      ),
                     ),
-                  ),
-                ),
+                  );
+                }),
 
                 const SizedBox(height: 14),
 
@@ -698,7 +848,7 @@ class _HeartRateHeroCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
+                    color: AppColors.surfaceAlt,
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
@@ -732,18 +882,18 @@ class _StatItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(children: [
       Text(label,
-          style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.6), fontSize: 10)),
+          style: const TextStyle(
+              color: AppColors.subtext, fontSize: 10)),
       const SizedBox(height: 3),
       Text(value,
           style: const TextStyle(
-              color: Colors.white,
+              color: AppColors.text,
               fontSize: 16,
               fontWeight: FontWeight.w800)),
       if (unit.isNotEmpty)
         Text(unit,
-            style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5), fontSize: 9)),
+            style: const TextStyle(
+                color: AppColors.subtext, fontSize: 9)),
     ]);
   }
 }
@@ -751,7 +901,7 @@ class _StatItem extends StatelessWidget {
 class _Divider extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
-      width: 1, height: 30, color: Colors.white.withValues(alpha: 0.2));
+      width: 1, height: 30, color: AppColors.border);
 }
 
 // SpO2 aur Stress charts hata diye gaye — requirements ke according.
@@ -960,13 +1110,14 @@ class _HrvLineChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b) + 10;
-    final minY = (spots.map((s) => s.y).reduce((a, b) => a < b ? a : b) - 10)
-        .clamp(0.0, double.infinity);
-    final double maxX = totalSeconds > 0
+    final hrvDataMax = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    final hrvDataMin = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
+    const double hrvYInterval = 10;
+    final hrvYFloor = (((hrvDataMin - 5) / hrvYInterval).floor() * 10.0).clamp(0.0, double.infinity);
+    final hrvYCeil = ((hrvDataMax + 5) / hrvYInterval).ceil() * 10.0;
+    final double hrvMaxX = totalSeconds > 0
         ? totalSeconds
         : (spots.last.x > 0 ? spots.last.x : 1.0);
-    final tickInterval = maxX / 4;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -1022,83 +1173,215 @@ class _HrvLineChart extends StatelessWidget {
             ),
           ]),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-          // Chart
-          SizedBox(
-            height: 110,
-            child: LineChart(
-              LineChartData(
-                minX: 0,
-                maxX: maxX,
-                minY: minY,
-                maxY: maxY,
-                clipData: const FlClipData.all(),
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  horizontalInterval: 10,
-                  getDrawingHorizontalLine: (_) => FlLine(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      strokeWidth: 1),
-                ),
-                borderData: FlBorderData(show: false),
-                titlesData: FlTitlesData(
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 22,
-                      interval: tickInterval,
-                      getTitlesWidget: (v, meta) {
-                        if (v < 0 || v > maxX) return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            anchor != null
-                                ? _fmtClock(anchor!, v.toInt())
-                                : _fmtElapsed(v.toInt()),
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.45),
-                              fontSize: 9,
+          Row(children: [
+            Icon(Icons.swipe_outlined,
+                size: 12,
+                color: _kHrvColor.withValues(alpha: 0.4)),
+            const SizedBox(width: 4),
+            Text('Swipe to scroll',
+                style: TextStyle(
+                    color: _kHrvColor.withValues(alpha: 0.4),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 8),
+
+          // Chart with fixed y-axis + scrollable area
+          Builder(builder: (context) {
+            final screenWidth =
+                MediaQuery.of(context).size.width - 92;
+            const pxPerMinute = 100.0;
+            final calculatedWidth = (hrvMaxX / 60) * pxPerMinute;
+            final chartWidth =
+                math.max(calculatedWidth, screenWidth);
+
+            final double labelInterval;
+            if (hrvMaxX <= 300) {
+              labelInterval = 30;
+            } else if (hrvMaxX <= 1800) {
+              labelInterval = 60;
+            } else {
+              labelInterval = 300;
+            }
+
+            return SizedBox(
+              height: 130,
+              child: Row(
+                children: [
+                  // Fixed y-axis
+                  SizedBox(
+                    width: 36,
+                    child: LineChart(
+                      LineChartData(
+                        minY: hrvYFloor,
+                        maxY: hrvYCeil,
+                        minX: 0,
+                        maxX: 1,
+                        gridData: const FlGridData(show: false),
+                        borderData: FlBorderData(show: false),
+                        lineBarsData: [],
+                        titlesData: FlTitlesData(
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 32,
+                              interval: hrvYInterval,
+                              getTitlesWidget: (v, _) => Text(
+                                v.toInt().toString(),
+                                style: TextStyle(
+                                    color: Colors.white
+                                        .withValues(alpha: 0.4),
+                                    fontSize: 9),
+                              ),
                             ),
                           ),
-                        );
-                      },
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 28,
-                      getTitlesWidget: (v, _) => Text(
-                        v.toInt().toString(),
-                        style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.4),
-                            fontSize: 9),
+                          rightTitles: const AxisTitles(
+                              sideTitles:
+                                  SideTitles(showTitles: false)),
+                          topTitles: const AxisTitles(
+                              sideTitles:
+                                  SideTitles(showTitles: false)),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 22,
+                              getTitlesWidget: (_, __) =>
+                                  const SizedBox.shrink(),
+                            ),
+                          ),
+                        ),
+                        lineTouchData:
+                            const LineTouchData(enabled: false),
                       ),
                     ),
                   ),
-                ),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: false,
-                    color: _kHrvColor,
-                    barWidth: 1.8,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(show: false),
-                    shadow: Shadow(
-                        color: _kHrvColor.withValues(alpha: 0.4),
-                        blurRadius: 6),
+                  // Scrollable chart
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16),
+                        child: SizedBox(
+                          width: chartWidth,
+                          child: LineChart(
+                            LineChartData(
+                              minX: -0.3,
+                              maxX: hrvMaxX + 0.3,
+                              minY: hrvYFloor,
+                              maxY: hrvYCeil,
+                              clipData: const FlClipData.none(),
+                              gridData: FlGridData(
+                                show: true,
+                                drawVerticalLine: true,
+                                horizontalInterval: hrvYInterval,
+                                verticalInterval: labelInterval,
+                                getDrawingHorizontalLine: (_) =>
+                                    FlLine(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.05),
+                                        strokeWidth: 1),
+                                getDrawingVerticalLine: (_) =>
+                                    FlLine(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.04),
+                                        strokeWidth: 0.5),
+                              ),
+                              borderData:
+                                  FlBorderData(show: false),
+                              titlesData: FlTitlesData(
+                                leftTitles: const AxisTitles(
+                                    sideTitles: SideTitles(
+                                        showTitles: false)),
+                                rightTitles: const AxisTitles(
+                                    sideTitles: SideTitles(
+                                        showTitles: false)),
+                                topTitles: const AxisTitles(
+                                    sideTitles: SideTitles(
+                                        showTitles: false)),
+                                bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 22,
+                                    interval: labelInterval,
+                                    getTitlesWidget: (v, _) {
+                                      if (v < 0 || v > hrvMaxX) {
+                                        return const SizedBox
+                                            .shrink();
+                                      }
+                                      return Padding(
+                                        padding:
+                                            const EdgeInsets.only(
+                                                top: 4),
+                                        child: Text(
+                                          anchor != null
+                                              ? _fmtClock(
+                                                  anchor!,
+                                                  v.toInt())
+                                              : _fmtElapsed(
+                                                  v.toInt()),
+                                          style: TextStyle(
+                                            color: Colors.white
+                                                .withValues(
+                                                    alpha: 0.45),
+                                            fontSize: 9,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                              lineBarsData: [
+                                LineChartBarData(
+                                  spots: spots,
+                                  isCurved: false,
+                                  color: _kHrvColor,
+                                  barWidth: 1.8,
+                                  dotData: const FlDotData(
+                                      show: false),
+                                  belowBarData:
+                                      BarAreaData(show: false),
+                                  shadow: Shadow(
+                                      color: _kHrvColor.withValues(
+                                          alpha: 0.4),
+                                      blurRadius: 6),
+                                ),
+                              ],
+                              lineTouchData: LineTouchData(
+                                touchTooltipData:
+                                    LineTouchTooltipData(
+                                  getTooltipColor: (_) =>
+                                      const Color(0xFF0A1628),
+                                  getTooltipItems: (touched) =>
+                                      touched
+                                          .map((s) =>
+                                              LineTooltipItem(
+                                                '${s.y.toStringAsFixed(1)} ms  •  ${anchor != null ? _fmtClockSec(anchor!, s.x.toInt()) : _fmtElapsed(s.x.toInt())}',
+                                                const TextStyle(
+                                                    color:
+                                                        _kHrvColor,
+                                                    fontSize: 11,
+                                                    fontWeight:
+                                                        FontWeight
+                                                            .w600),
+                                              ))
+                                          .toList(),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
-            ),
-          ),
+            );
+          }),
 
           const SizedBox(height: 12),
 
@@ -1141,6 +1424,108 @@ class _HrvChip extends StatelessWidget {
         ]),
       ),
     );
+  }
+}
+
+// ── Upload Session Button (raw_data missing) ────────────────────────────────
+
+class _UploadSessionButton extends StatelessWidget {
+  final int taskId;
+  final DateTime? sessionStart;
+  final DateTime? sessionEnd;
+
+  const _UploadSessionButton({
+    required this.taskId,
+    required this.sessionStart,
+    required this.sessionEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.cloud_upload_outlined,
+                color: AppColors.warning, size: 32),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Data not uploaded',
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Session data was not synced to the server.\nTap below to upload from your device.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.subtext, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: sessionStart != null && sessionEnd != null
+                  ? () => _startUpload(context)
+                  : null,
+              icon: const Icon(Icons.upload, size: 18),
+              label: const Text('Upload Session'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: AppColors.borderLight,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                textStyle:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startUpload(BuildContext context) {
+    final submitCubit = sl<TaskZipSubmitCubit>();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SessionUploadScreen(
+          submitCubit: submitCubit,
+          taskId: taskId,
+          sessionStart: sessionStart!,
+          sessionEnd: sessionEnd!,
+        ),
+      ),
+    ).then((_) {
+      if (!submitCubit.isClosed) {
+        submitCubit.close();
+      }
+      if (context.mounted) {
+        context.read<TaskResultCubit>().load();
+      }
+    });
   }
 }
 

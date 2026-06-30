@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
+import 'package:xelex_esp/core/widgets/ecg_waveform.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/profile/presentation/cubit/athlete_profile_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/profile/presentation/cubit/athlete_profile_state.dart';
@@ -66,7 +67,9 @@ class _AthleteHomeView extends StatelessWidget {
                 context.push(HeartTrackerPaths.athleteNotification),
           ),
           BlocBuilder<HeartBleCubit, HeartBleState>(
-            buildWhen: (p, c) => p.isConnected != c.isConnected,
+            buildWhen: (p, c) =>
+                p.isConnected != c.isConnected ||
+                p.isReconnecting != c.isReconnecting,
             builder: (context, state) => IconButton(
               icon: Icon(
                 state.isConnected
@@ -127,6 +130,7 @@ class _HeroHeader extends StatelessWidget {
         ? (profileState.profile?.name ?? prefs.getString(PrefKeys.userName) ?? 'Athlete')
         : (prefs.getString(PrefKeys.userName) ?? 'Athlete');
     final connected = state.isConnected;
+    final hasData = state.isConnected || state.isReconnecting;
     final accent = connected ? AppColors.success : AppColors.primary;
 
     return Container(
@@ -215,7 +219,7 @@ class _HeroHeader extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              connected && state.heartRate > 0
+                              state.heartRate > 0
                                   ? '${state.heartRate}'
                                   : '--',
                               style: const TextStyle(
@@ -265,11 +269,13 @@ class _HeroHeader extends StatelessWidget {
                           ]),
                           const SizedBox(height: 6),
                           Text(
-                            connected && state.lastDevice.isNotEmpty
-                                ? state.lastDevice
+                            hasData
+                                ? (state.lastDevice.isNotEmpty
+                                    ? state.lastDevice
+                                    : 'Connected')
                                 : 'Not Connected',
                             style: TextStyle(
-                                color: connected ? Colors.white : Colors.white54,
+                                color: hasData ? Colors.white : Colors.white54,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600),
                             maxLines: 1,
@@ -284,11 +290,17 @@ class _HeroHeader extends StatelessWidget {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              connected ? 'Live' : 'Offline',
+                              connected
+                                  ? 'Live'
+                                  : state.isReconnecting
+                                      ? 'Reconnecting'
+                                      : 'Offline',
                               style: TextStyle(
                                   color: connected
                                       ? const Color(0xFF80CBC4)
-                                      : Colors.white38,
+                                      : state.isReconnecting
+                                          ? Colors.orange.shade300
+                                          : Colors.white38,
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600),
                             ),
@@ -525,18 +537,6 @@ class _ActivityRow extends StatelessWidget {
           value: '${state.steps}',
           label: 'Steps',
           color: AppColors.actSteps),
-      const SizedBox(width: 12),
-      _ActivityCard(
-          icon: Icons.local_fire_department,
-          value: '${state.calorie}',
-          label: 'kcal',
-          color: AppColors.actCalorie),
-      const SizedBox(width: 12),
-      _ActivityCard(
-          icon: Icons.straighten,
-          value: (state.distance / 1000).toStringAsFixed(1),
-          label: 'km',
-          color: AppColors.actDistance),
     ]);
   }
 }
@@ -596,89 +596,74 @@ class _VitalGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hrv = _VitalData(
-      'HRV (RMSSD)',
-      state.hrv > 0 ? '${state.hrv.toStringAsFixed(1)} ms' : '--',
-      Icons.monitor_heart_outlined,
-      AppColors.primary,
-      route: HeartTrackerPaths.athleteHrvDetail,
-    );
+    final hrvValue =
+        state.hrv > 0 ? '${state.hrv.toStringAsFixed(1)} ms' : '--';
 
-    return AspectRatio(
-      aspectRatio: 2.4,
-      child: _VitalTile(data: hrv),
-    );
-  }
-}
-
-class _VitalData {
-  final String label, value;
-  final IconData icon;
-  final Color color;
-  final String? route;
-  const _VitalData(this.label, this.value, this.icon, this.color, {this.route});
-}
-
-class _VitalTile extends StatelessWidget {
-  final _VitalData data;
-  const _VitalTile({required this.data});
-
-  @override
-  Widget build(BuildContext context) {
-    final tile = Container(
+    final card = Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: data.route != null
-              ? data.color.withValues(alpha: 0.25)
-              : AppColors.border,
-        ),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
         boxShadow: [
           BoxShadow(
-              color: data.color.withValues(alpha: 0.07),
+              color: AppColors.primary.withValues(alpha: 0.07),
               blurRadius: 10,
               offset: const Offset(0, 3))
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
-                  color: data.color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10)),
-              child: Icon(data.icon, color: data.color, size: 16),
-            ),
-            const Spacer(),
-            if (data.route != null)
+          // ── Upar: HRV reading
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.monitor_heart_outlined,
+                    color: AppColors.primary, size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('HRV (RMSSD)',
+                        style: TextStyle(
+                            color: AppColors.subtext, fontSize: 11)),
+                    const SizedBox(height: 2),
+                    Text(hrvValue,
+                        style: const TextStyle(
+                            color: AppColors.text,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800)),
+                  ],
+                ),
+              ),
               Icon(Icons.arrow_forward_ios,
-                  size: 11, color: data.color.withValues(alpha: 0.5)),
-          ]),
-          const Spacer(),
-          Text(data.value,
-              style: const TextStyle(
-                  color: AppColors.text,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800)),
-          const SizedBox(height: 2),
-          Text(data.label,
-              style:
-                  const TextStyle(color: AppColors.subtext, fontSize: 11)),
+                  size: 11, color: AppColors.primary.withValues(alpha: 0.5)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // ── Neeche: live ECG-style waveform (sirf heart rate se driven)
+          EcgWaveform(
+            bpm: state.heartRate,
+            active: state.heartRate > 0,
+            height: 80,
+            lineColor: AppColors.heartRed,
+          ),
         ],
       ),
     );
 
-    if (data.route != null) {
-      return GestureDetector(
-        onTap: () => context.push(data.route!),
-        child: tile,
-      );
-    }
-    return tile;
+    return GestureDetector(
+      onTap: () => context.push(HeartTrackerPaths.athleteHrvDetail),
+      child: card,
+    );
   }
 }
 

@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/history_local_store.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/hr_reading_hive.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/rr_sample_hive.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/repository/history_repository.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history_sql/domain/entity/hr_reading.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history_sql/domain/entity/rr_sample.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/ble_fetch_range/cubit/ble_fetch_range_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/ble_fetch_range/cubit/ble_fetch_range_state.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
@@ -28,8 +28,8 @@ class _BleFetchDemoScreenState extends State<BleFetchDemoScreen> {
 
   String _statusMessage = '';
 
-  List<HrReadingHive> _hrReadings = [];
-  List<RrSampleHive> _rrSamples = [];
+  List<HrReading> _hrReadings = [];
+  List<RrSample> _rrSamples = [];
 
   // Only used for Fetch All (still uses HeartBleCubit directly)
   bool _isFetchingAll = false;
@@ -55,16 +55,14 @@ class _BleFetchDemoScreenState extends State<BleFetchDemoScreen> {
   }
 
   Future<void> _loadFromHive() async {
-    final store = HistoryLocalStore.instance;
-    await store.open();
-    final hrMaps = store.getAllHr();
-    final rrMaps = store.getAllRr();
+    final data = await HistoryRepository.instance.hydrate();
+    if (!mounted) return;
 
     setState(() {
-      _hrReadings = hrMaps.map((m) => HrReadingHive.fromMap(m)).toList()
-        ..sort((a, b) => a.stamp.compareTo(b.stamp));
-      _rrSamples = rrMaps.map((m) => RrSampleHive.fromMap(m)).toList()
-        ..sort((a, b) => a.stamp.compareTo(b.stamp));
+      _hrReadings = data.hr.map((m) => HrReading.fromMap(m)).toList()
+        ..sort((a, b) => a.stampSec.compareTo(b.stampSec));
+      _rrSamples = data.rr.map((m) => RrSample.fromMap(m)).toList()
+        ..sort((a, b) => a.stampSec.compareTo(b.stampSec));
     });
   }
 
@@ -75,10 +73,10 @@ class _BleFetchDemoScreenState extends State<BleFetchDemoScreen> {
   }
 
   Future<void> _onRangeFetchComplete(BleFetchRangeState fetchState) async {
-    final store = HistoryLocalStore.instance;
-    await store.open();
-    final hrSaved = await store.upsertHrChunk(fetchState.hrData);
-    final rrSaved = await store.upsertRrChunk(fetchState.rrData);
+    final hrSaved =
+        await HistoryRepository.instance.persistHrChunk(fetchState.hrData);
+    final rrSaved =
+        await HistoryRepository.instance.persistRrChunk(fetchState.rrData);
     await _loadFromHive();
 
     if (mounted) {
@@ -159,10 +157,8 @@ class _BleFetchDemoScreenState extends State<BleFetchDemoScreen> {
     final hrData = _bleCubit.state.historyHrData;
     final rrData = _bleCubit.state.historyRrData;
 
-    final store = HistoryLocalStore.instance;
-    await store.open();
-    final hrSaved = await store.upsertHrChunk(hrData);
-    final rrSaved = await store.upsertRrChunk(rrData);
+    final hrSaved = await HistoryRepository.instance.persistHrChunk(hrData);
+    final rrSaved = await HistoryRepository.instance.persistRrChunk(rrData);
 
     await _loadFromHive();
 
@@ -205,11 +201,9 @@ class _BleFetchDemoScreenState extends State<BleFetchDemoScreen> {
   }
 
   Future<void> _clearHiveData() async {
-    final store = HistoryLocalStore.instance;
-    await store.open();
-    await store.clearAll();
+    await HistoryRepository.instance.clearAll();
     await _loadFromHive();
-    setState(() => _statusMessage = 'Hive data cleared!');
+    if (mounted) setState(() => _statusMessage = 'Local data cleared!');
   }
 
   bool get _isBusy => _isFetchingAll || _fetchCubit.state.isSyncing;
@@ -450,9 +444,7 @@ class _BleFetchDemoScreenState extends State<BleFetchDemoScreen> {
       itemCount: _hrReadings.length,
       itemBuilder: (context, index) {
         final r = _hrReadings[index];
-        final time = DateTime.fromMillisecondsSinceEpoch(
-          r.stamp > 9999999999 ? r.stamp : r.stamp * 1000,
-        );
+        final time = DateTime.fromMillisecondsSinceEpoch(r.stampSec * 1000);
         return ListTile(
           dense: true,
           leading: const Icon(Icons.favorite, color: Colors.red, size: 20),
@@ -484,9 +476,7 @@ class _BleFetchDemoScreenState extends State<BleFetchDemoScreen> {
       itemCount: _rrSamples.length,
       itemBuilder: (context, index) {
         final r = _rrSamples[index];
-        final time = DateTime.fromMillisecondsSinceEpoch(
-          r.stamp > 9999999999 ? r.stamp : r.stamp * 1000,
-        );
+        final time = DateTime.fromMillisecondsSinceEpoch(r.stampSec * 1000);
         return ListTile(
           dense: true,
           leading: const Icon(Icons.timeline, color: Colors.blue, size: 20),

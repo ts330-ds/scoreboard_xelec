@@ -5,6 +5,7 @@ import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:pretty_dio_logger/pretty_dio_logger.dart';
+import 'package:xelex_esp/core/logging/file_logger.dart';
 
 class ApiService {
   static ApiService? _instance;
@@ -38,12 +39,30 @@ class ApiService {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          FileLogger.instance.log(
+            '→ ${options.method} ${options.uri}'
+            '${options.data != null ? '\nbody:\n${prettyJson(options.data)}' : ''}',
+            tag: 'API',
+          );
           handler.next(options);
         },
         onResponse: (response, handler) {
+          FileLogger.instance.log(
+            '← ${response.statusCode} ${response.requestOptions.method} '
+            '${response.requestOptions.uri}\ndata:\n${prettyJson(response.data)}',
+            tag: 'API',
+          );
           handler.next(response);
         },
         onError: (DioException error, handler) async {
+          FileLogger.instance.log(
+            '✖ ${error.type.name} ${error.requestOptions.method} '
+            '${error.requestOptions.uri}  '
+            'status=${error.response?.statusCode}  '
+            'msg=${error.message}\ndata:\n${prettyJson(error.response?.data)}',
+            tag: 'API',
+            level: 'ERROR',
+          );
           // Connection error pe HttpClient reset karke ek retry
           if (_isConnectionError(error) &&
               error.requestOptions.extra['_retried'] != true) {

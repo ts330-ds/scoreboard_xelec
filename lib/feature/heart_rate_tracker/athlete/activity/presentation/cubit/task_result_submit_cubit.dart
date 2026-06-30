@@ -5,8 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/data/local/task_upload_record.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/data/local/task_upload_store.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/repository/athlete_task_repository.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/history_local_store.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/hr_reading_hive.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/repository/history_repository.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history_sql/domain/entity/hr_reading.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/ble_fetch_range/cubit/ble_fetch_range_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/ble_fetch_range/cubit/ble_fetch_range_state.dart';
 
@@ -116,8 +116,8 @@ class TaskResultSubmitCubit extends Cubit<TaskResultSubmitState> {
       return;
     }
 
-    // Load readings from Hive and resume
-    final readings = _loadReadingsFromHive(
+    // Load readings from SQLite and resume
+    final readings = await _loadReadings(
       record.sessionStartMs,
       record.sessionEndMs,
     );
@@ -146,13 +146,11 @@ class TaskResultSubmitCubit extends Cubit<TaskResultSubmitState> {
     required int sessionEndMs,
     required List<Map<dynamic, dynamic>> hrData,
   }) async {
-    // Save HR data to Hive (so it persists even if upload fails)
-    final historyStore = HistoryLocalStore.instance;
-    await historyStore.open();
-    await historyStore.upsertHrChunk(hrData);
+    // Save HR data to SQLite (so it persists even if upload fails)
+    await HistoryRepository.instance.persistHrChunk(hrData);
 
-    // Load filtered readings from Hive
-    final readings = _loadReadingsFromHive(sessionStartMs, sessionEndMs);
+    // Load filtered readings from SQLite
+    final readings = await _loadReadings(sessionStartMs, sessionEndMs);
 
     if (readings.isEmpty) {
       debugPrint('[TASK-SUBMIT] No readings found for task $taskId '
@@ -186,29 +184,28 @@ class TaskResultSubmitCubit extends Cubit<TaskResultSubmitState> {
     await _uploadChunks(taskId: taskId, readings: mapped);
   }
 
-  // ── Load readings from Hive ──────────────────────────────────────────────
+  // ── Load readings from SQLite ─────────────────────────────────────────────
 
-  List<HrReadingHive> _loadReadingsFromHive(
+  Future<List<HrReading>> _loadReadings(
     int sessionStartMs,
     int sessionEndMs,
-  ) {
+  ) async {
     // BLE device clock can drift vs phone — allow 30s buffer on each side
     const driftMs = 30 * 1000;
     final fromMs = sessionStartMs - driftMs;
     final toMs = sessionEndMs + driftMs;
 
-    final store = HistoryLocalStore.instance;
-    final filtered = store.getHrInRange(fromMs, toMs);
+    final filtered = await HistoryRepository.instance.hrInRange(fromMs, toMs);
 
-    // Sort by timestamp
-    filtered.sort((a, b) => a.stamp.compareTo(b.stamp));
+    // Sort by timestamp (range scan already returns ASC, but stay explicit)
+    filtered.sort((a, b) => a.stampSec.compareTo(b.stampSec));
 
     return filtered;
   }
 
-  // ── Map HrReadingHive to API format ──────────────────────────────────────
+  // ── Map HrReading to API format ───────────────────────────────────────────
 
-  List<Map<String, dynamic>> _mapReadingsForApi(List<HrReadingHive> readings) {
+  List<Map<String, dynamic>> _mapReadingsForApi(List<HrReading> readings) {
     return readings.map((r) {
       return <String, dynamic>{
         'heart_rate': r.heartRate,
@@ -217,7 +214,7 @@ class TaskResultSubmitCubit extends Cubit<TaskResultSubmitState> {
         'lat': null,
         'lng': null,
         'stress_level': null,
-        'timestamp': _ensureMilliseconds(r.stamp),
+        'timestamp': _ensureMilliseconds(r.stampSec),
       };
     }).toList();
   }

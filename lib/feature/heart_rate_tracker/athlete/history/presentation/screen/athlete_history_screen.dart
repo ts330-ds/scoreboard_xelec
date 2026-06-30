@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
@@ -51,6 +52,52 @@ class _HistoryShellState extends State<_HistoryShell> {
   final _lastPushKey = GlobalKey<LastPushInfoState>();
   int _selectedDateIdx = 0;
 
+  // Cached derived data — recomputed only when the raw history list changes,
+  // not on every rebuild (e.g. when switching date tabs).
+  List<Map<dynamic, dynamic>>? _cacheKey;
+  List<_DayGroup> _cachedGroups = const [];
+  List<Map<dynamic, dynamic>> _cachedDedup = const [];
+
+  // Itne se zyada readings hone pe dedupe+grouping ek background isolate me
+  // hota hai (24h session = ~86k points) — UI thread block nahi hoti. Chhote
+  // data ke liye seedha main thread (isolate spawn ka overhead bachta hai).
+  static const int _isolateThreshold = 3000;
+
+  @override
+  void initState() {
+    super.initState();
+    _recomputeIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HistoryShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _recomputeIfNeeded();
+  }
+
+  void _recomputeIfNeeded() {
+    final raw = widget.bleState.historyHrData;
+    if (identical(raw, _cacheKey)) return;
+    _cacheKey = raw;
+
+    if (raw.length < _isolateThreshold) {
+      final r = _computeHistory(raw);
+      _cachedDedup = r.dedup;
+      _cachedGroups = r.groups;
+      return;
+    }
+
+    // Bada dataset — heavy crunching background isolate me chalao.
+    Isolate.run(() => _computeHistory(raw)).then((r) {
+      // Beech me data dobara badal gaya to ye result purana hai — chhod do.
+      if (!mounted || !identical(raw, _cacheKey)) return;
+      setState(() {
+        _cachedDedup = r.dedup;
+        _cachedGroups = r.groups;
+      });
+    });
+  }
+
   bool get _syncing {
     final s = widget.bleState.status.toLowerCase();
     return s.contains('syncing') || s.contains('yncing');
@@ -71,71 +118,9 @@ class _HistoryShellState extends State<_HistoryShell> {
     context.read<HeartBleCubit>().syncNewFromDevice();
   }
 
-  // ── Group all HR data by date (newest first) ──────────────────────────────
-
-  List<_DayGroup> _buildDayGroups() {
-    final raw = widget.bleState.historyHrData;
-    if (raw.isEmpty) return [];
-    final all = dedupeHrData(raw);
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-    final dateFmt = DateFormat('dd MMM');
-
-    final grouped = <String, List<Map<dynamic, dynamic>>>{};
-    final dateKeys = <String, DateTime>{};
-
-    for (final r in all) {
-      final stamp = (r['stamp'] as num?)?.toInt() ?? 0;
-      if (stamp <= 0) continue;
-      final hr = (r['heartRate'] as num?)?.toInt() ?? 0;
-      if (hr <= 0) continue;
-      final dt = stampToDateTime(stamp);
-      final dtDay = DateTime(dt.year, dt.month, dt.day);
-      String label;
-      if (dtDay == today) {
-        label = 'Today';
-      } else if (dtDay == yesterday) {
-        label = 'Yesterday';
-      } else {
-        label = dateFmt.format(dt);
-      }
-      grouped.putIfAbsent(label, () => []).add(r);
-      dateKeys.putIfAbsent(label, () => dtDay);
-    }
-
-    // Sort: newest date first
-    final sortedLabels = grouped.keys.toList()
-      ..sort((a, b) => dateKeys[b]!.compareTo(dateKeys[a]!));
-
-    return sortedLabels.map((label) {
-      final readings = grouped[label]!
-        ..sort((a, b) {
-          final sa = (a['stamp'] as num?)?.toInt() ?? 0;
-          final sb = (b['stamp'] as num?)?.toInt() ?? 0;
-          return sa.compareTo(sb); // chronological for chart
-        });
-      final hrs = readings
-          .map((r) => (r['heartRate'] as num?)?.toInt() ?? 0)
-          .where((v) => v > 0)
-          .toList();
-      if (hrs.isEmpty) return null;
-      return _DayGroup(
-        label: label,
-        date: dateKeys[label]!,
-        readings: readings,
-        avg: (hrs.reduce((a, b) => a + b) / hrs.length).round(),
-        max: hrs.reduce((a, b) => a > b ? a : b),
-        min: hrs.reduce((a, b) => a < b ? a : b),
-        count: readings.length,
-      );
-    }).whereType<_DayGroup>().toList();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final dayGroups = _buildDayGroups();
+    final dayGroups = _cachedGroups;
 
     // Clamp selected index
     if (_selectedDateIdx >= dayGroups.length) {
@@ -233,7 +218,7 @@ class _HistoryShellState extends State<_HistoryShell> {
                             Expanded(
                               child: _DayDetail(
                                 group: dayGroups[_selectedDateIdx],
-                                allHrData: dedupeHrData(widget.bleState.historyHrData),
+                                allHrData: _cachedDedup,
                               ),
                             ),
                           ],
@@ -243,6 +228,80 @@ class _HistoryShellState extends State<_HistoryShell> {
             ),
     );
   }
+}
+
+// ── Heavy data crunching — main thread ya isolate dono jagah se call hota hai ──
+
+class _HistoryComputeResult {
+  final List<Map<dynamic, dynamic>> dedup;
+  final List<_DayGroup> groups;
+  const _HistoryComputeResult(this.dedup, this.groups);
+}
+
+/// Raw HR data ko dedupe karke date-wise groups me badalta hai. Pure CPU kaam —
+/// 24h session (~86k points) pe bhari hota hai, isliye bade data ke liye ise
+/// `Isolate.run` background isolate me chalaya jaata hai.
+_HistoryComputeResult _computeHistory(List<Map<dynamic, dynamic>> raw) {
+  final dedup = dedupeHrData(raw);
+  return _HistoryComputeResult(dedup, _buildDayGroups(dedup));
+}
+
+List<_DayGroup> _buildDayGroups(List<Map<dynamic, dynamic>> all) {
+  if (all.isEmpty) return [];
+
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final yesterday = today.subtract(const Duration(days: 1));
+  final dateFmt = DateFormat('dd MMM');
+
+  final grouped = <String, List<Map<dynamic, dynamic>>>{};
+  final dateKeys = <String, DateTime>{};
+
+  for (final r in all) {
+    final stamp = (r['stamp'] as num?)?.toInt() ?? 0;
+    if (stamp <= 0) continue;
+    final hr = (r['heartRate'] as num?)?.toInt() ?? 0;
+    if (hr <= 0) continue;
+    final dt = stampToDateTime(stamp);
+    final dtDay = DateTime(dt.year, dt.month, dt.day);
+    String label;
+    if (dtDay == today) {
+      label = 'Today';
+    } else if (dtDay == yesterday) {
+      label = 'Yesterday';
+    } else {
+      label = dateFmt.format(dt);
+    }
+    grouped.putIfAbsent(label, () => []).add(r);
+    dateKeys.putIfAbsent(label, () => dtDay);
+  }
+
+  // Sort: newest date first
+  final sortedLabels = grouped.keys.toList()
+    ..sort((a, b) => dateKeys[b]!.compareTo(dateKeys[a]!));
+
+  return sortedLabels.map((label) {
+    final readings = grouped[label]!
+      ..sort((a, b) {
+        final sa = (a['stamp'] as num?)?.toInt() ?? 0;
+        final sb = (b['stamp'] as num?)?.toInt() ?? 0;
+        return sa.compareTo(sb); // chronological for chart
+      });
+    final hrs = readings
+        .map((r) => (r['heartRate'] as num?)?.toInt() ?? 0)
+        .where((v) => v > 0)
+        .toList();
+    if (hrs.isEmpty) return null;
+    return _DayGroup(
+      label: label,
+      date: dateKeys[label]!,
+      readings: readings,
+      avg: (hrs.reduce((a, b) => a + b) / hrs.length).round(),
+      max: hrs.reduce((a, b) => a > b ? a : b),
+      min: hrs.reduce((a, b) => a < b ? a : b),
+      count: readings.length,
+    );
+  }).whereType<_DayGroup>().toList();
 }
 
 // ─── Day group model ─────────────────────────────────────────────────────────

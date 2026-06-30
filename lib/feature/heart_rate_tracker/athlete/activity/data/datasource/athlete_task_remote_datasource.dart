@@ -87,6 +87,9 @@ class AthleteTaskRemoteDataSourceImpl implements AthleteTaskRemoteDataSource {
             data: {
               'name': name,
               'assigned_by': assignedBy,
+              // Backend "Session duration is required (in minutes)" maangta hai.
+              // Default 720 min (12h) bhej rahe hain.
+              'duration': 720,
             },
             options: Options(headers: {'Authorization': 'Bearer $token'}),
           );

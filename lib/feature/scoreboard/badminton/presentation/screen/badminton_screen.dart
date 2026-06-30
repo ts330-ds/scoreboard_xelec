@@ -15,7 +15,7 @@ class BadmintonScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider(create: (context) => sl<BadmintonControllerCubit>()),
+        BlocProvider.value(value: sl<BadmintonControllerCubit>()),
       ],
       child: ResponsiveLayout(
           mobile: BadmintionMobile(),

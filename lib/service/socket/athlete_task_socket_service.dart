@@ -138,6 +138,19 @@ class AthleteTaskSocketService {
     _socket!.emit('task_result_submit', payload);
   }
 
+  /// Minimal `task_result_submit` jisme sirf task_id (+ timestamp) hai.
+  /// Server kisi bhi `task_result_submit` par pending → in_progress kar deta hai,
+  /// chahe heart_rate na ho. Isse session start hote hi (BLE sensor ke valid
+  /// HR dene se PEHLE) task in_progress ho jaata hai — coach ko turant pata
+  /// chal jaata hai ki athlete active hai.
+  void notifySessionStart(int taskId) {
+    if (!isConnected) return;
+    _socket!.emit('task_result_submit', <String, dynamic>{
+      'task_id': taskId,
+      'timestamp': _mysqlTimestamp(),
+    });
+  }
+
   void stopTask(int taskId) {
     if (!isConnected) {
       // debugPrint('[SESSION SOCKET] stopTask skipped — not connected (task=$taskId)');

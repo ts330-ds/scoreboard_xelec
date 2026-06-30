@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:xelex_esp/core/logging/file_logger.dart';
 import 'package:xelex_esp/service/socket/athlete_task_socket_service.dart';
 
 // @pragma annotation zaroori hai — warna release build mein tree shaking
@@ -8,6 +10,10 @@ import 'package:xelex_esp/service/socket/athlete_task_socket_service.dart';
 // Flutter foreground task isko string naam se dhundh ke call karta hai.
 @pragma('vm:entry-point')
 void startCallback() {
+  // Background isolate ka apna FileLogger (alag file: bg_log.txt) — taaki
+  // session socket activity bhi log ho. Main isolate ki file se merge hoti hai.
+  FileLogger.instance.init(fileName: FileLogger.bgFileName);
+  installDebugPrintCapture();
   FlutterForegroundTask.setTaskHandler(AthleteBackgroundHandler());
 }
 
@@ -33,6 +39,11 @@ class AthleteBackgroundHandler extends TaskHandler {
   int? _activeTaskId;
   bool _readyAnnounced = false;
 
+  // Kya is session ki pehli REAL (HR > 0) reading ja chuki hai? Jab tak nahi,
+  // hum har tick par ek presence-ping bhejte hain taaki task pending → in_progress
+  // ho jaaye (sensor slow ho ya socket abhi connect hua ho tab bhi).
+  bool _firstHrSent = false;
+
   // BG-side self-reconnect — Vivo/Xiaomi screen-off pe main isolate throttle
   // ho jaata hai, isliye main isolate pe depend nahi karte.
   Timer? _reconnectTimer;
@@ -42,9 +53,16 @@ class AthleteBackgroundHandler extends TaskHandler {
   static const _maxReconnectAttempts = 5; // 2+4+8+16+30 = ~60s max
 
   // Pending stop — jab stop_activity aaye lekin socket disconnected ho,
-  // reconnect karke stop deliver karo.
+  // reconnect karke stop deliver karo. Delivery ek wall-clock deadline tak
+  // retry hoti hai (fixed retry-count nahi) — internet wapas aate hi turant
+  // bhej dete hain (connectivity listener), warna deadline pe abandon.
   int? _pendingStopTaskId;
   Timer? _stopDeliveryTimer;
+  DateTime? _pendingStopDeadline;
+  static const _pendingStopMaxDuration = Duration(minutes: 10);
+
+  // Connectivity-aware delivery (Layer 2) — net wapas aate hi reconnect.
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   // Notification throttle — onRepeatEvent har 1s pe fire hota hai, lekin
   // notification ko har 3s pe update karte hain (battery + OEM spam-filter ke liye).
@@ -56,6 +74,7 @@ class AthleteBackgroundHandler extends TaskHandler {
     debugPrint('[BG HANDLER] onStart — background isolate ready');
     _taskSocket = AthleteTaskSocketService();
     _setupActivitySocketCallbacks();
+    _listenConnectivity();
     // Note: bg_ready event onStart se directly bhejne pe main tak reliably
     // nahi pahunchta — IPC channel onStart ke andar abhi fully wired nahi
     // hota. Isliye onRepeatEvent ke first tick me bhejte hain (max 1s wait).
@@ -70,16 +89,24 @@ class AthleteBackgroundHandler extends TaskHandler {
       FlutterForegroundTask.sendDataToMain({'event': 'bg_ready'});
     }
 
-    if (_activeTaskId != null && _heartRate > 0 && _taskSocket.isConnected) {
-      _taskSocket.submitHeartbeat(
-        taskId: _activeTaskId!,
-        heartRate: _heartRate,
-        spo2: _spo2,
-        stressLevel: _stressLevel,
-        hrv: _hrv,
-        lat: _lat,
-        lng: _lng,
-      );
+    if (_activeTaskId != null && _taskSocket.isConnected) {
+      if (_heartRate > 0) {
+        _taskSocket.submitHeartbeat(
+          taskId: _activeTaskId!,
+          heartRate: _heartRate,
+          spo2: _spo2,
+          stressLevel: _stressLevel,
+          hrv: _hrv,
+          lat: _lat,
+          lng: _lng,
+        );
+        _firstHrSent = true;
+      } else if (!_firstHrSent) {
+        // Sensor abhi tak valid HR nahi de raha — phir bhi task ko in_progress
+        // karne ke liye presence-ping bhejo. Har 1s retry hota hai, isliye
+        // server-side auth race / late connect bhi cover ho jaata hai.
+        _taskSocket.notifySessionStart(_activeTaskId!);
+      }
     }
 
     _maybeUpdateNotification();
@@ -139,6 +166,7 @@ class AthleteBackgroundHandler extends TaskHandler {
     if (taskId == null) return;
 
     _pendingStopTaskId = taskId;
+    _pendingStopDeadline = DateTime.now().add(_pendingStopMaxDuration);
     _stopRetryCount = 0;
 
     if (_taskSocket.isConnected) {
@@ -148,28 +176,60 @@ class AthleteBackgroundHandler extends TaskHandler {
     }
   }
 
-  static const _maxStopRetries = 5;
   int _stopRetryCount = 0;
 
   void _attemptStopDelivery() {
+    if (_pendingStopTaskId == null) return;
     final token = _lastToken;
     final baseUrl = _lastBaseUrl;
-    if (token == null || baseUrl == null || _pendingStopTaskId == null) return;
+    if (token == null || baseUrl == null) return;
 
-    _taskSocket.connect(baseUrl, token);
+    // Deadline cross — itni der internet off raha ki ab give-up karo.
+    // Main isolate ko batao taaki wo foreground service tear down kar de.
+    if (_pendingStopDeadline != null &&
+        DateTime.now().isAfter(_pendingStopDeadline!)) {
+      debugPrint('[BG HANDLER] pending stop deadline exceeded — abandoning delivery');
+      _abandonPendingStop();
+      return;
+    }
 
+    if (!_taskSocket.isConnected) _taskSocket.connect(baseUrl, token);
+
+    // Backoff fallback retry — connectivity listener bhi parallel mein turant
+    // try karega jab net wapas aaye.
     _stopDeliveryTimer?.cancel();
     _stopRetryCount++;
     final delaySec = (2 * (1 << (_stopRetryCount - 1))).clamp(2, 15);
     _stopDeliveryTimer = Timer(Duration(seconds: delaySec), () {
       if (_pendingStopTaskId == null) return;
-      if (_stopRetryCount >= _maxStopRetries) {
-        debugPrint('[BG HANDLER] stop delivery failed after $_maxStopRetries retries — giving up');
-        _pendingStopTaskId = null;
-        return;
-      }
       debugPrint('[BG HANDLER] stop delivery retry #$_stopRetryCount');
       _attemptStopDelivery();
+    });
+  }
+
+  void _abandonPendingStop() {
+    _stopDeliveryTimer?.cancel();
+    _pendingStopTaskId = null;
+    _pendingStopDeadline = null;
+    FlutterForegroundTask.sendDataToMain({'event': 'activity_stop_abandoned'});
+  }
+
+  // Net wapas aate hi (Layer 2) — pending stop ya active task ko turant
+  // reconnect karke deliver/resume karo, fixed backoff ka wait kiye bina.
+  void _listenConnectivity() {
+    _connectivitySub =
+        Connectivity().onConnectivityChanged.listen((results) {
+      final online = results.any((r) => r != ConnectivityResult.none);
+      if (!online) return;
+      if (_taskSocket.isConnected) return;
+      if (_pendingStopTaskId == null && _activeTaskId == null) return;
+      final token = _lastToken;
+      final baseUrl = _lastBaseUrl;
+      if (token == null || baseUrl == null) return;
+      debugPrint('[BG HANDLER] connectivity restored — immediate reconnect');
+      _reconnectTimer?.cancel();
+      _stopDeliveryTimer?.cancel();
+      _taskSocket.connect(baseUrl, token);
     });
   }
 
@@ -178,6 +238,9 @@ class AthleteBackgroundHandler extends TaskHandler {
     debugPrint('[BG HANDLER] onDestroy — cleaning up');
     _reconnectTimer?.cancel();
     _stopDeliveryTimer?.cancel();
+    _connectivitySub?.cancel();
+    _connectivitySub = null;
+    _pendingStopDeadline = null;
     // Swipe-kill / system kill: sirf tab stop bhejo jab user ne explicitly
     // stop nahi kiya tha. Agar _pendingStopTaskId set hai, matlab stop already
     // bheja ja chuka hai / deliver ho raha hai — dobara bhejne ki zaroorat nahi.
@@ -198,6 +261,7 @@ class AthleteBackgroundHandler extends TaskHandler {
     _pendingStopTaskId = null;
     _stopDeliveryTimer?.cancel();
     _activeTaskId = taskId;
+    _firstHrSent = false;
     _lastToken = token;
     _lastBaseUrl = baseUrl;
     _reconnectAttempt = 0;
@@ -239,6 +303,13 @@ class AthleteBackgroundHandler extends TaskHandler {
         _stopDeliveryTimer?.cancel();
         _taskSocket.stopTask(pendingStop);
       }
+
+      // Connect hote hi turant task ko in_progress kar do — HR ka wait mat karo.
+      // onRepeatEvent fallback bhi cover karta hai, lekin yeh fast path hai.
+      final activeTask = _activeTaskId;
+      if (activeTask != null && !_firstHrSent) {
+        _taskSocket.notifySessionStart(activeTask);
+      }
     };
 
     _taskSocket.onTaskSaved = (data) {
@@ -251,6 +322,7 @@ class AthleteBackgroundHandler extends TaskHandler {
     _taskSocket.onRecordingStopped = (data) {
       _activeTaskId = null;
       _pendingStopTaskId = null;
+      _pendingStopDeadline = null;
       _stopDeliveryTimer?.cancel();
       _reconnectTimer?.cancel();
       _reconnectAttempt = 0;

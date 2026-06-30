@@ -8,7 +8,9 @@ import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentati
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/cubit/shell_cubit.dart';
 import 'package:xelex_esp/feature/onboarding/battery_optimization_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_activity_mobile.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/presentation/screen/athlete_history_screen.dart';
+// SQL-backed history screen. To revert to the Hive version, swap this import
+// back to athlete_history_screen.dart and use AthleteHistoryScreen below.
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history_sql/presentation/screen/athlete_history_sql_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_home_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_profile_mobile.dart';
 import 'package:xelex_esp/router/heart_tracker_path.dart';
@@ -35,6 +37,11 @@ class _AthleteMainScreenMobileState extends State<AthleteMainScreenMobile> {
         if (mounted) BatteryOptimizationScreen.showIfNeeded(context);
       });
     }
+    // Process death (phone off / app swipe-kill) ke baad adhoori session
+    // recover karo — server status ke hisaab se resume / upload / discard.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      sl<AthleteActivityCubit>().attemptSessionRecovery();
+    });
   }
 
   Future<void> _showFeedbackSheet(BuildContext context, int taskId) async {
@@ -60,7 +67,7 @@ class _AthleteMainScreenMobileState extends State<AthleteMainScreenMobile> {
     const AthleteHomeMobile(),
     const AthleteActivityMobile(),
     const AthleteProfileMobile(),
-    const AthleteHistoryScreen(),
+    const AthleteHistorySqlScreen(),
   ];
 
   int _locationToIndex(String location) {
@@ -96,13 +103,6 @@ class _AthleteMainScreenMobileState extends State<AthleteMainScreenMobile> {
           final taskId = activityState.pendingFeedbackTaskId;
 
           if (taskId != null) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-              final still = sl<AthleteActivityCubit>().state.pendingFeedbackTaskId;
-              if (still == null) return;
-              _showFeedbackSheet(context, taskId);
-            });
-
             return PopScope(
               canPop: false,
               onPopInvokedWithResult: (didPop, _) {

@@ -12,7 +12,9 @@ class LastPushInfo extends StatefulWidget {
 }
 
 class LastPushInfoState extends State<LastPushInfo> {
-  int _lastPushMs = 0;
+  // Server is the source of truth — these mirror the /last_timestamp API.
+  int _serverLastMs = 0;
+  int _checkedAtMs = 0;
   int _lastHrStamp = 0;
   int _lastRrStamp = 0;
   int _lastSleepUtc = 0;
@@ -28,7 +30,8 @@ class LastPushInfoState extends State<LastPushInfo> {
     final wm = await HistoryWatermarkStore.create();
     if (!mounted) return;
     setState(() {
-      _lastPushMs = wm.lastPushAtMs;
+      _serverLastMs = wm.serverLastStampMs;
+      _checkedAtMs = wm.serverCheckedAtMs;
       _lastHrStamp = wm.lastHrStamp;
       _lastRrStamp = wm.lastRrStamp;
       _lastSleepUtc = wm.lastSleepUtc;
@@ -37,15 +40,22 @@ class LastPushInfoState extends State<LastPushInfo> {
   }
 
   ({Color bg, Color fg, IconData icon}) _visual() {
-    if (_lastPushMs == 0) {
-      return (
-        bg: AppColors.errorBg,
-        fg: AppColors.error,
-        icon: Icons.cloud_off_outlined,
-      );
+    if (_serverLastMs == 0) {
+      // Reached server but it has no data → neutral; never reached → error.
+      return _checkedAtMs > 0
+          ? (
+              bg: AppColors.warningBg,
+              fg: AppColors.warning,
+              icon: Icons.cloud_queue_outlined,
+            )
+          : (
+              bg: AppColors.errorBg,
+              fg: AppColors.error,
+              icon: Icons.cloud_off_outlined,
+            );
     }
     final ageMin =
-        (DateTime.now().millisecondsSinceEpoch - _lastPushMs) ~/ (1000 * 60);
+        (DateTime.now().millisecondsSinceEpoch - _serverLastMs) ~/ (1000 * 60);
     if (ageMin < 60) {
       return (
         bg: AppColors.successBg,
@@ -72,7 +82,9 @@ class LastPushInfoState extends State<LastPushInfo> {
     if (!_loaded) return const SizedBox.shrink();
 
     final v = _visual();
-    final pushLabel = fmtLastSync(_lastPushMs);
+    final pushLabel = _serverLastMs > 0
+        ? fmtLastSync(_serverLastMs)
+        : (_checkedAtMs > 0 ? 'No data on server yet' : 'Never synced');
 
     final parts = <String>[];
     if (_lastHrStamp > 0) parts.add('HR');
@@ -102,7 +114,7 @@ class LastPushInfoState extends State<LastPushInfo> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'LAST SERVER PUSH',
+                  'LAST SYNCED',
                   style: TextStyle(
                     color: v.fg.withValues(alpha: 0.7),
                     fontSize: 9,

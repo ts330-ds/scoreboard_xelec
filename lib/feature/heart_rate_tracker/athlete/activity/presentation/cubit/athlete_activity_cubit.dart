@@ -10,6 +10,7 @@ import 'package:xelex_esp/core/pref_keys.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/data/model/activity_session_model.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/entity/athlete_task_entity.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/usecase/create_athlete_task_usecase.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/usecase/get_my_tasks_usecase.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_state.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
@@ -22,6 +23,7 @@ import 'athlete_activity_state.dart';
 class AthleteActivityCubit extends Cubit<AthleteActivityState>
     with WidgetsBindingObserver {
   final CreateAthleteTaskUseCase _createTask;
+  final GetMyTasksUseCase _getMyTasks;
   final SharedPreferences _prefs;
   final HeartBleCubit _bleCubit;
 
@@ -30,9 +32,11 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
 
   AthleteActivityCubit({
     required CreateAthleteTaskUseCase createTask,
+    required GetMyTasksUseCase getMyTasks,
     required SharedPreferences prefs,
     required HeartBleCubit bleCubit,
   })  : _createTask = createTask,
+        _getMyTasks = getMyTasks,
         _prefs = prefs,
         _bleCubit = bleCubit,
         super(const AthleteActivityState()) {
@@ -44,7 +48,12 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     // Airplane mode / Wi-Fi drop ke baad jab network restore ho, agar session
     // active hai aur socket disconnect/exhausted hai to turant retry karo.
     _netSub = NetworkReconnectNotifier.instance.onNetworkRestored.listen((_) {
-      if (isClosed || !state.isSessionActive || state.isAuthFailure) return;
+      if (isClosed ||
+          !state.isSessionActive ||
+          state.isAuthFailure ||
+          state.isStoppingSession) {
+        return;
+      }
       if (!state.isSocketConnected) {
         debugPrint('[ACTIVITY CUBIT] network restored — forcing retry');
         retryConnectionManually();
@@ -87,20 +96,68 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     final nowConnected = bleState.isConnected;
     if (nowConnected && !_bleWasConnected) {
       AthleteForegroundService.preWarmService();
-    } else if (!nowConnected && _bleWasConnected && !state.isSessionActive) {
-      AthleteForegroundService.stopIfIdle();
+      // Device wapas connect hua — reconnect loop band karo
+      _bleReconnectTimer?.cancel();
+      _bleReconnectTimer = null;
+    } else if (!nowConnected && _bleWasConnected) {
+      if (!state.isSessionActive) {
+        AthleteForegroundService.stopIfIdle();
+      } else {
+        // Session active hai aur device disconnect hua — periodic reconnect shuru
+        _startBleReconnectLoop();
+      }
     }
     _bleWasConnected = nowConnected;
 
     if (!state.isSessionActive) return;
+
+    final spo2 = bleState.spo2 > 0 ? bleState.spo2.toDouble() : null;
+    final stress = bleState.stressLevel > 0 ? bleState.stressLevel : null;
+    final hrv = bleState.hrv > 0 ? bleState.hrv : null;
+
     if (bleState.heartRate > 0) {
+      // Biometrics ko pehle state mein update karo (forward NAHI), phir
+      // recordHeartRate ek hi IPC call mein HR + freshest biometrics forward
+      // kare. Warna har BLE tick pe updateMetrics background ko DO baar jaata
+      // tha (recordHeartRate + updateBiometrics dono se).
+      updateBiometrics(spo2: spo2, stressLevel: stress, hrv: hrv, forward: false);
       recordHeartRate(bleState.heartRate);
+    } else if (!nowConnected) {
+      // Device disconnect ho gaya (band off / out of range). BG handler ka
+      // _heartRate apni aakhri value pe atak jaata hai aur har 1s wahi (jhooti)
+      // flat-line server pe bhejta rehta hai. Isliye BG ko HR=0 forward karke
+      // clear karo — server pe jhooti reading ki jagah honest gap aaye. Reconnect
+      // hote hi real HR wapas flow karega. (updateBiometrics yahan use nahi kar
+      // sakte — wo last valid bpm forward kar deta, jo dobara stale HR bhej deta.)
+      AthleteForegroundService.updateMetrics(
+        heartRate: 0,
+        lat: state.lat,
+        lng: state.lng,
+      );
+    } else {
+      // Connected hai par HR abhi 0 (sensor warm-up) — biometrics aage bhejo.
+      updateBiometrics(spo2: spo2, stressLevel: stress, hrv: hrv);
     }
-    updateBiometrics(
-      spo2: bleState.spo2 > 0 ? bleState.spo2.toDouble() : null,
-      stressLevel: bleState.stressLevel > 0 ? bleState.stressLevel : null,
-      hrv: bleState.hrv > 0 ? bleState.hrv : null,
-    );
+  }
+
+  // ── BLE reconnect loop ────────────────────────────────────────────────────
+  // Session active hai aur device out of range chala gaya — har 30s pe
+  // reconnect attempt karo. Jab device wapas range mein aayega, connect
+  // hoga aur _onBleState mein timer cancel ho jayega.
+
+  void _startBleReconnectLoop() {
+    _bleReconnectTimer?.cancel();
+    _bleReconnectTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (isClosed || !state.isSessionActive || _bleCubit.state.isConnected) {
+        _bleReconnectTimer?.cancel();
+        _bleReconnectTimer = null;
+        return;
+      }
+      debugPrint('[CUBIT] BLE reconnect attempt — device disconnected during session');
+      _bleCubit.reconnectLastDevice();
+    });
+    // Pehla attempt turant — 30s wait mat karo
+    _bleCubit.reconnectLastDevice();
   }
 
   // UI ke liye timer — sirf elapsed seconds update karta hai
@@ -109,6 +166,18 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   Timer? _autoStopTimer;
   // Server se response na aaye to fallback
   Timer? _stopTimeoutTimer;
+  // BLE reconnect timer — jab session active hai aur device out of range ho
+  Timer? _bleReconnectTimer;
+  // Connection watchdog — event-independent safety net. Disconnect/reconnect
+  // loops sirf disconnect EVENT pe trigger hote hain; lekin agar start_activity
+  // command BG isolate tak na pahunche (bg_ready race) ya connect attempt hi na
+  // ho, to koi event aata hi nahi aur task pura session 'pending' reh jaata hai.
+  // Ye timer har few-seconds check karta hai — session active aur socket
+  // disconnected ho to connect dobara trigger karta hai (BG connect() idempotent
+  // hai). Connect hote hi (first ping → task_result_saved) ruk-ruk ke band ho
+  // jaata hai kyunki isSocketConnected true ho jaata hai.
+  Timer? _connWatchdog;
+  static const _connWatchdogInterval = Duration(seconds: 5);
   // App pause time record — resume pe gap calculate karne ke liye
   DateTime? _pausedAt;
   final ReconnectController _reconnect = ReconnectController(tag: 'ACTIVITY RECONNECT');
@@ -121,6 +190,7 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   void _onBackgroundEvent(Map<String, dynamic> data) {
     if (isClosed) return;
     final event = data['event'] as String?;
+    debugPrint('🛑 [SESSION DEBUG] BG event received: $event — isSessionActive=${state.isSessionActive}');
 
     switch (event) {
       case 'activity_task_saved':
@@ -136,13 +206,27 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
         }
 
       case 'activity_recording_stopped':
-        debugPrint('[CUBIT] recording_stopped — ending session');
+        debugPrint('🛑 [SESSION DEBUG] BG event: activity_recording_stopped — data=$data');
         _stopTimeoutTimer?.cancel();
         _stopTimeoutTimer = null;
-        _endSession();
+        _endSession(stopConfirmed: true);
+
+      case 'activity_stop_abandoned':
+        // BG ne pending stop deadline cross hone pe chhod diya (internet bahut
+        // der off raha). UI to pehle hi end ho chuka — ab sirf service tear
+        // down karo taaki wo hamesha alive na rahe.
+        debugPrint('🛑 [SESSION DEBUG] BG event: activity_stop_abandoned');
+        _stopTimeoutTimer?.cancel();
+        _stopTimeoutTimer = null;
+        _endSession(stopConfirmed: true);
 
       case 'activity_disconnected':
-        if (!isClosed && state.isSessionActive && !state.isAuthFailure) {
+        // Stop ke dauraan disconnect EXPECTED hai — tab reconnect mat schedule
+        // karo (warna stop window mein socket resurrect ho jaata hai).
+        if (!isClosed &&
+            state.isSessionActive &&
+            !state.isAuthFailure &&
+            !state.isStoppingSession) {
           emit(state.copyWith(
             isSocketConnected: false,
             isSocketReconnecting: true,
@@ -174,7 +258,7 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   void _scheduleReconnect() {
     _reconnect.schedule(
       onAttempt: (attempt) {
-        if (isClosed || !state.isSessionActive) return;
+        if (isClosed || !state.isSessionActive || state.isStoppingSession) return;
         debugPrint('[CUBIT] Reconnect attempt #$attempt');
         emit(state.copyWith(reconnectAttempt: attempt));
         _connectSocket();
@@ -211,6 +295,7 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (isClosed) return;
+    debugPrint('🛑 [SESSION DEBUG] lifecycle=$state, isSessionActive=${this.state.isSessionActive}, taskId=${this.state.activeTaskId}');
     switch (state) {
       case AppLifecycleState.paused:
         _onAppPaused();
@@ -234,6 +319,8 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     _timer = null;
     _autoStopTimer?.cancel();
     _autoStopTimer = null;
+    _bleReconnectTimer?.cancel();
+    _bleReconnectTimer = null;
     _pausedAt = DateTime.now();
     debugPrint('[LIFECYCLE] Session paused at $_pausedAt');
     // NOTE: Background service chalta rehta hai — socket alive hai
@@ -261,6 +348,7 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       _pausedAt = null;
 
       if (targetSeconds > 0 && newElapsed >= targetSeconds) {
+        debugPrint('🛑 [SESSION DEBUG] AUTO-STOP on resume — elapsed($newElapsed) >= target($targetSeconds)');
         if (isClosed) return;
         emit(state.copyWith(elapsedSeconds: targetSeconds));
         if (isClosed) return;
@@ -274,6 +362,11 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
 
     if (isClosed || !state.isSessionActive) return;
     _startTimer();
+
+    // Agar BLE abhi bhi disconnected hai aur session active — reconnect loop restart
+    if (!_bleCubit.state.isConnected && _bleReconnectTimer == null) {
+      _startBleReconnectLoop();
+    }
   }
 
   // ── Task name ─────────────────────────────────────────────────────────────
@@ -451,10 +544,36 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     );
   }
 
+  // ── Connection watchdog ──────────────────────────────────────────────────
+  // Event-driven reconnect (BG handler + ReconnectController) sirf disconnect
+  // EVENT par chalta hai. Agar connect attempt hi na ho (start_activity drop /
+  // bg_ready race) to koi event nahi aata aur task pura session 'pending' reh
+  // jaata hai. Ye watchdog us silent gap ko bharta hai.
+  void _startConnWatchdog() {
+    _connWatchdog?.cancel();
+    _connWatchdog = Timer.periodic(_connWatchdogInterval, (_) {
+      if (isClosed || !state.isSessionActive) {
+        _connWatchdog?.cancel();
+        _connWatchdog = null;
+        return;
+      }
+      // Token invalid/expired — re-issue se kuch nahi hoga, user ko re-login chahiye.
+      if (state.isAuthFailure) return;
+      // Stop in progress — socket ko resurrect mat karo.
+      if (state.isStoppingSession) return;
+      // Pehle se connected hai to kuch mat karo.
+      if (state.isSocketConnected) return;
+
+      debugPrint('[CUBIT] conn watchdog — socket disconnected, re-issuing connect');
+      _connectSocket();
+    });
+  }
+
   // ── Session start ──────────────────────────────────────────────────────────
 
   void startSession() {
     final taskId = state.pendingTaskId;
+    debugPrint('🟢 [SESSION DEBUG] startSession — taskId=$taskId, duration=${state.selectedDuration}min, activity=${state.selectedActivity}');
     if (taskId == null) return;
 
     final session = ActivitySession(
@@ -476,13 +595,174 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     ));
     _pendingTask = null;
 
+    // Process death (phone off / app kill) se bachne ke liye session ko disk
+    // pe persist karo — launch pe attemptSessionRecovery() ise padhega.
+    _persistActiveSession(session, taskId);
+
     _connectSocket();
+    _startConnWatchdog();
     _startTimer();
+  }
+
+  // ── Session persistence (process-death recovery) ──────────────────────────
+  // Active session ko disk pe likhte hain taaki phone off / app swipe-kill ke
+  // baad bhi app dobara khulne par session recover ho sake. Sirf wo cheezein
+  // store karte hain jo recovery ke liye chahiye: taskId, startTime, target,
+  // activity, location. (HR samples band ki memory me hain — wahan se re-fetch
+  // ho jaate hain, isliye yahan store karne ki zaroorat nahi.)
+
+  void _persistActiveSession(ActivitySession session, int taskId) {
+    _prefs.setInt(PrefKeys.activeSessionTaskId, taskId);
+    _prefs.setInt(
+        PrefKeys.activeSessionStartMs, session.startTime.millisecondsSinceEpoch);
+    _prefs.setInt(
+        PrefKeys.activeSessionTargetMin, session.targetDurationMinutes);
+    _prefs.setString(PrefKeys.activeSessionActivity, session.activityType);
+    _prefs.setString(PrefKeys.activeSessionLocation, session.location);
+  }
+
+  void _clearPersistedSession() {
+    _prefs.remove(PrefKeys.activeSessionTaskId);
+    _prefs.remove(PrefKeys.activeSessionStartMs);
+    _prefs.remove(PrefKeys.activeSessionTargetMin);
+    _prefs.remove(PrefKeys.activeSessionActivity);
+    _prefs.remove(PrefKeys.activeSessionLocation);
+  }
+
+  // ── Launch-time session recovery ──────────────────────────────────────────
+  // App launch pe ek baar call karo (athlete main screen se). Agar process
+  // death (phone off / app swipe-kill) se ek active session adhoori reh gayi
+  // thi, to disk se padh ke server status verify karta hai aur decide karta hai:
+  //   • in_progress / pending  → session resume (socket reconnect + timer)
+  //   • completed (server ne khud band kiya) → resume NAHI; band se data upload
+  //   • offline / fetch fail    → kuch nahi; persisted rakho, agla launch resolve karega
+  // Stale (bahut purani) session ko bhi resume nahi karta — sirf upload flow.
+  static const _maxRecoveryWindow = Duration(hours: 12);
+
+  Future<void> attemptSessionRecovery() async {
+    // Pehle se koi session active hai (cubit singleton hai, dobara call ho gaya)
+    // to kuch mat karo.
+    if (isClosed || state.isSessionActive) return;
+
+    final taskId = _prefs.getInt(PrefKeys.activeSessionTaskId);
+    final startMs = _prefs.getInt(PrefKeys.activeSessionStartMs);
+    if (taskId == null || startMs == null) return; // koi adhoori session nahi
+
+    final startTime = DateTime.fromMillisecondsSinceEpoch(startMs);
+    final targetMin = _prefs.getInt(PrefKeys.activeSessionTargetMin) ?? 0;
+    final activity =
+        _prefs.getString(PrefKeys.activeSessionActivity) ?? 'Running';
+    final location = _prefs.getString(PrefKeys.activeSessionLocation) ?? '';
+    final elapsed = DateTime.now().difference(startTime).inSeconds;
+
+    debugPrint('🟡 [RECOVERY] persisted session mila — task=$taskId '
+        'elapsed=${elapsed}s target=${targetMin}min');
+
+    // Guard A: staleness — clock anomaly ya bahut purani session (e.g. agle din
+    // khuli). Resume mat karo; agar data ho to upload flow pe bhej do.
+    if (elapsed < 0 ||
+        DateTime.now().difference(startTime) > _maxRecoveryWindow) {
+      debugPrint('🟡 [RECOVERY] stale session — resume skip, routing to upload');
+      _clearPersistedSession();
+      _routeRecoveredSessionToUpload(taskId, startTime, DateTime.now());
+      return;
+    }
+
+    // Guard B: server status verify karo (getMyTasks page 1 — recent task
+    // yahin hota hai).
+    final result = await _getMyTasks(page: 1).run();
+    if (isClosed || state.isSessionActive) return;
+
+    result.fold(
+      (failure) {
+        // Offline / error — socket ko blind touch mat karo. Persisted rakho;
+        // agla launch (online) resolve kar dega.
+        debugPrint('🟡 [RECOVERY] status fetch fail (${failure.message}) — '
+            'keeping persisted for next launch');
+      },
+      (page) {
+        AthleteTaskEntity? task;
+        for (final t in page.tasks) {
+          if (t.id == taskId) {
+            task = t;
+            break;
+          }
+        }
+        final status = task?.status?.toLowerCase();
+        debugPrint('🟡 [RECOVERY] server status=$status');
+
+        if (task == null) {
+          // Server ke paas ye task hi nahi (delete/unknown) — clear.
+          _clearPersistedSession();
+          return;
+        }
+
+        if (status == 'completed') {
+          // Server ne session khud band kar diya. Resume nahi — band ki memory
+          // se us range ka data upload karne ke liye feedback/upload flow trigger.
+          debugPrint('🟡 [RECOVERY] server-completed — routing to upload');
+          _clearPersistedSession();
+          _routeRecoveredSessionToUpload(taskId, startTime, DateTime.now());
+          return;
+        }
+
+        // pending / in_progress / active → session abhi bhi server pe khuli hai.
+        if (targetMin > 0 && elapsed >= targetMin * 60) {
+          // Duration to puri ho chuki par server abhi tak in_progress hai —
+          // clean stop bhejo (server complete karega → feedback/upload chalega).
+          debugPrint('🟡 [RECOVERY] open but past target — resuming then stopping');
+          _reconstructActiveSession(
+              taskId, activity, targetMin, startTime, location, elapsed);
+          requestStopSession();
+        } else {
+          debugPrint('🟡 [RECOVERY] resuming live session');
+          _reconstructActiveSession(
+              taskId, activity, targetMin, startTime, location, elapsed);
+          _connectSocket();
+          _startConnWatchdog();
+          _startTimer();
+        }
+      },
+    );
+  }
+
+  // Recovered session ko UI state me wapas wire karta hai (live resume ke liye).
+  void _reconstructActiveSession(int taskId, String activity, int targetMin,
+      DateTime startTime, String location, int elapsed) {
+    final session = ActivitySession(
+      id: _uuid.v4(),
+      activityType: activity,
+      targetDurationMinutes: targetMin,
+      startTime: startTime,
+      location: location,
+    );
+    _bleCubit.setSessionActive(true);
+    emit(state.copyWith(
+      activeSession: session,
+      activeTaskId: taskId,
+      elapsedSeconds: targetMin > 0 ? elapsed.clamp(0, targetMin * 60) : elapsed,
+      clearPendingTaskId: true,
+    ));
+  }
+
+  // Server-completed / stale recovered session ko feedback + upload flow pe
+  // bhejta hai — wahi 3 fields jo normal _endSession set karta hai. UI
+  // (athlete_main_screen) inhe dekh ke feedback sheet + BLE upload chalata hai.
+  void _routeRecoveredSessionToUpload(
+      int taskId, DateTime start, DateTime end) {
+    if (isClosed) return;
+    emit(state.copyWith(
+      pendingFeedbackTaskId: taskId,
+      completedSessionStart: start,
+      completedSessionEnd: end,
+    ));
   }
 
   void requestStopSession() {
     if (isClosed) return;
     final taskId = state.activeTaskId;
+    debugPrint('🛑 [SESSION DEBUG] requestStopSession called — taskId=$taskId, isSessionActive=${state.isSessionActive}');
+    debugPrint('🛑 [SESSION DEBUG] caller stack: ${StackTrace.current.toString().split('\n').take(5).join(' | ')}');
 
     _timer?.cancel();
     _timer = null;
@@ -495,16 +775,24 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       _stopTimeoutTimer?.cancel();
       _stopTimeoutTimer = Timer(const Duration(seconds: 8), () {
         if (!isClosed && state.isStoppingSession) {
-          debugPrint('[CUBIT] Stop timeout — forcefully ending session');
-          _endSession();
+          debugPrint('🛑 [SESSION DEBUG] 8s stop TIMEOUT — ending UI, service alive for BG delivery');
+          _endSession(stopConfirmed: false);
         }
       });
     } else {
-      _endSession();
+      // Koi server-task hi nahi — kuch deliver nahi karna, service safe to stop.
+      _endSession(stopConfirmed: true);
     }
   }
 
-  void _endSession() {
+  /// [stopConfirmed]: true jab server ne stop confirm kiya (`activity_recording_stopped`)
+  /// ya koi server-task hi nahi tha (taskId == null) ya BG ne stop abandon kiya.
+  /// Sirf is case mein foreground service tear down hoti hai. false (8s timeout /
+  /// offline) pe UI to end hota hai par service ALIVE rehti hai taaki BG isolate
+  /// connectivity wapas aate hi pending stop deliver kar sake (Layer 1).
+  void _endSession({bool stopConfirmed = false}) {
+    debugPrint('🛑 [SESSION DEBUG] _endSession called — activeTaskId=${state.activeTaskId}, isSessionActive=${state.isSessionActive}, stopConfirmed=$stopConfirmed');
+    debugPrint('🛑 [SESSION DEBUG] _endSession caller: ${StackTrace.current.toString().split('\n').take(5).join(' | ')}');
     _bleCubit.setSessionActive(false);
     _timer?.cancel();
     _timer = null;
@@ -512,10 +800,30 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     _autoStopTimer = null;
     _stopTimeoutTimer?.cancel();
     _stopTimeoutTimer = null;
+    _bleReconnectTimer?.cancel();
+    _bleReconnectTimer = null;
+    _connWatchdog?.cancel();
+    _connWatchdog = null;
     _pausedAt = null;
     _reconnect.cancel();
+    // UI session end ho chuki — disk se persisted session hata do. Iske baad
+    // recovery kabhi is session ko resume na kare (stop delivery BG ka kaam hai).
+    _clearPersistedSession();
 
-    if (isClosed || state.activeSession == null) return;
+    if (isClosed) return;
+    // Session pehle hi end ho chuka (duplicate stop event / 8s timeout +
+    // real event dono) — dobara complete-session add mat karo, par stopping
+    // spinner ko stuck mat chhodo.
+    if (state.activeSession == null) {
+      // UI session pehle hi end ho chuka (8s timeout). Agar ye confirmed stop /
+      // abandon late aaya hai, to ab service tear down karo — Layer 1 ne usse
+      // pending-stop delivery ke liye alive rakha tha.
+      if (stopConfirmed) AthleteForegroundService.cleanupAfterSessionEnd();
+      if (state.isStoppingSession) {
+        emit(state.copyWith(isStoppingSession: false));
+      }
+      return;
+    }
 
     // Feedback sheet ke liye task id ko activeTaskId clear hone se pehle
     // capture karo. UI BlocListener pe sheet open karega, phir
@@ -546,7 +854,16 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       isAuthFailure: false,
     ));
 
-    AthleteForegroundService.cleanupAfterSessionEnd();
+    if (stopConfirmed) {
+      AthleteForegroundService.cleanupAfterSessionEnd();
+    } else {
+      // Stop abhi server pe deliver nahi hua (offline / 8s timeout). UI end kar
+      // diya, par foreground service ALIVE rakho — BG isolate connectivity wapas
+      // aate hi stop deliver karega. Service tab band hogi jab BG
+      // 'activity_recording_stopped' (delivered) ya 'activity_stop_abandoned'
+      // (deadline cross) bhejega.
+      debugPrint('🛑 [SESSION DEBUG] stop unconfirmed — service alive for BG delivery');
+    }
   }
 
   // UI sheet handle karne ke baad call karega (Save / Resume / Discard) —
@@ -568,8 +885,16 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     if (session == null) return;
 
     final sample = HeartRateSample(time: DateTime.now(), bpm: bpm);
+    // Defensive upper bound — unbounded memory growth rokne ke liye. 50k samples
+    // ~13.8 ghante @ 1Hz, yani koi bhi realistic session iske paas nahi aata
+    // (count display aur .last dono unaffected rehte hain). Sirf pathological
+    // high-rate / stuck-session edge case mein trigger hota hai.
+    const maxSamples = 50000;
+    final appended = [...session.heartRateSamples, sample];
     final updated = session.copyWith(
-      heartRateSamples: [...session.heartRateSamples, sample],
+      heartRateSamples: appended.length > maxSamples
+          ? appended.sublist(appended.length - maxSamples)
+          : appended,
     );
 
     final currentSpo2 = state.spo2;
@@ -595,6 +920,10 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     double? spo2,
     int? stressLevel,
     double? hrv,
+    // false hone par sirf state update — background ko forward nahi. Caller
+    // (_onBleState) HR ke saath ek hi baar forward karta hai, duplicate IPC se
+    // bachne ke liye.
+    bool forward = true,
   }) {
     if (isClosed) return;
     emit(state.copyWith(
@@ -605,7 +934,7 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     ));
 
     // Latest biometrics background ko forward karo
-    if (state.isSessionActive) {
+    if (forward && state.isSessionActive) {
       final latestBpm = state.activeSession?.heartRateSamples.isNotEmpty == true
           ? state.activeSession!.heartRateSamples.last.bpm
           : 0;
@@ -646,6 +975,7 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       if (remaining > 0) {
         _autoStopTimer = Timer(Duration(seconds: remaining), () {
           if (!isClosed && state.isSessionActive) {
+            debugPrint('🛑 [SESSION DEBUG] AUTO-STOP timer fired — remaining was ${remaining}s');
             requestStopSession();
           }
         });
@@ -667,6 +997,8 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     _timer?.cancel();
     _autoStopTimer?.cancel();
     _stopTimeoutTimer?.cancel();
+    _bleReconnectTimer?.cancel();
+    _connWatchdog?.cancel();
     _reconnect.dispose();
     _bgSub?.cancel();
     _bleSub?.cancel();

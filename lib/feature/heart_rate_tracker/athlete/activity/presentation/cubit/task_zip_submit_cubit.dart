@@ -3,12 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:xelex_esp/core/util/compression.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/history_local_store.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/local/hr_reading_hive.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/repository/history_repository.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history_sql/domain/entity/hr_reading.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/ble_fetch_range/cubit/ble_fetch_range_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/ble_fetch_range/cubit/ble_fetch_range_state.dart';
 import 'package:xelex_esp/service/api/api_service.dart';
@@ -106,10 +107,7 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
       message: 'Retrying upload...',
     ));
 
-    final historyStore = HistoryLocalStore.instance;
-    await historyStore.open();
-
-    final readings = _loadReadingsFromHive(sessionStartMs, sessionEndMs);
+    final readings = await _loadReadings(sessionStartMs, sessionEndMs);
     if (readings.isEmpty) {
       emit(state.copyWith(
         status: TaskZipStatus.error,
@@ -130,11 +128,9 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
     required int sessionEndMs,
     required List<Map<dynamic, dynamic>> hrData,
   }) async {
-    final historyStore = HistoryLocalStore.instance;
-    await historyStore.open();
-    await historyStore.upsertHrChunk(hrData);
+    await HistoryRepository.instance.persistHrChunk(hrData);
 
-    final readings = _loadReadingsFromHive(sessionStartMs, sessionEndMs);
+    final readings = await _loadReadings(sessionStartMs, sessionEndMs);
 
     if (readings.isEmpty) {
       debugPrint('[TASK-ZIP] No readings found for task $taskId '
@@ -181,13 +177,23 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
     };
 
     try {
-      final jsonString = jsonEncode(payload);
-      final jsonBytes = utf8.encode(jsonString);
-      final gzipBytes = gzip.encode(jsonBytes);
+      // JSON encode + gzip bhari ho sakte hain (multi-hour session → kai MB).
+      // Inhe main isolate pe chalane se UI freeze hoti thi, isliye ab ek alag
+      // background isolate me chalate hain — UI bilkul smooth rehti hai.
+      final compressed = await gzipPayloadInIsolate(payload);
+      final gzipBytes = compressed.gzipBytes;
+      final jsonLength = compressed.jsonLength;
 
-      debugPrint('[TASK-ZIP] JSON size: ${jsonBytes.length} bytes → '
-          'Gzip size: ${gzipBytes.length} bytes '
-          '(${(gzipBytes.length * 100 / jsonBytes.length).toStringAsFixed(1)}% ratio)');
+      final jsonKb = (jsonLength / 1024).toStringAsFixed(1);
+      final gzipKb = (gzipBytes.length / 1024).toStringAsFixed(1);
+      final ratio = (gzipBytes.length * 100 / jsonLength).toStringAsFixed(1);
+      final saved = (100 - gzipBytes.length * 100 / jsonLength).toStringAsFixed(1);
+      debugPrint('[TASK-ZIP] ═══════════ COMPRESSION ═══════════');
+      debugPrint('[TASK-ZIP] task=$taskId  readings=${readings.length}');
+      debugPrint('[TASK-ZIP] JSON   : $jsonLength bytes ($jsonKb KB)');
+      debugPrint('[TASK-ZIP] Gzip   : ${gzipBytes.length} bytes ($gzipKb KB)');
+      debugPrint('[TASK-ZIP] Ratio  : $ratio% of original  →  saved $saved%');
+      debugPrint('[TASK-ZIP] ════════════════════════════════════');
 
       // Upload with retry
       emit(state.copyWith(
@@ -383,20 +389,20 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
 
   // ── Load readings from Hive ──────────────────────────────────────────────
 
-  List<HrReadingHive> _loadReadingsFromHive(int sessionStartMs, int sessionEndMs) {
+  Future<List<HrReading>> _loadReadings(
+      int sessionStartMs, int sessionEndMs) async {
     const driftMs = 30 * 1000;
     final fromMs = sessionStartMs - driftMs;
     final toMs = sessionEndMs + driftMs;
 
-    final store = HistoryLocalStore.instance;
-    final filtered = store.getHrInRange(fromMs, toMs);
-    filtered.sort((a, b) => a.stamp.compareTo(b.stamp));
+    final filtered = await HistoryRepository.instance.hrInRange(fromMs, toMs);
+    filtered.sort((a, b) => a.stampSec.compareTo(b.stampSec));
     return filtered;
   }
 
   // ── Map to API format ───────────────────────────────────────────────────
 
-  List<Map<String, dynamic>> _mapReadingsForApi(List<HrReadingHive> readings) {
+  List<Map<String, dynamic>> _mapReadingsForApi(List<HrReading> readings) {
     return readings.map((r) {
       return <String, dynamic>{
         'heart_rate': r.heartRate,
@@ -405,7 +411,7 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
         'lat': null,
         'lng': null,
         'stress_level': null,
-        'timestamp': _ensureMilliseconds(r.stamp),
+        'timestamp': _ensureMilliseconds(r.stampSec),
       };
     }).toList();
   }

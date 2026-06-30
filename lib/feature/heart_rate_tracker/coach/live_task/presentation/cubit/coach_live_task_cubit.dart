@@ -17,6 +17,9 @@ class CoachLiveTaskCubit extends Cubit<CoachLiveTaskState>
   static const int _maxReadings = 60;
 
   int? _currentTaskId;
+  // App background me hai to reconnect attempts schedule mat karo — OS timers
+  // throttle karta hai aur network restricted hota hai, budget waste jaata hai.
+  bool _isBackgrounded = false;
   final ReconnectController _reconnect = ReconnectController(tag: 'COACH RECONNECT');
   StreamSubscription<void>? _netSub;
   // Athlete disconnect ka banner sirf tab dikhao jab sach mein lamba cut ho.
@@ -47,10 +50,24 @@ class CoachLiveTaskCubit extends Cubit<CoachLiveTaskState>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _onAppResumed();
+    if (state == AppLifecycleState.resumed) {
+      _onAppResumed();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _onAppPaused();
+    }
+  }
+
+  void _onAppPaused() {
+    // Screen off / app background. Pending reconnect cancel karo taaki
+    // background me attempts waste na hon aur 2-min budget na khatm ho —
+    // resume pe fresh reconnect karenge.
+    _isBackgrounded = true;
+    _reconnect.cancel();
   }
 
   void _onAppResumed() {
+    _isBackgrounded = false;
     final taskId = _currentTaskId;
     if (taskId == null || state.isAuthFailure) return;
     if (!_socketService.isConnected) {
@@ -133,20 +150,34 @@ class CoachLiveTaskCubit extends Cubit<CoachLiveTaskState>
     };
 
     _socketService.onDisconnected = () {
+      // `connecting` bhi include — warna pehla connect fail hone par kabhi
+      // reconnect schedule hi nahi hota aur screen "Connecting…" pe atak jaati
+      // (same fix jo TeamLiveCubit me hai).
       if (!isClosed &&
           (state.status == CoachLiveTaskStatus.watching ||
-              state.status == CoachLiveTaskStatus.reconnecting) &&
+              state.status == CoachLiveTaskStatus.reconnecting ||
+              state.status == CoachLiveTaskStatus.connecting) &&
           !state.isAuthFailure) {
         debugPrint('[COACH CUBIT] Socket dropped — scheduling reconnect');
         emit(state.copyWith(status: CoachLiveTaskStatus.reconnecting));
-        _scheduleReconnect();
+        // Background me schedule mat karo — resume pe _onAppResumed fresh
+        // reconnect kar dega.
+        if (!_isBackgrounded) _scheduleReconnect();
       }
     };
 
     _socketService.onError = (message) {
-      if (!isClosed) {
-        emit(state.copyWith(errorMessage: message));
+      if (isClosed) return;
+      // Active session ya reconnect ke dauran transient connect errors
+      // ("Socket connection failed") ko snackbar me mat dikhao — reconnecting
+      // banner already feedback de raha hai. Screen off/on pe aane wale scary
+      // error flash ko isi se roka jaata hai. Initial connect ya genuine
+      // errors normally surface honge.
+      if (state.status == CoachLiveTaskStatus.watching ||
+          state.status == CoachLiveTaskStatus.reconnecting) {
+        return;
       }
+      emit(state.copyWith(errorMessage: message));
     };
 
     _socketService.onAuthFailure = (message) {

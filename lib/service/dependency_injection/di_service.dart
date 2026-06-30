@@ -142,7 +142,9 @@ import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/tas
 import '../../feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_cubit.dart';
 import '../../feature/heart_rate_tracker/athlete/health_monitor/presentation/cubit/athlete_health_monitor_cubit.dart';
 import '../socket/coach_live_task_socket_service.dart';
+import '../socket/team_live_socket_service.dart';
 import '../../feature/heart_rate_tracker/coach/live_task/presentation/cubit/coach_live_task_cubit.dart';
+import '../../feature/heart_rate_tracker/coach/team_live/presentation/cubit/coach_team_live_cubit.dart';
 import '../../feature/heart_rate_tracker/coach/live_now/data/datasource/active_tasks_remote_datasource.dart';
 import '../../feature/heart_rate_tracker/coach/live_now/data/repository/active_tasks_repository_impl.dart';
 import '../../feature/heart_rate_tracker/coach/live_now/domain/repository/active_tasks_repository.dart';
@@ -305,6 +307,7 @@ void setupDI({required SharedPreferences sharedPreferences}) {
   sl.registerLazySingleton<AthleteActivityCubit>(
     () => AthleteActivityCubit(
       createTask: sl(),
+      getMyTasks: sl(),
       prefs: sl(),
       bleCubit: sl<HeartBleCubit>(),
     ),
@@ -344,6 +347,18 @@ void setupDI({required SharedPreferences sharedPreferences}) {
   );
   sl.registerFactory<CoachLiveTaskCubit>(
     () => CoachLiveTaskCubit(socketService: sl(), prefs: sl()),
+  );
+
+  // Coach Whole Team Live (WebSocket)
+  sl.registerLazySingleton<TeamLiveSocketService>(
+    () => TeamLiveSocketService(),
+  );
+  sl.registerFactory<CoachTeamLiveCubit>(
+    () => CoachTeamLiveCubit(
+      socketService: sl(),
+      getActiveTasks: sl(),
+      prefs: sl(),
+    ),
   );
 
   // Coach Live Now (active tasks API)

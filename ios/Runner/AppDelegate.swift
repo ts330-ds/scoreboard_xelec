@@ -10,6 +10,8 @@ import CoreBluetooth
 
     private var eventSink: FlutterEventSink?
     private var userInitiatedDisconnect = false
+    private var isConnected = false
+    private var connectedDeviceName: String?
     private var reconnectTimer: Timer?
     private var rssiTimer: Timer?
     private weak var connectedPeripheral: CBPeripheral?
@@ -77,6 +79,15 @@ import CoreBluetooth
                 FitBLECentralManager.shareInstance().dissConnect()
                 result("Disconnect Command Sent")
 
+            case "reconnectByAddress":
+                // iOS does not support connecting by MAC address directly.
+                // Start a short scan — device will auto-connect via
+                // fitConnectState when found (same as link-loss recovery).
+                self.userInitiatedDisconnect = false
+                self.sendToFlutter(type: "STATUS", value: "Reconnecting...")
+                FitBLECentralManager.shareInstance().centralStartSaomiao()
+                result("Scanning for device...")
+
             default:
                 result(FlutterMethodNotImplemented)
             }
@@ -128,12 +139,17 @@ import CoreBluetooth
         if isConnect {
             reconnectTimer?.invalidate()
             userInitiatedDisconnect = false
+            isConnected = true
             sendToFlutter(type: "STATUS", value: "Connected")
 
             // Start RSSI polling every 3 seconds
             rssiTimer?.invalidate()
             if let peripheral = FitBLECentralManager.shareInstance().peripheral {
                 connectedPeripheral = peripheral
+                if let name = peripheral.name, !name.isEmpty {
+                    connectedDeviceName = name
+                    sendToFlutter(type: "LAST_DEVICE_NAME", value: name)
+                }
                 peripheral.delegate = self
                 rssiTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self, weak peripheral] _ in
                     peripheral?.readRSSI()
@@ -146,6 +162,7 @@ import CoreBluetooth
             rssiTimer?.invalidate()
             rssiTimer = nil
             connectedPeripheral = nil
+            isConnected = false
 
             sendToFlutter(type: "STATUS", value: "Disconnected")
             if !userInitiatedDisconnect {
@@ -184,6 +201,15 @@ import CoreBluetooth
 extension AppDelegate: FlutterStreamHandler {
     func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
         eventSink = events
+        // Replay current connection state so a freshly-attached Dart engine
+        // learns it's already connected (STATUS:"Connected" is a one-shot event
+        // that may have fired before this subscription existed).
+        if isConnected {
+            sendToFlutter(type: "STATUS", value: "Connected")
+            if let name = connectedDeviceName, !name.isEmpty {
+                sendToFlutter(type: "LAST_DEVICE_NAME", value: name)
+            }
+        }
         return nil
     }
 

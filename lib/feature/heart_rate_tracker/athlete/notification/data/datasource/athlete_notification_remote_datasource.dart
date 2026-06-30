@@ -20,6 +20,38 @@ class AthleteNotificationRemoteDataSourceImpl
 
   String? get _token => _prefs.getString(PrefKeys.userToken);
 
+  /// Maps a [DioException] to a user-friendly message, with explicit handling
+  /// for timeouts and connection errors so the UI can show a clean retry.
+  String _dioMessage(DioException e, String fallback) {
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return 'Request timed out. Please check your connection and try again.';
+      case DioExceptionType.connectionError:
+        return 'Unable to reach the server. Please check your internet connection.';
+      case DioExceptionType.cancel:
+        return 'Request was cancelled.';
+      default:
+        final data = e.response?.data;
+        if (data is Map && data['message'] is String) {
+          return data['message'] as String;
+        }
+        return e.message ?? fallback;
+    }
+  }
+
+  /// Returns the server-provided message when the response signals failure,
+  /// otherwise null. Tolerates non-Map / unexpected bodies.
+  String? _failureMessage(dynamic body, String fallback) {
+    if (body is! Map) return fallback;
+    if (body['success'] == false) {
+      final msg = body['message'];
+      return msg is String ? msg : fallback;
+    }
+    return null;
+  }
+
   @override
   TaskEither<Failure, List<CoachRequestModel>> getCoachRequests() =>
       TaskEither(() async {
@@ -34,59 +66,46 @@ class AthleteNotificationRemoteDataSourceImpl
             options: Options(headers: {'Authorization': 'Bearer $token'}),
           );
 
-          if (response.data['success'] == false) {
-            return left(ServerFailure(
-              response.data['message'] as String? ?? 'Failed to fetch requests',
-            ));
-          }
+          final failure =
+              _failureMessage(response.data, 'Failed to fetch requests');
+          if (failure != null) return left(ServerFailure(failure));
 
-          final requests = (response.data['data']['requests'] as List)
-              .map((e) => CoachRequestModel.fromJson(e as Map<String, dynamic>))
+          final data = response.data;
+          final rawList = (data is Map ? data['data'] : null) is Map
+              ? (data['data'] as Map)['requests']
+              : null;
+
+          if (rawList is! List) return right(<CoachRequestModel>[]);
+
+          final requests = rawList
+              .whereType<Map<String, dynamic>>()
+              .map(CoachRequestModel.fromJson)
               .toList();
 
           return right(requests);
         } on DioException catch (e) {
-          return left(ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Failed to fetch requests',
-          ));
+          return left(ServerFailure(_dioMessage(e, 'Failed to fetch requests')));
         } catch (e) {
-          return left(ServerFailure('Failed to fetch requests: $e'));
+          return left(const ServerFailure('Something went wrong while loading requests'));
         }
       });
 
   @override
   TaskEither<Failure, String> acceptRequest(int requestId) =>
-      TaskEither(() async {
-        final token = _token;
-        if (token == null || token.isEmpty) {
-          return left(const AuthFailure('Token not found, please login again'));
-        }
-
-        try {
-          final response = await _dio.put(
-            '/athlete/request_action/$requestId',
-            data: {"action": "approved"},
-            options: Options(headers: {'Authorization': 'Bearer $token'}),
-          );
-
-          if (response.data['success'] == false) {
-            return left(ServerFailure(
-              response.data['message'] as String? ?? 'Failed to accept request',
-            ));
-          }
-
-          return right(response.data['message'] as String? ?? 'Request approved successfully');
-        } on DioException catch (e) {
-          return left(ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Failed to accept request',
-          ));
-        } catch (e) {
-          return left(ServerFailure('Failed to accept request: $e'));
-        }
-      });
+      _respond(requestId, 'approved', 'Request approved successfully',
+          'Failed to accept request');
 
   @override
   TaskEither<Failure, String> rejectRequest(int requestId) =>
+      _respond(requestId, 'rejected', 'Request rejected successfully',
+          'Failed to reject request');
+
+  TaskEither<Failure, String> _respond(
+    int requestId,
+    String action,
+    String successFallback,
+    String errorFallback,
+  ) =>
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
@@ -96,23 +115,20 @@ class AthleteNotificationRemoteDataSourceImpl
         try {
           final response = await _dio.put(
             '/athlete/request_action/$requestId',
-            data: {"action": "rejected"},
+            data: {"action": action},
             options: Options(headers: {'Authorization': 'Bearer $token'}),
           );
 
-          if (response.data['success'] == false) {
-            return left(ServerFailure(
-              response.data['message'] as String? ?? 'Failed to reject request',
-            ));
-          }
+          final failure = _failureMessage(response.data, errorFallback);
+          if (failure != null) return left(ServerFailure(failure));
 
-          return right(response.data['message'] as String? ?? 'Request rejected successfully');
+          final data = response.data;
+          final msg = data is Map ? data['message'] : null;
+          return right(msg is String ? msg : successFallback);
         } on DioException catch (e) {
-          return left(ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Failed to reject request',
-          ));
+          return left(ServerFailure(_dioMessage(e, errorFallback)));
         } catch (e) {
-          return left(ServerFailure('Failed to reject request: $e'));
+          return left(ServerFailure(errorFallback));
         }
       });
 }

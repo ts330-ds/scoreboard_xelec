@@ -10,6 +10,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
+import 'package:xelex_esp/core/logging/file_logger.dart';
+import 'package:xelex_esp/core/util/compression.dart';
 import 'package:xelex_esp/error/cubit/error_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history/data/repository/history_repository.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
@@ -44,7 +46,6 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
   bool _pushingHistory = false;
   Map<String, dynamic>? _pendingPayload;
-  bool _showingPlaceholderHr = false;
   bool _historySyncing = false;
 
   final GlobalErrorCubit errorCubit;
@@ -64,11 +65,45 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     _resumePollingIfNeeded();
   }
 
+  /// Single choke-point for the server's last-reading watermark.
+  ///
+  /// Calls the `/last_timestamp` API (30s in-memory cache) and ALWAYS mirrors
+  /// the result into local storage — so every API call persists, and no caller
+  /// has to remember to save. Server is the single source of truth.
+  ///
+  /// Persists: `serverLastStampMs` (what the UI shows) + `serverCheckedAtMs`,
+  /// and advances the push/sync delta cursor (`lastHrStamp`).
+  ///
+  /// Returns the server stamp (0 if no data or unreachable).
+  Future<int> refreshServerWatermark() async {
+    final res = await _fetchServerWatermark();
+    if (!res.reached) return res.stamp; // offline/auth — leave local untouched
+
+    final wm = await HistoryWatermarkStore.create();
+    if (wm.isAnonymous) return res.stamp; // don't write under 'anon'
+
+    if (res.stamp > 0) {
+      final serverMs = res.stamp > 9999999999 ? res.stamp : res.stamp * 1000;
+      await wm.commitServerWatermark(serverMs);
+      // Server already has everything up to stamp → advance delta cursor.
+      // NOTE: ms normalized stamp commit karo (raw seconds nahi) — push filter
+      // aur baaki commit sites (_commitV3Watermark) watermark ko ms maante hain.
+      await wm.commitHr(serverMs);
+    } else {
+      // Reached, but server has no data yet (new user) — record the reach so
+      // the UI shows "No data on server yet" rather than "Never synced".
+      await wm.commitServerReachedNow();
+    }
+    return res.stamp;
+  }
+
   /// Exposes DB-backed sync metadata for the UI (last sync time, data range,
   /// total count) — used by the SyncStatusBanner.
-  HistorySyncMeta get historyMeta => _historyRepo.getMeta();
+  Future<HistorySyncMeta> get historyMeta => _historyRepo.getMeta();
 
-  /// Clears all persisted history. Used by a future "reset" action.
+  /// Clears all persisted history — the SQLite store and the in-memory lists.
+  /// Called on logout so the next user (or the same device, logged out) never
+  /// sees a previous account's health data.
   Future<void> clearPersistedHistory() async {
     await _historyRepo.clearAll();
     emit(state.copyWith(
@@ -78,11 +113,11 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     ));
   }
 
-  /// Loads persisted history from Hive so the UI shows last-known data
+  /// Loads persisted history from SQLite so the UI shows last-known data
   /// before any live sync arrives.
-  void _hydrateFromDb() {
-    final h = _historyRepo.hydrate();
-    if (h.hr.isEmpty && h.rr.isEmpty && h.sleep.isEmpty) return;
+  Future<void> _hydrateFromDb() async {
+    final h = await _historyRepo.hydrate();
+    if (isClosed || (h.hr.isEmpty && h.rr.isEmpty && h.sleep.isEmpty)) return;
     emit(state.copyWith(
       historyHrData: h.hr,
       historyRrData: h.rr,
@@ -90,34 +125,20 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     ));
   }
 
-  List<Map<dynamic, dynamic>> _generatePlaceholderHr() {
-    final rng = math.Random();
-    final now = DateTime.now();
-    final start = now.subtract(const Duration(hours: 1));
-    final list = <Map<dynamic, dynamic>>[];
-    for (int i = 0; i < 60; i++) {
-      final t = start.add(Duration(minutes: i));
-      final hr = 68 + rng.nextInt(15) + (5 * (0.5 - 0.5 * (i % 10) / 10)).round();
-      list.add(<dynamic, dynamic>{
-        'stamp': t.millisecondsSinceEpoch,
-        'heartRate': hr.clamp(60, 95),
-      });
-    }
-    return list;
-  }
-
   // ─── EventChannel listener ──────────────────────────────────────────────────
   void _listenToDeviceData() {
     _dataSubscription = _eventChannel.receiveBroadcastStream().listen(
-      (dynamic event) {
+      (dynamic event) async {
         if (event is! Map<dynamic, dynamic>) return;
         final map = event;
         final type = map['type'] as String?;
         if (type == null) return;
         final value = map['value'];
 
-        // ── Log every arriving event (remove once debugging is done) ──────
-       // debugPrint('[BLE] ◀ type=$type  value=$value');
+        // NOTE: Real-time device events (HR/PPG/RSSI har few ms) ko JAAN-BUJH KE
+        // log/file me NAHI likhte — per-second flood app_log file ko bloat karta
+        // tha aur perf hit deta tha. Sirf low-freq history dumps (_dumpHistory)
+        // file me jaate hain.
 
         switch (type) {
           case "HEART_RATE":
@@ -126,6 +147,12 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
           case "BATTERY":
             emit(state.copyWith(battery: _toInt(value)));
+            break;
+
+          // PPG (optical) waveform samples — high-freq real-time data.
+          // Per-event logging JAAN-BUJH KE band hai (per-second flood). Koi
+          // state change nahi.
+          case "PPG_DATA":
             break;
 
           case "RSSI":
@@ -139,6 +166,14 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
           case "LAST_DEVICE_ADDRESS":
             emit(state.copyWith(lastDeviceAddress: value as String));
+            break;
+
+          // Device name replayed by native on connect/reconnect AND on Dart
+          // (re)subscribe — keeps state.lastDevice populated even when the
+          // connection wasn't established via connectToDevice() this session
+          // (auto-reconnect, app relaunch while already connected).
+          case "LAST_DEVICE_NAME":
+            emit(state.copyWith(lastDevice: value as String));
             break;
 
           case "DEVICE_FOUND":
@@ -256,43 +291,50 @@ class HeartBleCubit extends Cubit<HeartBleState> {
             emit(state.copyWith(historySport: sportList));
             break;
           case "HISTORY_HR_RECORD":
+            _resetSyncSafetyTimerIfSyncing();
             final hrRec = _toList(value);
             _dumpHistory('HISTORY_HR_RECORD', hrRec);
             emit(state.copyWith(historyHrRecord: hrRec));
             break;
           case "HISTORY_HR_DATA_CHUNK":
+            _resetSyncSafetyTimerIfSyncing();
             final chunk = _toList(value);
             _dumpHistory('HR_CHUNK_DATA', chunk);
-            _historyRepo.persistHrChunk(chunk);
-            final base = _showingPlaceholderHr ? <Map<dynamic, dynamic>>[] : state.historyHrData;
-            _showingPlaceholderHr = false;
+            await _historyRepo.persistHrChunk(chunk);
+            if (isClosed) return;
             emit(state.copyWith(
-              historyHrData: [...base, ...chunk],
+              historyHrData: [...state.historyHrData, ...chunk],
             ));
             break;
           case "HISTORY_HR_DATA_DONE":
+            _resetSyncSafetyTimerIfSyncing();
             _dumpHistory('HR_FULL_DATA', state.historyHrData);
             emit(state.copyWith(status: "HR sync complete"));
             break;
           case "HISTORY_RR_RECORD":
+            _resetSyncSafetyTimerIfSyncing();
             final rrRec = _toList(value);
             _dumpHistory('HISTORY_RR_RECORD', rrRec);
             emit(state.copyWith(historyRrRecord: rrRec));
             break;
           case "HISTORY_RR_DATA":
+            _resetSyncSafetyTimerIfSyncing();
             final rrData = _toList(value);
             _dumpHistory('HISTORY_RR_DATA', rrData);
             emit(state.copyWith(historyRrData: rrData));
             break;
           case "HISTORY_RR_DATA_CHUNK":
+            _resetSyncSafetyTimerIfSyncing();
             final chunk = _toList(value);
             _dumpHistory('RR_CHUNK_DATA', chunk);
-            _historyRepo.persistRrChunk(chunk);
+            await _historyRepo.persistRrChunk(chunk);
+            if (isClosed) return;
             emit(state.copyWith(
               historyRrData: [...state.historyRrData, ...chunk],
             ));
             break;
           case "HISTORY_RR_DATA_DONE":
+            _resetSyncSafetyTimerIfSyncing();
             // debugPrint(
                 // '[BLE-HISTORY] ✅ RR streaming DONE — total ${state.historyRrData.length} samples');
             _dumpHistory('RR_FULL_DATA', state.historyRrData);
@@ -308,9 +350,11 @@ class HeartBleCubit extends Cubit<HeartBleState> {
             emit(state.copyWith(historyStepData: stepData));
             break;
           case "HISTORY_SLEEP":
+            _resetSyncSafetyTimerIfSyncing();
             final sleepList = _toList(value);
             _dumpHistory('HISTORY_SLEEP', sleepList);
-            _historyRepo.persistSleep(sleepList);
+            await _historyRepo.persistSleep(sleepList);
+            if (isClosed) return;
             emit(state.copyWith(historySleep: sleepList));
             break;
           case "HISTORY_SINGLE_RECORD":
@@ -339,46 +383,32 @@ class HeartBleCubit extends Cubit<HeartBleState> {
             break;
 
           case "HISTORY_SYNC_START":
-            _showingPlaceholderHr = true;
             _historySyncing = true;
             emit(state.copyWith(
               status: "Syncing history…",
-              historyHrData: _generatePlaceholderHr(),
+              historyHrData: const [],
               historyRrData: const [],
               historySleep: const [],
             ));
-            _syncDoneTimer?.cancel();
-            _syncDoneTimer = Timer(const Duration(seconds: 30), () {
-              if (!isClosed && _historySyncing) {
-                debugPrint('[BLE-HISTORY] ⏱ sync safety timer expired — marking complete');
-                _historySyncing = false;
-                _showingPlaceholderHr = false;
-                final h = _historyRepo.hydrate();
-                emit(state.copyWith(
-                  status: "Sync complete",
-                  historyHrData: h.hr,
-                  historyRrData: h.rr,
-                  historySleep: h.sleep,
-                ));
-                _historyRepo.updateAllMeta();
-                _commitSyncCompleted();
-                _scheduleAutoPush();
-              }
-            });
+            // Safety timer arm karo. Ye ab fixed nahi — har naye data chunk pe
+            // reset hota hai (neeche _resetSyncSafetyTimerIfSyncing dekho), isliye
+            // bada transfer beech me nahi katega. Sirf tab fire hoga jab device
+            // 60s tak kuch na bheje (stall/disconnect).
+            _armSyncSafetyTimer();
             break;
 
           case "SYNC_COMPLETE":
             _syncDoneTimer?.cancel();
             _historySyncing = false;
-            _showingPlaceholderHr = false;
-            final hiveData = _historyRepo.hydrate();
+            final hiveData = await _historyRepo.hydrate();
+            if (isClosed) return;
             emit(state.copyWith(
               status: "Sync complete",
               historyHrData: hiveData.hr,
               historyRrData: hiveData.rr,
               historySleep: hiveData.sleep,
             ));
-            _historyRepo.updateAllMeta();
+            await _historyRepo.updateAllMeta();
             _commitSyncCompleted();
             if (_skipNextAutoPush) {
               _skipNextAutoPush = false;
@@ -594,6 +624,43 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     }
   }
 
+  // ─── Reconnect by saved address ─────────────────────────────────────────────
+  /// Attempts to reconnect to the last connected device using its saved
+  /// MAC address (Android) or a quick scan (iOS). No prior scan needed.
+  /// Returns true if attempt was initiated, false if already connected or
+  /// no saved address available.
+  /// Pure decision: reconnect tab hi karo jab pehle se connected na ho AUR
+  /// koi saved device address mojood ho. Side-effects se alag rakha hai taaki
+  /// bina device/Hive ke unit-test ho sake.
+  @visibleForTesting
+  static bool shouldReconnect({
+    required bool isConnected,
+    required String lastDeviceAddress,
+  }) {
+    if (isConnected) return false;
+    if (lastDeviceAddress.isEmpty) return false;
+    return true;
+  }
+
+  Future<bool> reconnectLastDevice() async {
+    if (!shouldReconnect(
+      isConnected: state.isConnected,
+      lastDeviceAddress: state.lastDeviceAddress,
+    )) {
+      return false;
+    }
+    final address = state.lastDeviceAddress;
+    try {
+      await _methodChannel.invokeMethod('reconnectByAddress', {
+        'address': address,
+      });
+      return true;
+    } on PlatformException catch (e) {
+      debugPrint('[BLE] reconnectLastDevice failed: ${e.message}');
+      return false;
+    }
+  }
+
   // ─── Disconnect ─────────────────────────────────────────────────────────────
   Future<void> disconnect() async {
     try {
@@ -648,14 +715,10 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       return;
     }
     try {
+      // Server watermark is the source of truth — refresh local first (this
+      // also advances the delta cursor), then decide the range from it.
+      await refreshServerWatermark();
       final wm = await HistoryWatermarkStore.create();
-
-      // Server watermark is the source of truth — seed local before deciding range.
-      final serverStamp = await _fetchServerWatermark();
-      if (serverStamp > 0) {
-        await wm.commitHr(serverStamp);
-      }
-
       final lastStamp = wm.lastHrStamp;
       final toMs = DateTime.now().millisecondsSinceEpoch;
       final int fromMs;
@@ -743,6 +806,51 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     } catch (_) {}
   }
 
+  // ─── History sync safety timer ─────────────────────────────────────────────
+  // Pehle ye ek fixed 30s timer tha jo HISTORY_SYNC_START pe lagta tha aur 30s
+  // baad zabardasti sync ko "complete" maar deta tha — chahe data abhi aa raha
+  // ho. Bade session ka transfer 30s se zyada leta tha to beech me hi kat jata
+  // tha (adhura data → 0 readings). Ab ye idle timer hai: har naye history data
+  // chunk pe reset hota hai, sirf tab fire karega jab device 60s tak kuch na
+  // bheje (genuine stall/disconnect).
+  static const _syncIdleTimeout = Duration(seconds: 60);
+
+  void _armSyncSafetyTimer() {
+    _syncDoneTimer?.cancel();
+    _syncDoneTimer = Timer(_syncIdleTimeout, () async {
+      if (!isClosed && _historySyncing) {
+        debugPrint('[BLE-HISTORY] ⏱ sync safety timer expired — marking complete');
+        _historySyncing = false;
+        final h = await _historyRepo.hydrate();
+        if (isClosed) return;
+        emit(state.copyWith(
+          status: "Sync complete",
+          historyHrData: h.hr,
+          historyRrData: h.rr,
+          historySleep: h.sleep,
+        ));
+        await _historyRepo.updateAllMeta();
+        _commitSyncCompleted();
+        // SYNC_COMPLETE path jaisa hi — agar ye ek device-only range fetch tha
+        // (session upload / syncHistoryRange ne _skipNextAutoPush set kiya),
+        // to history auto-push (V3-PUSH) mat chalao. Pehle ye check yahan nahi
+        // tha, isliye safety-timer se finalize hone par session upload ke saath
+        // ek extra health_metrics push bhi chal jata tha.
+        if (_skipNextAutoPush) {
+          _skipNextAutoPush = false;
+        } else {
+          _scheduleAutoPush();
+        }
+      }
+    });
+  }
+
+  /// History data aate waqt safety timer ko reset karta hai taaki active
+  /// transfer beech me na kate. Sirf sync chalu hone par effect karta hai.
+  void _resetSyncSafetyTimerIfSyncing() {
+    if (_historySyncing) _armSyncSafetyTimer();
+  }
+
   // ─── History → Socket Push ─────────────────────────────────────────────────
   // On-demand socket lifecycle:
   //   1. pushHistoryBatch() — filter, build payload, connect socket
@@ -766,7 +874,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   void _scheduleAutoPush() {
     if (_sessionActive) return;
     _autoPushTimer?.cancel();
-    _autoPushTimer = Timer(const Duration(seconds: 2), () {
+    _autoPushTimer = Timer(const Duration(milliseconds: 500), () {
       if (!isClosed && !_sessionActive) pushHistoryBatch();
     });
   }
@@ -789,18 +897,22 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   int _watermarkFetchedAtMs = 0;
   static const int _watermarkCacheTtlMs = 30 * 1000; // 30 seconds
 
-  Future<int> _fetchServerWatermark() async {
+  /// [reached] = server was successfully contacted (HTTP ok + success),
+  /// regardless of whether it actually has data. Lets a new user (server
+  /// reachable but empty) be told "No data on server yet" instead of the
+  /// alarming "Never synced" (which means we couldn't reach the server).
+  Future<({int stamp, bool reached})> _fetchServerWatermark() async {
     // Return cached value if recently fetched
     final now = DateTime.now().millisecondsSinceEpoch;
     if (_cachedServerWatermark > 0 &&
         (now - _watermarkFetchedAtMs) < _watermarkCacheTtlMs) {
-      return _cachedServerWatermark;
+      return (stamp: _cachedServerWatermark, reached: true);
     }
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(PrefKeys.userToken) ?? '';
-      if (token.isEmpty) return 0;
+      if (token.isEmpty) return (stamp: 0, reached: false);
       ApiService.instance.setAuthToken(token);
       final response = await ApiService.instance.dio.get(
         '/athlete/health_metrics/last_timestamp',
@@ -813,13 +925,13 @@ class HeartBleCubit extends Cubit<HeartBleState> {
           _cachedServerWatermark = stamp;
           _watermarkFetchedAtMs = now;
         }
-        return stamp;
+        return (stamp: stamp, reached: true); // reached, even if empty
       }
-      return 0;
+      return (stamp: 0, reached: false);
     } on DioException {
-      return 0;
+      return (stamp: 0, reached: false);
     } catch (_) {
-      return 0;
+      return (stamp: 0, reached: false);
     }
   }
 
@@ -838,17 +950,15 @@ class HeartBleCubit extends Cubit<HeartBleState> {
         return;
       }
 
-      // Server is the single source of truth — fetch and seed local watermark.
-      // On failure (no internet, timeout, etc.) local cache is used as fallback.
-      final serverStamp = await _fetchServerWatermark();
-      if (serverStamp > 0) {
-        await wm.commitHr(serverStamp);
-      }
-
-      final watermark = wm.lastHrStamp;
+      // syncNewFromDevice() ne already fresh server watermark fetch karke local
+      // mein save kiya hai — dobara API call ki zaroorat nahi. Sirf local use karo.
       int stampMs(int s) => s > 9999999999 ? s : s * 1000;
+      // Watermark bhi normalize karo — purane state mein seconds mein store ho
+      // sakta hai; bina normalize kiye ms-reading vs seconds-watermark compare
+      // se har reading pass ho jaati thi (duplicate push).
+      final watermark = stampMs(wm.lastHrStamp);
 
-      final hive = _historyRepo.hydrate();
+      final hive = await _historyRepo.hydrate();
 
       final hrFiltered = hive.hr.where((r) {
         final s = (r['stamp'] as num?)?.toInt() ?? 0;
@@ -873,7 +983,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
           sleepFiltered.isEmpty) {
         // debugPrint('[HISTORY-PUSH] nothing new to push (all under watermark)');
         _emitPushEvent(const PushNothingNew());
-        _pushingHistory = false;
+        _cleanupPush();
         return;
       }
 
@@ -1050,11 +1160,12 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     ));
 
     try {
-      // 1. JSON encode → gzip compress (in-memory)
-      final jsonString = jsonEncode(payload);
-      final jsonBytes = utf8.encode(jsonString);
-      final gzipBytes = gzip.encode(jsonBytes);
-      debugPrint('[V3-PUSH] JSON size: ${jsonBytes.length} bytes → Gzip size: ${gzipBytes.length} bytes (${(gzipBytes.length * 100 / jsonBytes.length).toStringAsFixed(1)}% ratio)');
+      // 1. JSON encode → gzip compress — background isolate me (bade history
+      // payloads pe main thread block na ho).
+      final compressed = await gzipPayloadInIsolate(payload);
+      final gzipBytes = compressed.gzipBytes;
+      final jsonLength = compressed.jsonLength;
+      debugPrint('[V3-PUSH] JSON size: $jsonLength bytes → Gzip size: ${gzipBytes.length} bytes (${(gzipBytes.length * 100 / jsonLength).toStringAsFixed(1)}% ratio)');
 
       // 2. POST raw gzip bytes via dart:io HttpClient
       // Dio ka transformer List<int>/Uint8List ko JSON array [31,139,8,...] bana
@@ -1077,24 +1188,35 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       final httpClient = HttpClient();
       httpClient.connectionTimeout = const Duration(seconds: 60);
 
-      final request = await httpClient.postUrl(uri);
-      request.headers.set('Authorization', 'Bearer $token');
-      request.headers.set('Content-Type', 'application/json');
-      request.headers.set('Content-Encoding', 'gzip');
-      request.headers.contentLength = gzipBytes.length;
-      request.add(gzipBytes);
+      final int statusCodeRaw;
+      final String reasonPhrase;
+      final String responseBody;
+      final HttpHeaders responseHeaders;
+      try {
+        final request = await httpClient.postUrl(uri);
+        request.headers.set('Authorization', 'Bearer $token');
+        request.headers.set('Content-Type', 'application/json');
+        request.headers.set('Content-Encoding', 'gzip');
+        request.headers.contentLength = gzipBytes.length;
+        request.add(gzipBytes);
 
-      final httpResponse = await request.close();
-      final responseBody = await httpResponse.transform(utf8.decoder).join();
-      httpClient.close();
+        final httpResponse = await request.close();
+        responseBody = await httpResponse.transform(utf8.decoder).join();
+        statusCodeRaw = httpResponse.statusCode;
+        reasonPhrase = httpResponse.reasonPhrase;
+        responseHeaders = httpResponse.headers;
+      } finally {
+        // Exception ho ya na ho — client hamesha close, warna socket leak.
+        httpClient.close();
+      }
 
       stopwatch.stop();
 
       debugPrint('[V3-PUSH] ───────────────────────────────────────────');
-      debugPrint('[V3-PUSH] Status: ${httpResponse.statusCode} ${httpResponse.reasonPhrase}');
+      debugPrint('[V3-PUSH] Status: $statusCodeRaw $reasonPhrase');
       debugPrint('[V3-PUSH] Time: ${stopwatch.elapsedMilliseconds} ms');
       debugPrint('[V3-PUSH] Response headers:');
-      httpResponse.headers.forEach((name, values) {
+      responseHeaders.forEach((name, values) {
         debugPrint('[V3-PUSH]   $name: ${values.join(', ')}');
       });
       debugPrint('[V3-PUSH] Body: $responseBody');
@@ -1102,7 +1224,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
       final responseData = jsonDecode(responseBody) as Map<String, dynamic>? ?? {};
       final data = responseData['data'] as Map<String, dynamic>? ?? {};
-      final statusCode = httpResponse.statusCode;
+      final statusCode = statusCodeRaw;
 
       // Auth check
       if (statusCode == 401 || statusCode == 403) {
@@ -1143,6 +1265,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
       // 5. Clear polling state regardless of result
       await _clearPollingState();
+      if (isClosed) return;
       emit(state.copyWith(
         isPolling: false,
         pollingJobId: '',
@@ -1275,6 +1398,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     }
 
     // Resume polling
+    if (isClosed) return;
     emit(state.copyWith(
       isPolling: true,
       pollingJobId: jobId,
@@ -1284,6 +1408,10 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
     final pollResult = await _pollJobStatus(jobId);
     await _clearPollingState();
+    // Poll 60s tak chal sakti hai — tab tak cubit close ho sakta hai
+    // (logout/screen dispose). emit-after-close StateError se bachne ke
+    // liye guard. _emitPushEvent khud isClosed check karta hai.
+    if (isClosed) return;
     emit(state.copyWith(
       isPolling: false,
       pollingJobId: '',
@@ -1496,20 +1624,12 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   // Device history data ko console pe dump karta hai. Android logcat ki
   // per-line ~1000 char limit hoti hai — isliye 800 char chunks me todte hain.
   void _dumpHistory(String tag, List<dynamic> data) {
-    //debugPrint('[BLE-HISTORY] $tag — count=${data.length}');
     if (data.isEmpty) return;
-    final str = data.toString();
-    const chunkSize = 800;
-    if (str.length <= chunkSize) {
-      //debugPrint('[BLE-HISTORY] $tag → $str');
-      return;
-    }
-    final total = (str.length / chunkSize).ceil();
-    for (var i = 0; i < total; i++) {
-      final start = i * chunkSize;
-      final end = (start + chunkSize) < str.length ? start + chunkSize : str.length;
-     // debugPrint('[BLE-HISTORY] $tag [${i + 1}/$total] ${str.substring(start, end)}');
-    }
+    // Sync se aane wala poora history data log file me (count + pretty JSON).
+    FileLogger.instance.log(
+      '$tag — count=${data.length}  data:\n${prettyJson(data)}',
+      tag: 'BLE-HISTORY',
+    );
   }
 
   double _calculateRmssd(List<int> rr) {

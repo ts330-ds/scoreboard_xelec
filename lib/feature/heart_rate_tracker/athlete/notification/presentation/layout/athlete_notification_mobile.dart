@@ -67,10 +67,21 @@ class AthleteNotificationMobile extends StatelessWidget {
           }
 
           if (state.requests.isEmpty) {
-            return const Center(
-              child: Text(
-                'No coach requests yet',
-                style: TextStyle(color: AppColors.subtext, fontSize: 14),
+            return RefreshIndicator(
+              onRefresh: () =>
+                  context.read<AthleteNotificationCubit>().fetchRequests(),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
+                  SizedBox(height: 120),
+                  Center(
+                    child: Text(
+                      'No coach requests yet',
+                      style:
+                          TextStyle(color: AppColors.subtext, fontSize: 14),
+                    ),
+                  ),
+                ],
               ),
             );
           }
@@ -83,8 +94,11 @@ class AthleteNotificationMobile extends StatelessWidget {
               itemCount: state.requests.length,
               itemBuilder: (context, index) {
                 final request = state.requests[index];
+                final isPending = request.requestStatus == 'pending';
                 return GestureDetector(
-                  onTap: () => _showRequestActionSheet(context, request),
+                  onTap: isPending
+                      ? () => _showRequestActionSheet(context, request)
+                      : null,
                   child: _CoachRequestCard(request: request),
                 );
               },
@@ -126,10 +140,14 @@ class _RequestActionSheet extends StatelessWidget {
         ),
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
         child: BlocConsumer<AthleteNotificationCubit, AthleteNotificationState>(
+          // One-shot: pop only when a success signal newly arrives, so a
+          // follow-up refresh emit can never trigger a second pop (which would
+          // otherwise pop the underlying screen → blank screen).
+          listenWhen: (prev, curr) =>
+              curr.successMessage != null &&
+              curr.successMessage != prev.successMessage,
           listener: (context, state) {
-            if (!state.isResponding &&
-                state.respondedRequestId == request.requestId &&
-                state.responseError == null) {
+            if (Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
             }
           },

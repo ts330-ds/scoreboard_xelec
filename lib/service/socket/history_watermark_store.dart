@@ -45,6 +45,9 @@ class HistoryWatermarkStore {
   String get _sleepKey => '${PrefKeys.lastEmittedSleepUtcPrefix}$_athleteId';
   String get _syncAtKey => '${PrefKeys.lastHistorySyncAtPrefix}$_athleteId';
   String get _pushAtKey => '${PrefKeys.lastHistoryPushAtPrefix}$_athleteId';
+  String get _serverStampKey => '${PrefKeys.serverLastStampPrefix}$_athleteId';
+  String get _serverCheckedKey =>
+      '${PrefKeys.serverCheckedAtPrefix}$_athleteId';
 
   int get lastHrStamp => _prefs.getInt(_hrKey) ?? 0;
   int get lastRrStamp => _prefs.getInt(_rrKey) ?? 0;
@@ -56,9 +59,19 @@ class HistoryWatermarkStore {
       DateTime.fromMillisecondsSinceEpoch(lastSyncAtMs);
 
   // Epoch millis of last successful server push. 0 = never pushed.
+  // (Local push event only — NOT the source of truth for the UI.)
   int get lastPushAtMs => _prefs.getInt(_pushAtKey) ?? 0;
   DateTime get lastPushAt =>
       DateTime.fromMillisecondsSinceEpoch(lastPushAtMs);
+
+  // ── Server watermark (single source of truth, mirrored locally) ───────────
+
+  // Newest reading timestamp the server has (epoch millis). 0 = server has
+  // nothing / never reached. This is what the History UI displays.
+  int get serverLastStampMs => _prefs.getInt(_serverStampKey) ?? 0;
+
+  // Wall-clock of the last successful server reach (epoch millis).
+  int get serverCheckedAtMs => _prefs.getInt(_serverCheckedKey) ?? 0;
 
   Future<void> commitHr(int stamp) async {
     if (stamp > lastHrStamp) await _prefs.setInt(_hrKey, stamp);
@@ -78,5 +91,21 @@ class HistoryWatermarkStore {
 
   Future<void> commitPushAtNow() async {
     await _prefs.setInt(_pushAtKey, DateTime.now().millisecondsSinceEpoch);
+  }
+
+  /// Mirror the server's last-reading watermark into local. Server is the
+  /// source of truth, so this overwrites unconditionally. Also stamps the
+  /// "checked at" wall-clock. Call only from the single choke-point.
+  Future<void> commitServerWatermark(int serverStampMs) async {
+    await _prefs.setInt(_serverStampKey, serverStampMs);
+    await _prefs.setInt(
+        _serverCheckedKey, DateTime.now().millisecondsSinceEpoch);
+  }
+
+  /// Record that the server was reached but had no data (new user). Only
+  /// stamps "checked at" — leaves serverLastStampMs at 0.
+  Future<void> commitServerReachedNow() async {
+    await _prefs.setInt(
+        _serverCheckedKey, DateTime.now().millisecondsSinceEpoch);
   }
 }

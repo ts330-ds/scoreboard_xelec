@@ -210,12 +210,34 @@ class _AthleteRegistrationMobileState
         }
         return DropdownButtonFormField<Sport>(
           initialValue: _selectedSport,
+          isExpanded: true,
+          // isDense: dropdown button ki intrinsic height (kMinInteractiveDimension
+          // = 48px) ko collapse karta hai taaki ye field bilkul baaki text fields
+          // jaisa (same _inputDecoration) layout ho — warna vertical pixel overflow.
+          isDense: true,
           decoration: _inputDecoration(
               label: 'Sport',
               hint: 'Select your sport',
               icon: Icons.sports),
           items: state.sports
-              .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
+              .map((s) => DropdownMenuItem(
+                    value: s,
+                    child: Text(
+                      s.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ))
+              .toList(),
+          selectedItemBuilder: (context) => state.sports
+              .map((s) => Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      s.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ))
               .toList(),
           onChanged: (s) => setState(() => _selectedSport = s),
           validator: (v) => v == null ? 'Please select a sport' : null,
@@ -260,7 +282,7 @@ class _AthleteRegistrationMobileState
           name: _nameController.text.trim(),
           email: _email,
           password: '123456',
-          sport: 1,
+          sport: _selectedSport!.id,
         );
   }
 
