@@ -18,8 +18,14 @@ class ApiService {
     dio = Dio(
       BaseOptions(
         baseUrl: dotenv.env['BASE_URL'] ?? '',
-        connectTimeout: const Duration(seconds: 60),
-        receiveTimeout: const Duration(seconds: 60),
+        // Reachable server pe connection 1-2s me banta hai — 15s slow mobile
+        // network/DNS ke liye kaafi hai. Pehle 60s tha, jisse server down hone
+        // par app pura ek minute hang karta tha (+ retry se aur 60s).
+        connectTimeout: const Duration(seconds: 15),
+        // Dio ki saari calls chhoti JSON hain (bada gzip history push apne
+        // HttpClient se jaata hai, Dio se nahi) — 30s safe hai.
+        receiveTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(seconds: 30),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -133,5 +139,17 @@ class ApiService {
   // Auth token hata do (logout ke baad call karo)
   void clearAuthToken() {
     dio.options.headers.remove('Authorization');
+  }
+
+  /// Raw HttpClient (Dio-bypass) uploads ke 401/403 ke liye. Dio interceptor
+  /// un requests ko nahi dekhta, isliye unke auth-failure ko manually yahan
+  /// report karo — taaki wahi GLOBAL flow chale jo Dio 401 pe chalta hai
+  /// (token clear + tokenExpiredStream → app re-login pe route karta hai).
+  /// Sirf pakke 401/403 pe call karo (network/other error pe nahi).
+  void notifyTokenExpired() {
+    clearAuthToken();
+    if (!_tokenExpiredController.isClosed) {
+      _tokenExpiredController.add(null);
+    }
   }
 }

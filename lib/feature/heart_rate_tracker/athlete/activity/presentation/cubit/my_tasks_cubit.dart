@@ -1,5 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/core/failure.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/entity/athlete_task_entity.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/usecase/get_my_tasks_usecase.dart';
 import 'my_tasks_state.dart';
 
@@ -11,11 +12,44 @@ class MyTasksCubit extends Cubit<MyTasksState> {
         super(const MyTasksState());
 
   // Initial load / pull-to-refresh — page 1, replaces the list.
+  //
+  // Do-phase (backend ki wajah se zaroori): `?page=1` list me `in_progress`
+  // task aata HI NAHI — use detect karne ke liye alag `?status=in_progress`
+  // call chahiye. Isliye pehle wahi check karo:
+  //   • in_progress mila → athlete ko usi pe force karo (banner), list load hi
+  //     mat karo — sirf 1 call.
+  //   • koi in_progress nahi → normal list laao (2nd call).
   Future<void> fetchTasks() async {
     if (state.status == MyTasksStatus.loading) return;
 
-    emit(state.copyWith(status: MyTasksStatus.loading, clearError: true));
+    emit(state.copyWith(
+      status: MyTasksStatus.loading,
+      clearError: true,
+      clearInProgress: true,
+    ));
+
+    final blocking = await _findInProgressTask();
+    if (isClosed) return;
+    if (blocking != null) {
+      emit(state.copyWith(
+        status: MyTasksStatus.loaded,
+        inProgressTask: blocking,
+      ));
+      return;
+    }
+
     await _fetch(page: 1, append: false);
+  }
+
+  // Server-authoritative in_progress check — `?status=in_progress` zaroori hai
+  // (default list ise exclude karta hai). Network error pe null (offline athlete
+  // ko list se lock out mat karo). Client-side dobara filter — defensive.
+  Future<AthleteTaskEntity?> _findInProgressTask() async {
+    final result = await _getMyTasks(page: 1, status: 'in_progress').run();
+    return result.fold(
+      (_) => null,
+      (data) => _findInProgress(data.tasks),
+    );
   }
 
   // Called when the user scrolls to the bottom — loads next page and appends.
@@ -53,5 +87,13 @@ class MyTasksCubit extends Cubit<MyTasksState> {
         ));
       },
     );
+  }
+
+  AthleteTaskEntity? _findInProgress(List<AthleteTaskEntity> tasks) {
+    for (final t in tasks) {
+      final s = t.status?.toLowerCase();
+      if (s == 'in_progress' || s == 'active') return t;
+    }
+    return null;
   }
 }

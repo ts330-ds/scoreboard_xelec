@@ -12,6 +12,13 @@ class MyTasksState extends Equatable {
   final int totalRecords;
   final bool hasMore;
 
+  /// Server pe abhi jo session `in_progress` (ya `active`) hai — usका task.
+  /// Non-null hone par athlete ko force kiya jaata hai ki pehle isi ko
+  /// finish/stop kare (list + New Task hide ho jaate hain). App-kill ke baad
+  /// jab local `isSessionActive` gum ho jaata hai, ye server-side signal us
+  /// running session ko wapas surface karta hai.
+  final AthleteTaskEntity? inProgressTask;
+
   const MyTasksState({
     this.status = MyTasksStatus.initial,
     this.tasks = const [],
@@ -20,6 +27,7 @@ class MyTasksState extends Equatable {
     this.currentPage = 1,
     this.totalRecords = 0,
     this.hasMore = false,
+    this.inProgressTask,
   });
 
   MyTasksState copyWith({
@@ -31,6 +39,8 @@ class MyTasksState extends Equatable {
     int? currentPage,
     int? totalRecords,
     bool? hasMore,
+    AthleteTaskEntity? inProgressTask,
+    bool clearInProgress = false,
   }) {
     return MyTasksState(
       status: status ?? this.status,
@@ -40,10 +50,20 @@ class MyTasksState extends Equatable {
       currentPage: currentPage ?? this.currentPage,
       totalRecords: totalRecords ?? this.totalRecords,
       hasMore: hasMore ?? this.hasMore,
+      inProgressTask:
+          clearInProgress ? null : (inProgressTask ?? this.inProgressTask),
     );
   }
 
   @override
-  List<Object?> get props =>
-      [status, tasks, errorMessage, isAuthError, currentPage, totalRecords, hasMore];
+  List<Object?> get props => [
+        status,
+        tasks,
+        errorMessage,
+        isAuthError,
+        currentPage,
+        totalRecords,
+        hasMore,
+        inProgressTask,
+      ];
 }

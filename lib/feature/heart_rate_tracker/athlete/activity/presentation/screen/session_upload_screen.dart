@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_state.dart';
@@ -20,12 +21,18 @@ class SessionUploadScreen extends StatefulWidget {
   final DateTime sessionStart;
   final DateTime sessionEnd;
 
+  /// Task ka naam — top info card me dikhta hai ("ye task hai"). Recovery/
+  /// feedback path (jahan sirf taskId hota hai) se null aata hai; tab card
+  /// `Session #id` fallback dikhata hai.
+  final String? taskName;
+
   const SessionUploadScreen({
     super.key,
     required this.submitCubit,
     required this.taskId,
     required this.sessionStart,
     required this.sessionEnd,
+    this.taskName,
   });
 
   @override
@@ -125,7 +132,16 @@ class _SessionUploadScreenState extends State<SessionUploadScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Column(
                         children: [
-                          const SizedBox(height: 48),
+                          const SizedBox(height: 20),
+
+                          _TaskInfoCard(
+                            taskName: widget.taskName,
+                            taskId: widget.taskId,
+                            sessionStart: widget.sessionStart,
+                            sessionEnd: widget.sessionEnd,
+                          ),
+
+                          const SizedBox(height: 28),
 
                           _StatusIcon(status: state.status),
 
@@ -247,6 +263,164 @@ class _SessionUploadScreenState extends State<SessionUploadScreen> {
       case TaskZipStatus.error:
         return state.errorMessage ?? 'Something went wrong. Please try again.';
     }
+  }
+}
+
+// ── Task Info Card ─────────────────────────────────────────────────────────
+// "Ye task hai aur yha se yha tak chala hai" — task naam + session ka
+// from→to range + duration. Upload ke har phase me top pe visible rehta hai.
+
+class _TaskInfoCard extends StatelessWidget {
+  final String? taskName;
+  final int taskId;
+  final DateTime sessionStart;
+  final DateTime sessionEnd;
+
+  const _TaskInfoCard({
+    required this.taskName,
+    required this.taskId,
+    required this.sessionStart,
+    required this.sessionEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final start = sessionStart.toLocal();
+    final end = sessionEnd.toLocal();
+    final sameDay =
+        start.year == end.year && start.month == end.month && start.day == end.day;
+
+    final dateFmt = DateFormat('dd MMM yyyy');
+    final timeFmt = DateFormat('hh:mm a');
+
+    final title = (taskName != null && taskName!.trim().isNotEmpty)
+        ? taskName!.trim()
+        : 'Session #$taskId';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.directions_run_rounded,
+                    color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AppColors.text,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _durationLabel(sessionEnd.difference(sessionStart)),
+                      style: const TextStyle(
+                        color: AppColors.subtext,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(height: 1, color: AppColors.borderLight),
+          const SizedBox(height: 14),
+          _RangeRow(
+            icon: Icons.play_arrow_rounded,
+            label: 'Started',
+            value: '${timeFmt.format(start)} · ${dateFmt.format(start)}',
+          ),
+          const SizedBox(height: 10),
+          _RangeRow(
+            icon: Icons.stop_rounded,
+            label: 'Ended',
+            value: sameDay
+                ? timeFmt.format(end)
+                : '${timeFmt.format(end)} · ${dateFmt.format(end)}',
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _durationLabel(Duration d) {
+    if (d.isNegative || d == Duration.zero) return 'Duration —';
+    final h = d.inHours;
+    final m = d.inMinutes % 60;
+    final s = d.inSeconds % 60;
+    if (h > 0) return 'Duration ${h}h ${m}m';
+    if (m > 0) return 'Duration ${m}m ${s}s';
+    return 'Duration ${s}s';
+  }
+}
+
+class _RangeRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _RangeRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.primary),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 64,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.subtext,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: AppColors.text,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

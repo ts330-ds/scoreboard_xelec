@@ -13,6 +13,10 @@ class SportCubit extends Cubit<SportState> {
   Future<void> getSports() async {
     emit(state.copyWith(status: SportStatus.loading));
     final result = await _getSports().run();
+    // API return hone se pehle user sheet band / tab change kar sakta hai —
+    // cubit close ho chuka hota hai, aur emit "Bad state: cannot emit after
+    // close" throw karta hai. Isliye await ke baad guard.
+    if (isClosed) return;
     result.fold(
       (failure) => emit(state.copyWith(
         status: SportStatus.error,

@@ -9,6 +9,7 @@ class AthleteTaskModel extends AthleteTaskEntity {
     super.assignedByName,
     super.status,
     super.assignedAt,
+    super.startedAt,
   });
 
   factory AthleteTaskModel.fromJson(Map<String, dynamic> json) {
@@ -24,6 +25,7 @@ class AthleteTaskModel extends AthleteTaskEntity {
         assignedByName: json['assigned_by_name'] as String?,
         status: json['status'] as String?,
         assignedAt: json['assigned_at'] as String?,
+        startedAt: json['started_at'] as String?,
       );
   }
 }

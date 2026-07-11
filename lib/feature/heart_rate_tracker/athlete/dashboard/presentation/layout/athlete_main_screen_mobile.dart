@@ -1,11 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_state.dart';
-import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/session_feedback_sheet.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/cubit/shell_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
 import 'package:xelex_esp/feature/onboarding/battery_optimization_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_activity_mobile.dart';
 // SQL-backed history screen. To revert to the Hive version, swap this import
@@ -26,7 +28,17 @@ class AthleteMainScreenMobile extends StatefulWidget {
 
 class _AthleteMainScreenMobileState extends State<AthleteMainScreenMobile> {
   static bool _promptAttempted = false;
-  bool _feedbackSheetShowing = false;
+
+  // BT-off notify guard — snackbar ek hi baar dikhao jab tak BT off rehta hai
+  // (har state emit pe repeat na ho). BT on hote hi reset ho jaata hai.
+  StreamSubscription<HeartBleState>? _bleSub;
+  bool _btOffNotified = false;
+
+  // Lazy tab build — IndexedStack normally saare tabs turant build karta hai,
+  // isliye Activity tab ka MyTasksCubit..fetchTasks() dashboard khulte hi chal
+  // jaata tha (chahe user Activity kabhi na khole). Sirf visited tabs ko build
+  // karo; visit hone ke baad IndexedStack unhe alive rakhta hai (state preserve).
+  final Set<int> _visitedTabs = {};
 
   @override
   void initState() {
@@ -38,19 +50,60 @@ class _AthleteMainScreenMobileState extends State<AthleteMainScreenMobile> {
       });
     }
     // Process death (phone off / app swipe-kill) ke baad adhoori session
-    // recover karo — server status ke hisaab se resume / upload / discard.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      sl<AthleteActivityCubit>().attemptSessionRecovery();
+    // recover karo — server status ke hisaab se resume / discard.
+    // Recovery ne session resume nahi ki (ya thi hi nahi) to idle case me
+    // last-connected band se bounded auto-reconnect chala do — app kholte hi
+    // wahi band jud jaye jo aam taur pe use hota hai (jaise smartwatch app).
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final activityCubit = sl<AthleteActivityCubit>();
+      await activityCubit.attemptSessionRecovery();
+      if (!mounted) return;
+      if (!activityCubit.state.isSessionActive) {
+        sl<HeartBleCubit>().attemptLaunchReconnect();
+      }
+    });
+
+    // BT-off notification — launch pe auto-reconnect athlete main screen se
+    // chalta hai (Connect Device screen mounted nahi hota), isliye wahan wala
+    // BT-off dialog nahi aata. Yahan dashboard-level pe sunke snackbar dikhao.
+    final bleCubit = sl<HeartBleCubit>();
+    _bleSub = bleCubit.stream.listen((s) {
+      if (!mounted) return;
+      if (s.isBluetoothOff && !_btOffNotified) {
+        _btOffNotified = true;
+        _showBtOffSnackbar(bleCubit);
+      } else if (!s.isBluetoothOff && _btOffNotified) {
+        _btOffNotified = false;
+      }
     });
   }
 
-  Future<void> _showFeedbackSheet(BuildContext context, int taskId) async {
-    if (_feedbackSheetShowing) return;
-    _feedbackSheetShowing = true;
-    await SessionFeedbackSheet.show(context, taskId: taskId);
-    _feedbackSheetShowing = false;
-    if (!mounted) return;
-    sl<AthleteActivityCubit>().acknowledgeFeedbackPrompt();
+  @override
+  void dispose() {
+    _bleSub?.cancel();
+    super.dispose();
+  }
+
+  void _showBtOffSnackbar(HeartBleCubit cubit) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text(
+          'Bluetooth is off — turn it on to connect your heart rate monitor',
+        ),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Enable',
+          onPressed: () {
+            cubit
+              ..clearBluetoothOffFlag()
+              ..openBluetoothSettings();
+          },
+        ),
+      ),
+    );
   }
 
   static const List<_NavItem> _navItems = [
@@ -88,58 +141,29 @@ class _AthleteMainScreenMobileState extends State<AthleteMainScreenMobile> {
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).uri.toString();
     final currentIndex = _locationToIndex(location);
+    // Current tab ko visited maano — ye tabhi build hoga (aur uska cubit/fetch
+    // tabhi chalega). Visit hone ke baad alive rehta hai.
+    _visitedTabs.add(currentIndex);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final cubitIdx = context.read<AthleteShellCubit>().state;
       if (cubitIdx != currentIndex) context.read<AthleteShellCubit>().changeTab(currentIndex);
     });
 
-    return BlocProvider.value(
-      value: sl<AthleteActivityCubit>(),
-      child: BlocBuilder<AthleteActivityCubit, AthleteActivityState>(
-        buildWhen: (prev, curr) =>
-            prev.pendingFeedbackTaskId != curr.pendingFeedbackTaskId,
-        builder: (context, activityState) {
-          final taskId = activityState.pendingFeedbackTaskId;
-
-          if (taskId != null) {
-            return PopScope(
-              canPop: false,
-              onPopInvokedWithResult: (didPop, _) {
-                if (!didPop) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Please submit session feedback first.'),
-                      behavior: SnackBarBehavior.floating,
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
-              },
-              child: Scaffold(
-                backgroundColor: AppColors.bg,
-                body: _FeedbackBlockingScreen(
-                  onOpenFeedback: () => _showFeedbackSheet(context, taskId),
-                ),
-              ),
+    return BlocBuilder<AthleteShellCubit, int>(
+      builder: (context, state) => Scaffold(
+        body: IndexedStack(
+          index: currentIndex,
+          children: List.generate(_pages.length, (i) {
+            // Jo tab abhi tak nahi khula, use build mat karo — sirf placeholder.
+            if (!_visitedTabs.contains(i)) return const SizedBox.shrink();
+            return Navigator(
+              key: _navigatorKeys[i],
+              onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => _pages[i]),
             );
-          }
-
-          return BlocBuilder<AthleteShellCubit, int>(
-            builder: (context, state) => Scaffold(
-              body: IndexedStack(
-                index: currentIndex,
-                children: _pages.asMap().entries.map((e) =>
-                  Navigator(
-                    key: _navigatorKeys[e.key],
-                    onGenerateRoute: (_) => MaterialPageRoute(builder: (_) => e.value),
-                  ),
-                ).toList(),
-              ),
-              bottomNavigationBar: _buildBottomNav(context, currentIndex),
-            ),
-          );
-        },
+          }),
+        ),
+        bottomNavigationBar: _buildBottomNav(context, currentIndex),
       ),
     );
   }
@@ -208,73 +232,3 @@ class _NavItem {
   const _NavItem({required this.label, required this.icon, required this.activeIcon, required this.path});
 }
 
-class _FeedbackBlockingScreen extends StatelessWidget {
-  final VoidCallback onOpenFeedback;
-  const _FeedbackBlockingScreen({required this.onOpenFeedback});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.rate_review_rounded,
-                size: 48,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Session Feedback Required',
-              style: TextStyle(
-                color: AppColors.text,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Please submit your session feedback before continuing.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.subtext,
-                fontSize: 14,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 28),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: onOpenFeedback,
-                icon: const Icon(Icons.edit_note),
-                label: const Text(
-                  'Submit Feedback',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 2,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

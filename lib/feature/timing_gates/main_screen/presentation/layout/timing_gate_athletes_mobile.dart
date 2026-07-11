@@ -124,6 +124,7 @@ class _TimingGateAthletesMobileState extends State<TimingGateAthletesMobile> {
 
   Widget _buildFab(BuildContext context) {
     return FloatingActionButton(
+      heroTag: 'timing_gate_add_athlete_fab',
       backgroundColor: _primary,
       onPressed: () => _showAddEditModal(context, null),
       child: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white),

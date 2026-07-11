@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/failure.dart';
+import 'package:xelex_esp/core/network/dio_error_message.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import '../model/athlete_search_model.dart';
 
@@ -62,7 +63,7 @@ class CoachRequestRemoteDataSourceImpl implements CoachRequestRemoteDataSource {
           ));
         } on DioException catch (e) {
           return left(ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Failed to load athletes',
+            friendlyDioMessage(e, fallback: 'Failed to load athletes'),
           ));
         } catch (e) {
           return left(ServerFailure('Failed to load athletes: $e'));
@@ -89,7 +90,7 @@ class CoachRequestRemoteDataSourceImpl implements CoachRequestRemoteDataSource {
           return right(null);
         } on DioException catch (e) {
           return left(ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Failed to send request',
+            friendlyDioMessage(e, fallback: 'Failed to send request'),
           ));
         } catch (e) {
           return left(ServerFailure('Failed to send request: $e'));

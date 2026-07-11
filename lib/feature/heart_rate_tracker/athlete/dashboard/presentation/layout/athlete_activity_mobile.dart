@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/entity/athlete_task_entity.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/athlete_activity_state.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/my_tasks_cubit.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/my_tasks_state.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/my_tasks_list_view.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/widgets/new_activity_sheet.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/common/sport/presentation/cubit/sport_cubit.dart';
@@ -36,63 +38,87 @@ class _ActivityBody extends StatelessWidget {
       buildWhen: (prev, curr) =>
           prev.isSessionActive != curr.isSessionActive,
       builder: (context, activityState) {
-        return Scaffold(
-          backgroundColor: AppColors.bg,
-          appBar: AppBar(
-            title: const Text('My Tasks'),
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            elevation: 0,
-          ),
-          body: activityState.isSessionActive
-              ? _ActiveSessionBanner(
-                  onGoToSession: () => _navigateToActiveSession(context, activityState),
-                )
-              : MyTasksListView(
-                  onTaskTap: (task) {
-                    if (task.status?.toLowerCase() == 'completed') {
-                      context.push(HeartTrackerPaths.athleteTaskResult, extra: task);
-                      return;
-                    }
+        return BlocBuilder<MyTasksCubit, MyTasksState>(
+          buildWhen: (prev, curr) =>
+              prev.inProgressTask != curr.inProgressTask ||
+              prev.status != curr.status,
+          builder: (context, tasksState) {
+            // Session ko active maano agar:
+            //   • local cubit me session active hai (normal flow), YA
+            //   • server ne is athlete ka ek task `in_progress` bataya
+            //     (app-kill ke baad local state gum — recovery signal).
+            // Dono me se koi bhi ho to list + New Task block, force banner dikhao.
+            final serverInProgress = tasksState.inProgressTask;
+            final blocked =
+                activityState.isSessionActive || serverInProgress != null;
 
-                    context.push(
-                      HeartTrackerPaths.athleteTaskDetail,
-                      extra: {
-                        'task': task,
-                        'activityCubit': context.read<AthleteActivityCubit>(),
+            return Scaffold(
+              backgroundColor: AppColors.bg,
+              appBar: AppBar(
+                title: const Text('My Tasks'),
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+              ),
+              body: blocked
+                  ? _ActiveSessionBanner(
+                      onGoToSession: () {
+                        // Server in_progress task ko priority — recovery-resumed
+                        // session me local activeTask null ho sakta hai.
+                        final task =
+                            serverInProgress ?? activityState.activeTask;
+                        if (task == null) return;
+                        // Local session active nahi (app-kill) — pehle resume
+                        // karo taaki detail screen seedha ActiveSessionView
+                        // dikhaye, na ki PendingTaskView "Start" wali.
+                        if (!activityState.isSessionActive) {
+                          context
+                              .read<AthleteActivityCubit>()
+                              .resumeInProgressTask(task);
+                        }
+                        _navigateToTask(context, task);
                       },
-                    ).then((_) {
-                      if (context.mounted) context.read<MyTasksCubit>().fetchTasks();
-                    });
-                  },
-                ),
-          floatingActionButton: activityState.isSessionActive
-              ? null
-              : FloatingActionButton.extended(
-                  onPressed: () => _showNewActivitySheet(context),
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  icon: const Icon(Icons.add),
-                  label: const Text(
-                    'New Task',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
+                    )
+                  : MyTasksListView(
+                      onTaskTap: (task) {
+                        if (task.status?.toLowerCase() == 'completed') {
+                          context.push(HeartTrackerPaths.athleteTaskResult,
+                              extra: task);
+                          return;
+                        }
+                        _navigateToTask(context, task);
+                      },
+                    ),
+              floatingActionButton: blocked
+                  ? null
+                  : FloatingActionButton.extended(
+                      heroTag: 'athlete_new_task_fab',
+                      onPressed: () => _showNewActivitySheet(context),
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      icon: const Icon(Icons.add),
+                      label: const Text(
+                        'New Task',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+            );
+          },
         );
       },
     );
   }
 
-  void _navigateToActiveSession(BuildContext context, AthleteActivityState activityState) {
-    final task = activityState.activeTask;
-    if (task == null) return;
+  void _navigateToTask(BuildContext context, AthleteTaskEntity task) {
     context.push(
       HeartTrackerPaths.athleteTaskDetail,
       extra: {
         'task': task,
         'activityCubit': context.read<AthleteActivityCubit>(),
       },
-    );
+    ).then((_) {
+      if (context.mounted) context.read<MyTasksCubit>().fetchTasks();
+    });
   }
 
   void _showNewActivitySheet(BuildContext context) {

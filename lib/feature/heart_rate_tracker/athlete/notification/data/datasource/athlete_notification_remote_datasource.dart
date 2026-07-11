@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/failure.dart';
+import 'package:xelex_esp/core/network/dio_error_message.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import '../model/coach_request_model.dart';
 
@@ -20,26 +21,10 @@ class AthleteNotificationRemoteDataSourceImpl
 
   String? get _token => _prefs.getString(PrefKeys.userToken);
 
-  /// Maps a [DioException] to a user-friendly message, with explicit handling
-  /// for timeouts and connection errors so the UI can show a clean retry.
-  String _dioMessage(DioException e, String fallback) {
-    switch (e.type) {
-      case DioExceptionType.connectionTimeout:
-      case DioExceptionType.sendTimeout:
-      case DioExceptionType.receiveTimeout:
-        return 'Request timed out. Please check your connection and try again.';
-      case DioExceptionType.connectionError:
-        return 'Unable to reach the server. Please check your internet connection.';
-      case DioExceptionType.cancel:
-        return 'Request was cancelled.';
-      default:
-        final data = e.response?.data;
-        if (data is Map && data['message'] is String) {
-          return data['message'] as String;
-        }
-        return e.message ?? fallback;
-    }
-  }
+  /// Maps a [DioException] to a user-friendly message. App-wide shared helper
+  /// use karta hai (server body message → error-type friendly text → fallback).
+  String _dioMessage(DioException e, String fallback) =>
+      friendlyDioMessage(e, fallback: fallback);
 
   /// Returns the server-provided message when the response signals failure,
   /// otherwise null. Tolerates non-Map / unexpected bodies.

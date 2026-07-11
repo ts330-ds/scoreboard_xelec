@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:xelex_esp/core/failure.dart';
+import 'package:xelex_esp/core/network/dio_error_message.dart';
 import '../model/athlete_auth_model.dart';
 
 abstract interface class AthleteAuthRemoteDataSource {
@@ -54,7 +55,7 @@ class AthleteAuthRemoteDataSourceImpl implements AthleteAuthRemoteDataSource {
           if (e.response?.statusCode == 404 || e.response?.statusCode == 401) {
             return left(const AthleteNotFoundFailure());
           }
-          return left(AuthFailure(e.response?.data['message'] ?? e.message ?? 'Login failed'));
+          return left(AuthFailure(friendlyDioMessage(e, fallback: 'Login failed')));
         } catch (e) {
           debugPrint('Login error: $e');
           return left(AuthFailure('Login failed: $e'));
@@ -83,7 +84,7 @@ class AthleteAuthRemoteDataSourceImpl implements AthleteAuthRemoteDataSource {
           if (e.response?.statusCode == 404 || e.response?.statusCode == 401) {
             return left(const AthleteNotFoundFailure());
           }
-          return left(AuthFailure(e.response?.data['message'] ?? e.message ?? 'Login failed'));
+          return left(AuthFailure(friendlyDioMessage(e, fallback: 'Login failed')));
         } catch (e) {
           debugPrint('Social login error: $e');
           return left(AuthFailure('Login failed: $e'));
@@ -110,7 +111,7 @@ class AthleteAuthRemoteDataSourceImpl implements AthleteAuthRemoteDataSource {
           );
           return right(AthleteAuthModel.fromJson(response.data));
         } on DioException catch (e) {
-          return left(AuthFailure(e.response?.data['message'] ?? e.message ?? 'Registration failed'));
+          return left(AuthFailure(friendlyDioMessage(e, fallback: 'Registration failed')));
         } catch (e) {
           return left(AuthFailure('Registration failed: $e'));
         }

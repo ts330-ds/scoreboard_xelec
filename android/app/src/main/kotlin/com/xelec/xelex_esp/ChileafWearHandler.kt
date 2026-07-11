@@ -107,13 +107,15 @@ class ChileafWearHandler(
     private var hrTimeoutRunnable: Runnable? = null
     private var rrTimeoutRunnable: Runnable? = null
 
-    // Ek record ka data fetch hone ke liye max wait. Pehle 5s tha — bada record
-    // (long session → ek record me hazaron readings) 5s me transfer na ho paaye
-    // to skip ho jata tha aur uska data permanently chhut jata tha. Ab 25s:
-    // bade records ke liye ~5x headroom, par Flutter ke 60s idle/safety timers
-    // se safely neeche (record transfer ke dauraan koi chunk nahi jata, isliye
-    // ye per-record wait us 60s se kam rehna chahiye).
-    private val perRecordTimeoutMs = 25_000L
+    // Ek record ka data fetch hone ke liye max wait. History: 5s → 25s → 60s.
+    // 2-ghante ki session ka ek record hazaron readings rakhta hai; slow device
+    // / BLE congestion (khaaskar live session ke turant baad) me 25s me bhi
+    // transfer poora na hota tha → record skip → 0 readings → upload fail.
+    // Ab 60s. IMPORTANT: ye Flutter ke idle timeout (BleFetchRangeCubit._idleTimeout)
+    // se neeche rehna chahiye — ek record ke transfer ke dauraan Flutter ko koi
+    // naya chunk nahi milta, isliye uska idle timer is wait ko cut na kar de.
+    // Isliye Flutter idle timeout 60s → 90s bump kiya gaya hai (30s margin).
+    private val perRecordTimeoutMs = 60_000L
 
     // HR/RR record callback fallback. Sleep ki tarah HR/RR record callback bhi
     // device ke paas us stream ka data na hone par fire nahi hota → us stream ka
@@ -166,7 +168,8 @@ class ChileafWearHandler(
                 }
             }
         }
-        // Per-record timeout: if callback doesn't fire in 5s, skip this record.
+        // Per-record timeout (perRecordTimeoutMs): if callback doesn't fire in
+        // time, skip this record.
         // Cancel any previous timeout first to avoid stale runnables stacking up.
         hrTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
         val timeout = Runnable {
@@ -516,6 +519,43 @@ class ChileafWearHandler(
         stopRssiPolling()
         wearManager.disconnectDevice()
 
+    }
+
+    // ── Device power / reset commands ─────────────────────────────────────────
+    /**
+     * Powers OFF the connected band. Device disconnects on its own after this;
+     * the onDeviceDisconnected callback handles UI state. Returns false if no
+     * device is connected.
+     */
+    fun shutdownDevice(): Boolean {
+        if (!wearManager.isConnected) return false
+        // Treat like a user-initiated disconnect so auto-reconnect doesn't kick
+        // in once the band powers off.
+        userInitiatedDisconnect = true
+        stopRssiPolling()
+        return try {
+            wearManager.shutdown()
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "shutdown failed: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Factory-resets the connected band. This ERASES all stored settings and
+     * history on the device. UTC time + any device settings must be re-applied
+     * afterwards. Returns false if no device is connected.
+     */
+    fun restoreDevice(): Boolean {
+        if (!wearManager.isConnected) return false
+        return try {
+            wearManager.restoration()
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "restoration failed: ${e.message}")
+            false
+        }
     }
 
     // ── History Sync ──────────────────────────────────────────────────────────

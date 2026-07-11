@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/failure.dart';
+import 'package:xelex_esp/core/network/dio_error_message.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import '../../domain/entity/task_result_entity.dart';
 import '../model/athlete_task_model.dart';
@@ -23,7 +24,7 @@ abstract interface class AthleteTaskRemoteDataSource {
     required String assignedBy,
   });
 
-  TaskEither<Failure, MyTasksResult> getMyTasks({int page = 1});
+  TaskEither<Failure, MyTasksResult> getMyTasks({int page = 1, String? status});
 
   TaskEither<Failure, TaskResultEntity> getTaskResult(int taskId);
 
@@ -112,7 +113,7 @@ class AthleteTaskRemoteDataSourceImpl implements AthleteTaskRemoteDataSource {
           return left(ServerFailure(
             _extractErrorMessage(
               body,
-              e.message ?? 'Task create karne mein failure',
+              friendlyDioMessage(e),
             ),
           ));
         } catch (e) {
@@ -121,7 +122,7 @@ class AthleteTaskRemoteDataSourceImpl implements AthleteTaskRemoteDataSource {
       });
 
   @override
-  TaskEither<Failure, MyTasksResult> getMyTasks({int page = 1}) =>
+  TaskEither<Failure, MyTasksResult> getMyTasks({int page = 1, String? status}) =>
       TaskEither(() async {
         final token = _token;
         if (token == null || token.isEmpty) {
@@ -131,7 +132,10 @@ class AthleteTaskRemoteDataSourceImpl implements AthleteTaskRemoteDataSource {
         try {
           final response = await _dio.get(
             '/athlete/my_tasks',
-            queryParameters: {'page': page},
+            queryParameters: {
+              'page': page,
+              if (status != null && status.isNotEmpty) 'status': status,
+            },
             options: Options(headers: {'Authorization': 'Bearer $token'}),
           );
 
@@ -167,7 +171,7 @@ class AthleteTaskRemoteDataSourceImpl implements AthleteTaskRemoteDataSource {
           return left(ServerFailure(
             _extractErrorMessage(
               body,
-              e.message ?? 'Tasks fetch karne mein failure',
+              friendlyDioMessage(e),
             ),
           ));
         } catch (e) {
@@ -220,7 +224,7 @@ class AthleteTaskRemoteDataSourceImpl implements AthleteTaskRemoteDataSource {
           final data = e.response?.data;
           final body = data is Map<String, dynamic> ? data : null;
           return left(ServerFailure(
-            _extractErrorMessage(body, e.message ?? 'Upload failed'),
+            _extractErrorMessage(body, friendlyDioMessage(e)),
           ));
         } catch (e) {
           return left(ServerFailure('Upload failed: $e'));
@@ -259,7 +263,7 @@ class AthleteTaskRemoteDataSourceImpl implements AthleteTaskRemoteDataSource {
           return left(ServerFailure(
             _extractErrorMessage(
               errBody,
-              e.message ?? 'Result fetch karne mein failure',
+              friendlyDioMessage(e),
             ),
           ));
         } catch (e) {

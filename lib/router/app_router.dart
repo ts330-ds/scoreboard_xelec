@@ -20,6 +20,7 @@ import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history_sql/present
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_home_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/layout/athlete_profile_mobile.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/screen/athlete_main_screen.dart';
+import 'package:xelex_esp/service/foreground/athlete_foreground_service.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/screen/athlete_sleep_detail_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/dashboard/presentation/screen/athlete_hrv_detail_screen.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/notification/presentation/screen/athlete_notification_screen.dart';
@@ -647,7 +648,14 @@ final GoRouter appRouter = GoRouter(
                   ],
                 ),
               );
-              if (shouldExit == true) SystemNavigator.pop();
+              if (shouldExit == true) {
+                // Exit par foreground service + BG isolate band karo, par server
+                // ko stop mat bhejo — session `in_progress` rahe. Agli launch pe
+                // recovery (attemptSessionRecovery) socket + service resume kar
+                // dega. Idle (koi session nahi) me ye safe no-op hai.
+                await AthleteForegroundService.stopServiceKeepSession();
+                SystemNavigator.pop();
+              }
               return true;
             },
             child: AthleteMainScreen(child: child),

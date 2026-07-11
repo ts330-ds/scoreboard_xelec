@@ -99,6 +99,11 @@ class AthleteForegroundService {
 
   static Future<void> stopIfIdle() => _stopServiceIfIdle();
 
+  /// FG service abhi chal rahi hai ya nahi — launch-time orphan (zombie)
+  /// detection ke liye (persisted/UI session gayab par service zinda).
+  static Future<bool> get isServiceRunning =>
+      FlutterForegroundTask.isRunningService;
+
   // Activity session start karo
   static Future<void> startActivitySession({
     required String token,
@@ -128,6 +133,30 @@ class AthleteForegroundService {
   static Future<void> cleanupAfterSessionEnd() async {
     _activityActive = false;
     await _stopServiceIfIdle();
+  }
+
+  /// App-exit (user ne "Exit App" confirm kiya) par foreground service + BG
+  /// isolate band karo — LEKIN server ko koi stop command mat bhejo. Session
+  /// `in_progress` rehti hai taaki agli launch pe recovery use resume kar sake
+  /// (bilkul swipe-kill jaisa).
+  ///
+  /// NOTE: `stopActivitySession()` se ALAG — wo `stop_activity` bhejta hai jo
+  /// server pe `stopTask` → session COMPLETE kar deta hai (resume ka mauka
+  /// khatam). Yahan seedha `stopService()` — BG handler ka `onDestroy` sirf
+  /// local cleanup karta hai, server ko chhedta nahi.
+  static Future<void> stopServiceKeepSession() async {
+    // Guard 1: koi active session hi nahi → kuch mat karo. (Idle me service
+    // waise bhi running nahi hoti; galti se kisi aur cheez ko touch na karein.)
+    if (!_activityActive) return;
+    // Guard 2: service actually running (i.e. native service null nahi) tabhi
+    // stop karo. Warna stopService() call bekaar / no-op.
+    if (!await FlutterForegroundTask.isRunningService) return;
+
+    _activityActive = false;
+    await FlutterForegroundTask.stopService();
+    // Service band — next start fresh handshake karega.
+    _bgReady = false;
+    _bgReadyCompleter = null;
   }
 
   // BLE se nayi reading aayi — background handler ko batao

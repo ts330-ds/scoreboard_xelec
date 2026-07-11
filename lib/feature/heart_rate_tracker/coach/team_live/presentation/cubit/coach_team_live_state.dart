@@ -18,10 +18,15 @@ class TeamAthleteCard extends Equatable {
   final double? lng;
   // null = abhi tak reading nahi (sirf seed hua hai active-tasks list se).
   final DateTime? lastUpdate;
+  // Card kab seed hua (active-tasks list se). Agar iske baad stale-threshold
+  // tak koi reading na aaye to card offline maano — is se woh case handle hota
+  // hai jab athlete app kill kar de par backend task ko abhi in_progress dikhata
+  // rahe (coach re-enter kare to card seed to hota hai par kabhi live nahi hota).
+  final DateTime seededAt;
   // Connection drop ya stale fallback se card grey ho jaata hai.
   final bool isOffline;
 
-  const TeamAthleteCard({
+  TeamAthleteCard({
     required this.taskId,
     required this.athleteId,
     required this.athleteName,
@@ -33,8 +38,9 @@ class TeamAthleteCard extends Equatable {
     this.lat,
     this.lng,
     this.lastUpdate,
+    DateTime? seededAt,
     this.isOffline = false,
-  });
+  }) : seededAt = seededAt ?? DateTime.now();
 
   bool get hasReading => lastUpdate != null && heartRate > 0;
 
@@ -59,6 +65,7 @@ class TeamAthleteCard extends Equatable {
         lat: r.lat,
         lng: r.lng,
         lastUpdate: r.timestamp,
+        seededAt: seededAt,
         isOffline: false,
       );
 
@@ -74,6 +81,7 @@ class TeamAthleteCard extends Equatable {
         lat: lat,
         lng: lng,
         lastUpdate: lastUpdate,
+        seededAt: seededAt,
         isOffline: isOffline ?? this.isOffline,
       );
 

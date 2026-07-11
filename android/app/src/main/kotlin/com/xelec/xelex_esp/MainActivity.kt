@@ -99,11 +99,45 @@ class MainActivity : FlutterActivity() {
                         result.success("Disconnect Command Sent")
                     }
 
+                    "shutdownDevice" -> {
+                        if (!chileafHandler.isDeviceConnected) {
+                            result.error("NOT_CONNECTED", "No device connected", null)
+                            return@setMethodCallHandler
+                        }
+                        if (chileafHandler.shutdownDevice()) {
+                            result.success("Shutdown Command Sent")
+                        } else {
+                            result.error("SHUTDOWN_FAILED", "Could not shut down device", null)
+                        }
+                    }
+
+                    "restoreDevice" -> {
+                        if (!chileafHandler.isDeviceConnected) {
+                            result.error("NOT_CONNECTED", "No device connected", null)
+                            return@setMethodCallHandler
+                        }
+                        if (chileafHandler.restoreDevice()) {
+                            result.success("Restore Command Sent")
+                        } else {
+                            result.error("RESTORE_FAILED", "Could not restore device", null)
+                        }
+                    }
+
+                    "isBluetoothOn" -> {
+                        result.success(isBluetoothOn())
+                    }
+
                     "reconnectByAddress" -> {
                         val args = call.arguments as? Map<*, *>
                         val address = args?.get("address") as? String
                         if (address.isNullOrEmpty()) {
                             result.error("INVALID_ARGS", "address missing", null)
+                            return@setMethodCallHandler
+                        }
+                        // Silent guard — BT off ho to connect try mat karo (aur
+                        // startScan jaisa settings popup bhi mat kholo).
+                        if (!isBluetoothOn()) {
+                            result.error("BLUETOOTH_OFF", "Bluetooth is disabled", null)
                             return@setMethodCallHandler
                         }
                         val started = chileafHandler.reconnectByAddress(address)
@@ -173,6 +207,15 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         super.onDestroy()
         chileafHandler.destroy()
+    }
+
+    // Pure BT-state check — koi side-effect nahi (settings popup nahi).
+    // Silent auto-reconnect isko use karta hai; isBluetoothReady() (jo settings
+    // khol deta hai) sirf user-initiated scan ke liye hai.
+    private fun isBluetoothOn(): Boolean {
+        val adapter = (getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)
+            ?.adapter ?: return false
+        return adapter.isEnabled
     }
 
     private fun isBluetoothReady(): Boolean {

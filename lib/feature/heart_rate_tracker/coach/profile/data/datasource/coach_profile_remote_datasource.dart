@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/failure.dart';
+import 'package:xelex_esp/core/network/dio_error_message.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import '../model/coach_profile_model.dart';
 
@@ -51,7 +52,7 @@ class CoachProfileRemoteDataSourceImpl implements CoachProfileRemoteDataSource {
             return left(const AuthFailure('Session expired, please login again'));
           }
           return left(ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Failed to fetch profile',
+            friendlyDioMessage(e, fallback: 'Failed to fetch profile'),
           ));
         } catch (e) {
           return left(ServerFailure('Failed to fetch profile: $e'));
@@ -112,7 +113,7 @@ class CoachProfileRemoteDataSourceImpl implements CoachProfileRemoteDataSource {
             return left(const AuthFailure('Session expired, please login again'));
           }
           return left(ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Failed to update profile',
+            friendlyDioMessage(e, fallback: 'Failed to update profile'),
           ));
         } catch (e) {
           return left(ServerFailure('Failed to update profile: $e'));

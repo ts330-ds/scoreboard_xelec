@@ -297,12 +297,12 @@ String fmtDuration(int minutes) {
   return '${h}h ${m}m';
 }
 
-/// Friendly last-sync label with both relative + absolute time.
+/// Last-sync label — ABSOLUTE time only (no "X min ago" style relative text).
+/// Relative labels froze on screen because they were computed once at build and
+/// never re-ticked; absolute values stay correct without any periodic refresh.
 /// Example outputs:
-///   "Just now • 14:32"
-///   "12 min ago • 14:20"
-///   "Today 09:15"
-///   "Yesterday 22:40"
+///   "Today, 09 Jul 09:15"
+///   "Yesterday, 08 Jul 22:40"
 ///   "23 May 2026, 14:32"
 String fmtLastSync(int lastSyncMs) {
   if (lastSyncMs <= 0) return 'Never synced';
@@ -310,19 +310,11 @@ String fmtLastSync(int lastSyncMs) {
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
   final dtDay = DateTime(dt.year, dt.month, dt.day);
-  final diff = now.difference(dt);
-  final timeFmt = DateFormat('HH:mm');
+  final dateTimeFmt = DateFormat('dd MMM HH:mm');
 
-  if (diff.inSeconds < 60) return 'Just now • ${timeFmt.format(dt)}';
-  if (diff.inMinutes < 60) {
-    return '${diff.inMinutes} min ago • ${timeFmt.format(dt)}';
-  }
-  if (dtDay == today) return 'Today ${timeFmt.format(dt)}';
+  if (dtDay == today) return 'Today, ${dateTimeFmt.format(dt)}';
   if (dtDay == today.subtract(const Duration(days: 1))) {
-    return 'Yesterday ${timeFmt.format(dt)}';
-  }
-  if (diff.inDays < 7) {
-    return '${diff.inDays}d ago • ${DateFormat('dd MMM HH:mm').format(dt)}';
+    return 'Yesterday, ${dateTimeFmt.format(dt)}';
   }
   return DateFormat('dd MMM yyyy, HH:mm').format(dt);
 }

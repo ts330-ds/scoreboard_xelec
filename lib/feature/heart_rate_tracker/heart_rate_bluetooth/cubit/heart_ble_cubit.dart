@@ -43,6 +43,17 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   Timer? _scanTimeout;
   Timer? _syncDoneTimer;
   Timer? _autoPushTimer;
+  // App-open pe last device se bounded auto-reconnect (idle case — koi session
+  // active nahi). Session-recovery ka apna aggressive loop alag hai.
+  Timer? _launchReconnectTimer;
+  int _launchReconnectAttempt = 0;
+  static const _maxLaunchReconnectAttempts = 3;
+  static const _launchReconnectInterval = Duration(seconds: 20);
+  // App-launch auto-reconnect chal raha hai kya. Native link-loss reconnect aur
+  // launch reconnect dono "Reconnecting..." bhejte hain — ye flag unhe alag
+  // karta hai taaki launch-reconnect pe auto-sync chale par link-loss flap pe
+  // nahi. Connect hone ya attempts khatam hone par clear ho jaata hai.
+  bool _launchReconnectActive = false;
 
   bool _pushingHistory = false;
   Map<String, dynamic>? _pendingPayload;
@@ -61,8 +72,26 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
   HeartBleCubit({required this.errorCubit}) : super(const HeartBleState()) {
     _hydrateFromDb();
+    _hydrateLastDevice();
     _listenToDeviceData();
     _resumePollingIfNeeded();
+  }
+
+  /// Cold launch pe last-connected device prefs se wapas lao. Native ka
+  /// `lastConnectedDevice` in-memory hai aur `LAST_DEVICE_ADDRESS` event sirf
+  /// connect hone par (ya already-connected replay pe) aata hai — app kill ke
+  /// baad dono khali hote hain, to `reconnectLastDevice()` ke paas address hi
+  /// nahi hota. Ye hydration us gap ko bharta hai.
+  Future<void> _hydrateLastDevice() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (isClosed) return;
+    final address = prefs.getString(PrefKeys.lastBleDeviceAddress) ?? '';
+    final name = prefs.getString(PrefKeys.lastBleDeviceName) ?? '';
+    if (address.isEmpty || state.lastDeviceAddress.isNotEmpty) return;
+    emit(state.copyWith(
+      lastDeviceAddress: address,
+      lastDevice: name.isNotEmpty ? name : null,
+    ));
   }
 
   /// Single choke-point for the server's last-reading watermark.
@@ -166,6 +195,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
           case "LAST_DEVICE_ADDRESS":
             emit(state.copyWith(lastDeviceAddress: value as String));
+            _persistLastDevice(address: value);
             break;
 
           // Device name replayed by native on connect/reconnect AND on Dart
@@ -174,6 +204,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
           // (auto-reconnect, app relaunch while already connected).
           case "LAST_DEVICE_NAME":
             emit(state.copyWith(lastDevice: value as String));
+            _persistLastDevice(name: value);
             break;
 
           case "DEVICE_FOUND":
@@ -433,7 +464,19 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   void _handleStatus(String s) {
     if (isClosed) return;
     final wasConnected = state.isConnected;
+    // Ye "Connected" ek reconnect ka hissa hai kya? (pichhla state
+    // "Reconnecting..." / "Link Lost" tha) — agar haan to auto-sync skip karenge…
+    final wasReconnecting = state.isReconnecting;
+    // …siwaay iske ki ye app-launch auto-reconnect ho (tab sync chalne do).
+    final launchReconnect = _launchReconnectActive;
     final isDisconnected = s == "Disconnected";
+
+    // Band jud gaya — app-open wala bounded reconnect ab band karo.
+    if (s == "Connected") {
+      _launchReconnectTimer?.cancel();
+      _launchReconnectTimer = null;
+      _launchReconnectActive = false; // launch reconnect resolve ho gaya
+    }
     final bleOff = s == "BLUETOOTH_OFF";
     final permDenied = s == "PERMISSION_DENIED";
 
@@ -478,9 +521,13 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       hrv: isDisconnected ? 0.0 : null,
     ));
 
-    // BLE connect hote hi check karo — agar cooldown se zyada time ho gaya to
-    // auto sync trigger karo. Sync complete pe push automatically chal jaayega.
-    if (s == "Connected" && !wasConnected) {
+    // Auto-sync tab chale jab: FRESH connect ho (!wasReconnecting) YA app-launch
+    // auto-reconnect ho (launchReconnect). In-session link-loss/flap reconnect pe
+    // NAHI — warna reconnect flap se baar-baar sync + /last_timestamp hammering.
+    // Manual "Sync" button hamesha available hai.
+    if (s == "Connected" &&
+        !wasConnected &&
+        (!wasReconnecting || launchReconnect)) {
       _maybeAutoSyncOnConnect();
     }
   }
@@ -642,11 +689,101 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     return true;
   }
 
+  /// App open hone par last-connected band se bounded auto-reconnect.
+  ///
+  /// Sirf idle case ke liye — koi activity session active nahi. (Session
+  /// recovery ka apna aggressive 30s loop athlete cubit me hai; ye usse
+  /// takraana nahi chahiye.) Sirf tab chalta hai jab:
+  ///   • abhi connected nahi, aur
+  ///   • prefs me ek saved device hai (user ne pehle connect kiya tha aur
+  ///     explicitly disconnect nahi kiya — disconnect() keys clear kar deta hai)
+  ///
+  /// Bounded hai (max 3 attempts × 20s) taaki band genuinely door/off hone par
+  /// battery na jale. Band aa jaaye to timer turant cancel ho jaata hai
+  /// (_handleStatus me, Connected pe).
+  Future<void> attemptLaunchReconnect() async {
+    if (isClosed || state.isConnected) return;
+    // Session active hai to uska apna recovery reconnect loop chal raha hai —
+    // do loops takraaein na, isliye yahan skip.
+    if (_sessionActive) return;
+
+    // Address prefs se pakka karo — cubit init ki async hydration abhi adhoori
+    // ho sakti hai, is race se bachne ke liye seedha prefs padho.
+    final prefs = await SharedPreferences.getInstance();
+    if (isClosed || state.isConnected) return;
+    final address = prefs.getString(PrefKeys.lastBleDeviceAddress) ?? '';
+    if (address.isEmpty) return; // kabhi connect nahi kiya / user ne disconnect kiya
+
+    // BT band hai to reconnect ki koshish hi mat karo — warna native andar
+    // baar-baar fail hota rehta hai. Flag surface karo taaki UI "Bluetooth off"
+    // dikhaye; user BT on karke dobara try kar sakta hai.
+    if (!await _isBluetoothOn()) {
+      if (isClosed) return;
+      debugPrint('[BLE] launch auto-reconnect skipped — Bluetooth is off');
+      emit(state.copyWith(
+        status: 'BLUETOOTH_OFF',
+        isBluetoothOff: true,
+        isReconnecting: false,
+      ));
+      return;
+    }
+
+    if (state.lastDeviceAddress.isEmpty) {
+      final name = prefs.getString(PrefKeys.lastBleDeviceName) ?? '';
+      emit(state.copyWith(
+        lastDeviceAddress: address,
+        lastDevice: name.isNotEmpty ? name : null,
+      ));
+    }
+
+    // Pehle se koi launch-reconnect chal raha ho to dobara mat chalao.
+    if (_launchReconnectTimer != null) return;
+
+    debugPrint('[BLE] launch auto-reconnect — saved device mila, connecting…');
+    _launchReconnectAttempt = 0;
+    _launchReconnectActive = true; // ye reconnect launch-driven hai
+    emit(state.copyWith(isReconnecting: true));
+    _tryLaunchReconnect();
+
+    _launchReconnectTimer = Timer.periodic(_launchReconnectInterval, (t) {
+      if (isClosed ||
+          state.isConnected ||
+          _launchReconnectAttempt >= _maxLaunchReconnectAttempts) {
+        _cancelLaunchReconnect();
+        return;
+      }
+      _tryLaunchReconnect();
+    });
+  }
+
+  void _tryLaunchReconnect() {
+    _launchReconnectAttempt++;
+    debugPrint(
+        '[BLE] launch auto-reconnect attempt $_launchReconnectAttempt/$_maxLaunchReconnectAttempts');
+    reconnectLastDevice();
+  }
+
+  void _cancelLaunchReconnect() {
+    _launchReconnectTimer?.cancel();
+    _launchReconnectTimer = null;
+    _launchReconnectActive = false; // launch reconnect khatam (connect nahi hua)
+    // Attempts khatam par connect nahi hua — spinner stuck mat chhodo.
+    if (!isClosed && !state.isConnected && state.isReconnecting) {
+      emit(state.copyWith(isReconnecting: false));
+    }
+  }
+
   Future<bool> reconnectLastDevice() async {
     if (!shouldReconnect(
       isConnected: state.isConnected,
       lastDeviceAddress: state.lastDeviceAddress,
     )) {
+      return false;
+    }
+    // BT off ho to attempt hi mat karo (session-recovery / periodic loop dono
+    // yahin se gujarte hain, isliye ek hi jagah check kaafi hai).
+    if (!await _isBluetoothOn()) {
+      if (!isClosed) emit(state.copyWith(isBluetoothOff: true));
       return false;
     }
     final address = state.lastDeviceAddress;
@@ -656,9 +793,41 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       });
       return true;
     } on PlatformException catch (e) {
+      // Native ne BT-off pakda (Flutter check aur invoke ke beech race) —
+      // flag surface karo.
+      if (e.code == 'BLUETOOTH_OFF' && !isClosed) {
+        emit(state.copyWith(isBluetoothOff: true));
+      }
       debugPrint('[BLE] reconnectLastDevice failed: ${e.message}');
       return false;
     }
+  }
+
+  /// Native se poochho BT adapter ON hai ya nahi — koi side-effect nahi
+  /// (settings popup nahi). Silent auto-reconnect isse guard karta hai.
+  /// Error / purana build (method missing) pe `true` (false-block se bacho —
+  /// warna reconnect kabhi na chale).
+  Future<bool> _isBluetoothOn() async {
+    try {
+      final on = await _methodChannel.invokeMethod<bool>('isBluetoothOn');
+      return on ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  // Last-connected device ko prefs me likho (cold-launch reconnect ke liye).
+  // Fire-and-forget — BLE event handler ko block nahi karna.
+  Future<void> _persistLastDevice({String? address, String? name}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (address != null && address.isNotEmpty) {
+        await prefs.setString(PrefKeys.lastBleDeviceAddress, address);
+      }
+      if (name != null && name.isNotEmpty) {
+        await prefs.setString(PrefKeys.lastBleDeviceName, name);
+      }
+    } catch (_) {}
   }
 
   // ─── Disconnect ─────────────────────────────────────────────────────────────
@@ -669,8 +838,47 @@ class HeartBleCubit extends Cubit<HeartBleState> {
         isReconnecting: false,
         lastDeviceAddress: "",
       ));
+      // User ne explicitly disconnect kiya — saved device bhi bhool jao,
+      // warna agla cold launch chupchaap wapas connect kar dega.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(PrefKeys.lastBleDeviceAddress);
+      await prefs.remove(PrefKeys.lastBleDeviceName);
     } on PlatformException catch (e) {
       emit(state.copyWith(status: "Disconnect Error: ${e.message}"));
+    }
+  }
+
+  // ─── Device power / reset commands ─────────────────────────────────────────
+  /// Powers OFF the connected band. The device disconnects on its own; the
+  /// normal disconnect flow updates connection state. Returns true if the
+  /// command was accepted by the native side.
+  Future<bool> shutdownDevice() async {
+    try {
+      await _methodChannel.invokeMethod('shutdownDevice');
+      return true;
+    } on PlatformException catch (e) {
+      if (e.code == 'NOT_CONNECTED') {
+        emit(state.copyWith(status: "Not connected — connect a device first"));
+      } else {
+        emit(state.copyWith(status: "Shutdown failed: ${e.message}"));
+      }
+      return false;
+    }
+  }
+
+  /// Factory-resets the connected band. ERASES all settings + history on the
+  /// device. Returns true if the command was accepted by the native side.
+  Future<bool> restoreDevice() async {
+    try {
+      await _methodChannel.invokeMethod('restoreDevice');
+      return true;
+    } on PlatformException catch (e) {
+      if (e.code == 'NOT_CONNECTED') {
+        emit(state.copyWith(status: "Not connected — connect a device first"));
+      } else {
+        emit(state.copyWith(status: "Factory reset failed: ${e.message}"));
+      }
+      return false;
     }
   }
 
@@ -891,9 +1099,15 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
   /// Fetches the server-side last pushed HR timestamp for this athlete.
   /// Returns the timestamp (ms) or 0 on failure (caller falls back to local).
-  /// Caches the result for 30 seconds to avoid duplicate API calls
-  /// (syncNewFromDevice + pushHistoryBatch fire within seconds of each other).
-  int _cachedServerWatermark = 0;
+  ///
+  /// Result 30s tak cache hota hai — SUCCESS, EMPTY aur ERROR teeno outcomes ke
+  /// liye. Pehle sirf success-with-data cache hota tha, isliye jab server error
+  /// deta tha (ya empty tha) to koi throttle nahi tha: har trigger (auto-sync
+  /// on har BLE reconnect, history tab open, etc.) `/last_timestamp` ko dobara
+  /// hit karta tha — aur api_service upar se 1 retry (60s timeout) bhi lagata,
+  /// jisse error par API "continuously chalti" dikhti thi. Ab kisi bhi outcome
+  /// ke baad 30s tak network hit nahi hoga.
+  ({int stamp, bool reached})? _watermarkCache;
   int _watermarkFetchedAtMs = 0;
   static const int _watermarkCacheTtlMs = 30 * 1000; // 30 seconds
 
@@ -902,17 +1116,22 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   /// reachable but empty) be told "No data on server yet" instead of the
   /// alarming "Never synced" (which means we couldn't reach the server).
   Future<({int stamp, bool reached})> _fetchServerWatermark() async {
-    // Return cached value if recently fetched
+    // Recent result (kisi bhi outcome ka) 30s tak reuse karo — error/empty pe
+    // bhi. Isse repeated triggers network ko hammer nahi karte.
     final now = DateTime.now().millisecondsSinceEpoch;
-    if (_cachedServerWatermark > 0 &&
-        (now - _watermarkFetchedAtMs) < _watermarkCacheTtlMs) {
-      return (stamp: _cachedServerWatermark, reached: true);
+    final cached = _watermarkCache;
+    if (cached != null && (now - _watermarkFetchedAtMs) < _watermarkCacheTtlMs) {
+      return cached;
     }
 
+    ({int stamp, bool reached}) result;
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(PrefKeys.userToken) ?? '';
-      if (token.isEmpty) return (stamp: 0, reached: false);
+      if (token.isEmpty) {
+        // Token nahi — cache mat karo (login ke turant baad valid ho sakta hai).
+        return (stamp: 0, reached: false);
+      }
       ApiService.instance.setAuthToken(token);
       final response = await ApiService.instance.dio.get(
         '/athlete/health_metrics/last_timestamp',
@@ -921,18 +1140,20 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       if (data['success'] == true) {
         final inner = data['data'] as Map<String, dynamic>? ?? {};
         final stamp = (inner['recorded_at'] as num?)?.toInt() ?? 0;
-        if (stamp > 0) {
-          _cachedServerWatermark = stamp;
-          _watermarkFetchedAtMs = now;
-        }
-        return (stamp: stamp, reached: true); // reached, even if empty
+        result = (stamp: stamp, reached: true); // reached, even if empty
+      } else {
+        result = (stamp: 0, reached: false);
       }
-      return (stamp: 0, reached: false);
     } on DioException {
-      return (stamp: 0, reached: false);
+      result = (stamp: 0, reached: false);
     } catch (_) {
-      return (stamp: 0, reached: false);
+      result = (stamp: 0, reached: false);
     }
+
+    // Har mukammal attempt (success/empty/error) ko cache karo → 30s throttle.
+    _watermarkCache = result;
+    _watermarkFetchedAtMs = now;
+    return result;
   }
 
   Future<void> pushHistoryBatch() async {
@@ -1228,6 +1449,9 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
       // Auth check
       if (statusCode == 401 || statusCode == 403) {
+        // Raw HttpClient Dio interceptor bypass karta hai — global logout flow
+        // manually trigger karo (token clear + re-login route).
+        ApiService.instance.notifyTokenExpired();
         final msg = _extractServerMessage(responseData) ?? 'Auth failed';
         _emitPushEvent(PushAuthFailed(msg));
         return;
@@ -1248,7 +1472,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
       }
 
       // Invalidate watermark cache — push ke baad server watermark badal jaayega
-      _cachedServerWatermark = 0;
+      _watermarkCache = null;
       _watermarkFetchedAtMs = 0;
 
       // 3. Persist polling state — survives app kill
@@ -1261,7 +1485,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
       // 4. Poll job status every 1 second
       _emitPushEvent(PushPolling(jobId));
-      final pollResult = await _pollJobStatus(jobId);
+      final pollResult = await _pollJobStatus(jobId, token);
 
       // 5. Clear polling state regardless of result
       await _clearPollingState();
@@ -1307,7 +1531,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   /// Poll GET /athlete/ingestion/job/:jobId every 1 second.
   /// Returns the result map on "done", null on timeout,
   /// or {'error': '...'} on server-side failure.
-  Future<Map<String, dynamic>?> _pollJobStatus(String jobId) async {
+  Future<Map<String, dynamic>?> _pollJobStatus(String jobId, String token) async {
     const maxAttempts = 60; // 60 seconds max
     int consecutiveErrors = 0;
     const maxConsecutiveErrors = 5;
@@ -1315,8 +1539,11 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     for (int i = 0; i < maxAttempts; i++) {
       await Future.delayed(const Duration(seconds: 1));
       try {
+        // Auth header explicitly bhejo — relaunch/resume pe global Dio token set
+        // na ho to poll "No token provided" (401) de deta tha.
         final response = await ApiService.instance.dio.get(
           '/athlete/ingestion/job/$jobId',
+          options: Options(headers: {'Authorization': 'Bearer $token'}),
         );
         consecutiveErrors = 0; // Reset on success
 
@@ -1385,7 +1612,8 @@ class HeartBleCubit extends Cubit<HeartBleState> {
 
     final jobId = prefs.getString(PrefKeys.pollingJobId) ?? '';
     final startedAt = prefs.getInt(PrefKeys.pollingStartedAt) ?? 0;
-    if (jobId.isEmpty || startedAt <= 0) {
+    final token = prefs.getString(PrefKeys.userToken) ?? '';
+    if (jobId.isEmpty || startedAt <= 0 || token.isEmpty) {
       await _clearPollingState();
       return;
     }
@@ -1406,7 +1634,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     ));
     _emitPushEvent(PushPolling(jobId));
 
-    final pollResult = await _pollJobStatus(jobId);
+    final pollResult = await _pollJobStatus(jobId, token);
     await _clearPollingState();
     // Poll 60s tak chal sakti hai — tab tak cubit close ho sakta hai
     // (logout/screen dispose). emit-after-close StateError se bachne ke
@@ -1430,7 +1658,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     // Success — commit watermarks
     // Note: original payload not available after app kill, so we rely on
     // server's watermark update. Invalidate cache to force fresh fetch.
-    _cachedServerWatermark = 0;
+    _watermarkCache = null;
     _watermarkFetchedAtMs = 0;
     final wm = await HistoryWatermarkStore.create();
     await wm.commitPushAtNow();
@@ -1650,6 +1878,7 @@ class HeartBleCubit extends Cubit<HeartBleState> {
     _scanTimeout?.cancel();
     _syncDoneTimer?.cancel();
     _autoPushTimer?.cancel();
+    _launchReconnectTimer?.cancel();
     _dataSubscription?.cancel();
     _pushEvents.close();
     return super.close();

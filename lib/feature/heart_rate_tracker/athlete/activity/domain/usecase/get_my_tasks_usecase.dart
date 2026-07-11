@@ -6,6 +6,6 @@ class GetMyTasksUseCase {
   final AthleteTaskRepository _repository;
   const GetMyTasksUseCase(this._repository);
 
-  TaskEither<Failure, MyTasksPage> call({int page = 1}) =>
-      _repository.getMyTasks(page: page);
+  TaskEither<Failure, MyTasksPage> call({int page = 1, String? status}) =>
+      _repository.getMyTasks(page: page, status: status);
 }

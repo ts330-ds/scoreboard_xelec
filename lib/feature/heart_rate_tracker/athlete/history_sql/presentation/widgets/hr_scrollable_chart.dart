@@ -12,7 +12,14 @@ import '../../../history/presentation/widgets/history_data_utils.dart'
 /// readings fetched from SQLite.
 class HrScrollableChart extends StatelessWidget {
   final List<Map<dynamic, dynamic>> readings;
-  const HrScrollableChart({super.key, required this.readings});
+  // Card ka background — default surface (white). Activity task-result screen
+  // ise light-blue tint se use karta hai; history tab default rakhta hai.
+  final Color backgroundColor;
+  const HrScrollableChart({
+    super.key,
+    required this.readings,
+    this.backgroundColor = AppColors.surface,
+  });
 
   static const _gapThresholdMin = 5.0;
   static const _segmentGapMin = 2.0;
@@ -117,7 +124,7 @@ class HrScrollableChart extends StatelessWidget {
       return Container(
         height: 200,
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppColors.border),
         ),
@@ -155,7 +162,7 @@ class HrScrollableChart extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: backgroundColor,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.border),
         boxShadow: [

@@ -27,9 +27,14 @@ class CoachTeamLiveCubit extends Cubit<CoachTeamLiveState>
   static const _staleThreshold = Duration(seconds: 30);
   static const _staleCheckInterval = Duration(seconds: 5);
   // Naye/khatam session detect karne ke liye active-tasks list poll.
-  static const _pollInterval = Duration(seconds: 20);
+  static const _pollInterval = Duration(seconds: 45);
   // watch_task_results ack (watching_task) na aaye to re-emit.
   static const _watchRetryInterval = Duration(milliseconds: 800);
+  // Socket drop hone par turant "Reconnecting" banner mat dikhao. Aksar server
+  // watched-athlete crash pe coach ko bhi gira deta hai par 2-3s me khud
+  // reconnect ho jaata hai — is grace ke andar recover ho jaye to banner
+  // flash hi na ho. Isse zyada der lage tabhi banner dikhta hai.
+  static const _bannerDelay = Duration(seconds: 3);
   // Ek task ko itni baar se zyada watch try mat karo — agar server kabhi
   // watching_task ack na bheje (e.g. "not authorized"), to forever spam na ho.
   static const _maxWatchAttempts = 8;
@@ -42,6 +47,7 @@ class CoachTeamLiveCubit extends Cubit<CoachTeamLiveState>
   Timer? _staleTimer;
   Timer? _pollTimer;
   Timer? _watchRetryTimer;
+  Timer? _bannerDelayTimer;
   bool _refreshing = false;
 
   // Jin tasks ka watching_task ack mil chuka hai.
@@ -149,7 +155,8 @@ class CoachTeamLiveCubit extends Cubit<CoachTeamLiveState>
               state.status == CoachTeamLiveStatus.connecting) &&
           !state.isAuthFailure) {
         debugPrint('[TEAM CUBIT] Socket dropped — scheduling reconnect');
-        emit(state.copyWith(status: CoachTeamLiveStatus.reconnecting));
+        // Banner turant nahi — grace ke baad hi (agar tab tak reconnect na ho).
+        _scheduleBannerAfterDelay();
         if (!_isBackgrounded) _scheduleReconnect();
       }
     };
@@ -197,6 +204,9 @@ class CoachTeamLiveCubit extends Cubit<CoachTeamLiveState>
       if (isClosed) return;
       _resetWatchTracking();
       _reconnect.reset();
+      // Reconnect ho gaya — pending banner-delay cancel, banner flash na ho.
+      _bannerDelayTimer?.cancel();
+      _bannerDelayTimer = null;
       emit(state.copyWith(
         status: CoachTeamLiveStatus.watching,
         reconnectAttempt: 0,
@@ -318,10 +328,14 @@ class CoachTeamLiveCubit extends Cubit<CoachTeamLiveState>
       final cards = Map<int, TeamAthleteCard>.from(state.cards);
       for (final entry in cards.entries) {
         final card = entry.value;
-        // Sirf un cards ko grey karo jinki reading aa chuki thi par ab ruk gayi.
-        if (!card.isOffline &&
-            card.lastUpdate != null &&
-            now.difference(card.lastUpdate!) >= _staleThreshold) {
+        if (card.isOffline) continue;
+        // Reading aayi thi to uska time; warna seed hone ka time. Dono me se jo
+        // bhi ho, stale-threshold se purana hai to card grey. `seededAt` fallback
+        // us case ke liye zaroori hai jab athlete app kill kar chuka ho par
+        // backend task ko in_progress dikhata rahe — card seed to hota hai par
+        // kabhi live reading nahi aati (warna forever "live, HR --" atka rehta).
+        final ref = card.lastUpdate ?? card.seededAt;
+        if (now.difference(ref) >= _staleThreshold) {
           cards[entry.key] = card.copyWith(isOffline: true);
           changed = true;
         }
@@ -336,6 +350,22 @@ class CoachTeamLiveCubit extends Cubit<CoachTeamLiveState>
   }
 
   // ── Reconnect ───────────────────────────────────────────────────────────────
+
+  // Grace-period baad hi "Reconnecting" banner dikhao — quick self-heal wale
+  // drops par flash na ho. Pehle se timer chalu ya banner dikh raha ho to
+  // dobara reset mat karo (warna flapping drop banner ko forever aage khiskata
+  // rahega aur woh kabhi dikhega hi nahi).
+  void _scheduleBannerAfterDelay() {
+    if (state.status == CoachTeamLiveStatus.reconnecting) return;
+    if (_bannerDelayTimer != null) return;
+    _bannerDelayTimer = Timer(_bannerDelay, () {
+      _bannerDelayTimer = null;
+      if (isClosed || !_isWatching) return;
+      if (!_socketService.isConnected && !state.isAuthFailure) {
+        emit(state.copyWith(status: CoachTeamLiveStatus.reconnecting));
+      }
+    });
+  }
 
   void _scheduleReconnect() {
     _reconnect.schedule(
@@ -390,6 +420,8 @@ class CoachTeamLiveCubit extends Cubit<CoachTeamLiveState>
     _pollTimer = null;
     _watchRetryTimer?.cancel();
     _watchRetryTimer = null;
+    _bannerDelayTimer?.cancel();
+    _bannerDelayTimer = null;
     for (final taskId in state.cards.keys) {
       _socketService.unwatchTask(taskId);
     }
@@ -404,6 +436,7 @@ class CoachTeamLiveCubit extends Cubit<CoachTeamLiveState>
     _staleTimer?.cancel();
     _pollTimer?.cancel();
     _watchRetryTimer?.cancel();
+    _bannerDelayTimer?.cancel();
     _socketService.dispose();
     return super.close();
   }

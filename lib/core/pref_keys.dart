@@ -56,6 +56,13 @@ abstract class PrefKeys {
   static const String pollingJobId = 'v3_polling_job_id';
   static const String pollingStartedAt = 'v3_polling_started_at';
 
+  // Last connected BLE device — app kill ke baad cold launch pe auto-reconnect
+  // ke liye. Native `lastConnectedDevice` in-memory hai (process ke saath mar
+  // jaata hai) aur Dart ka lastDeviceAddress sirf connect event pe milta hai,
+  // isliye address ko yahan persist karte hain. Explicit disconnect pe clear.
+  static const String lastBleDeviceAddress = 'last_ble_device_address';
+  static const String lastBleDeviceName = 'last_ble_device_name';
+
   // Active activity session — disk pe persist hoti hai taaki process death
   // (phone off / app swipe-kill) ke baad app dobara khulne par recover ho sake.
   // startSession pe set, _endSession pe clear. Launch pe attemptSessionRecovery()

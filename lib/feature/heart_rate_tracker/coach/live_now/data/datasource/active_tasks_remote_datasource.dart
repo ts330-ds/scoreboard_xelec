@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/failure.dart';
+import 'package:xelex_esp/core/network/dio_error_message.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import '../../domain/entity/coach_task_result_entity.dart';
 import '../model/active_task_model.dart';
@@ -66,9 +67,7 @@ class ActiveTasksRemoteDataSourceImpl implements ActiveTasksRemoteDataSource {
           ));
         } on DioException catch (e) {
           return left(ServerFailure(
-            e.response?.data?['message'] ??
-                e.message ??
-                'Failed to load active tasks',
+            friendlyDioMessage(e, fallback: 'Failed to load active tasks'),
           ));
         } catch (e) {
           return left(ServerFailure('Failed to load active tasks: $e'));
@@ -110,9 +109,7 @@ class ActiveTasksRemoteDataSourceImpl implements ActiveTasksRemoteDataSource {
               CoachTaskResultEntity(taskId: taskId, sessions: sessions));
         } on DioException catch (e) {
           return left(ServerFailure(
-            e.response?.data?['message'] ??
-                e.message ??
-                'Result fetch karne mein failure',
+            friendlyDioMessage(e, fallback: 'Result fetch karne mein failure'),
           ));
         } catch (e) {
           return left(ServerFailure('Result fetch karne mein failure: $e'));

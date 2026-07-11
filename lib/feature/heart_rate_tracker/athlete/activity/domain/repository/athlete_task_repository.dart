@@ -19,7 +19,7 @@ abstract interface class AthleteTaskRepository {
     required String assignedBy,
   });
 
-  TaskEither<Failure, MyTasksPage> getMyTasks({int page = 1});
+  TaskEither<Failure, MyTasksPage> getMyTasks({int page = 1, String? status});
 
   TaskEither<Failure, TaskResultEntity> getTaskResult(int taskId);
 

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/failure.dart';
+import 'package:xelex_esp/core/network/dio_error_message.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import '../../domain/entity/feedback_result.dart';
 
@@ -71,11 +72,7 @@ class FeedbackRemoteDataSourceImpl implements FeedbackRemoteDataSource {
           ));
         } on DioException catch (e) {
           return left(ServerFailure(
-            e.response?.data is Map
-                ? (e.response?.data['message'] as String? ??
-                    e.message ??
-                    'Feedback submit karne mein failure')
-                : e.message ?? 'Feedback submit karne mein failure',
+            friendlyDioMessage(e, fallback: 'Feedback submit karne mein failure'),
           ));
         } catch (e) {
           return left(ServerFailure('Feedback submit karne mein failure: $e'));

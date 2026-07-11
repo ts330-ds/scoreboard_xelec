@@ -85,6 +85,7 @@ class _AthleteTaskDetailScreenState extends State<AthleteTaskDetailScreen> {
                 builder: (_) => SessionUploadScreen(
                   submitCubit: submitCubit,
                   taskId: taskId,
+                  taskName: widget.task.name,
                   sessionStart: sessionStart,
                   sessionEnd: sessionEnd,
                 ),
@@ -105,41 +106,26 @@ class _AthleteTaskDetailScreenState extends State<AthleteTaskDetailScreen> {
           builder: (context, state) {
             final isActive = state.isSessionActive;
 
-            return PopScope(
-              canPop: !isActive,
-              onPopInvokedWithResult: (didPop, _) {
-                if (didPop) return;
-                final messenger = ScaffoldMessenger.of(context);
-                messenger.clearSnackBars();
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text("Can't go back without stopping the session."),
-                    behavior: SnackBarBehavior.floating,
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
-              child: Scaffold(
-                backgroundColor: AppColors.bg,
-                appBar: AppBar(
-                  title:
-                      Text(isActive ? 'Active Session' : widget.task.name),
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  leading: isActive
-                      ? const SizedBox.shrink()
-                      : BackButton(
-                          onPressed: () {
-                            widget.activityCubit.cancelPendingTask();
-                            context.pop();
-                          },
-                        ),
+            // Active session background isolate me chalti hai — back dabane pe
+            // session rukti nahi, sirf list pe wapas jaate hain. Activity tab ka
+            // "Go to Active Session" banner dobara isi screen pe le aata hai.
+            return Scaffold(
+              backgroundColor: AppColors.bg,
+              appBar: AppBar(
+                title: Text(isActive ? 'Active Session' : widget.task.name),
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                leading: BackButton(
+                  onPressed: () {
+                    if (!isActive) widget.activityCubit.cancelPendingTask();
+                    context.pop();
+                  },
                 ),
-                body: isActive
-                    ? ActiveSessionView(state: state)
-                    : PendingTaskView(state: state),
               ),
+              body: isActive
+                  ? ActiveSessionView(state: state)
+                  : PendingTaskView(state: state),
             );
           },
         ),

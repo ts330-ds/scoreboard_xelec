@@ -178,8 +178,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   // jaata hai kyunki isSocketConnected true ho jaata hai.
   Timer? _connWatchdog;
   static const _connWatchdogInterval = Duration(seconds: 5);
-  // App pause time record — resume pe gap calculate karne ke liye
-  DateTime? _pausedAt;
   final ReconnectController _reconnect = ReconnectController(tag: 'ACTIVITY RECONNECT');
   static const _uuid = Uuid();
 
@@ -290,7 +288,10 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   // ── App Lifecycle ─────────────────────────────────────────────────────────
   // Main isolate suspend hone pe UI timer ruk jaata hai.
   // Lekin background service chalta rehta hai aur heartbeat bhejta rehta hai.
-  // Resume pe gap calculate karke elapsed sync karo, aur timer restart karo.
+  // Elapsed hamesha wall-clock (session.startTime) se derive hota hai — isliye
+  // resume pe seedha `now - startTime` reconcile ho jaata hai. Ye kisi bhi
+  // lifecycle event (paused/resumed) ke reliably fire hone pe depend nahi karta,
+  // isliye aggressive OEM battery-managers (Vivo/Oppo/MIUI) pe bhi time drift nahi hota.
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -314,15 +315,16 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
 
   void _onAppPaused() {
     if (!state.isSessionActive) return;
-    // UI timer cancel — background mein drift ho sakta hai
+    // UI timer cancel — background mein drift ho sakta hai. Elapsed startTime se
+    // derive hota hai, isliye resume pe wall-clock se sahi value mil jaati hai —
+    // koi _pausedAt track karne ki zaroorat nahi.
     _timer?.cancel();
     _timer = null;
     _autoStopTimer?.cancel();
     _autoStopTimer = null;
     _bleReconnectTimer?.cancel();
     _bleReconnectTimer = null;
-    _pausedAt = DateTime.now();
-    debugPrint('[LIFECYCLE] Session paused at $_pausedAt');
+    debugPrint('[LIFECYCLE] Session paused');
     // NOTE: Background service chalta rehta hai — socket alive hai
   }
 
@@ -335,30 +337,30 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
 
     if (isClosed || !state.isSessionActive) return;
 
-    if (_pausedAt != null) {
-      final gapSeconds = DateTime.now().difference(_pausedAt!).inSeconds;
-      final newElapsed = state.elapsedSeconds + gapSeconds;
-      final session = state.activeSession;
-      if (session == null) return;
-      final targetSeconds = session.targetDurationMinutes * 60;
+    final session = state.activeSession;
+    if (session == null) return;
 
-      debugPrint(
-          '[LIFECYCLE] Resumed — gap: ${gapSeconds}s, newElapsed: ${newElapsed}s');
+    // Wall-clock se elapsed reconcile — chahe `paused`/`resumed` reliably fire
+    // hue ho ya na (kuch OEMs pe miss hote hain). _pausedAt pe depend nahi.
+    final elapsed = DateTime.now().difference(session.startTime).inSeconds;
+    final newElapsed = elapsed < 0 ? 0 : elapsed;
+    final targetSeconds = session.targetDurationMinutes * 60;
 
-      _pausedAt = null;
+    debugPrint('[LIFECYCLE] Resumed — elapsed(from startTime): ${newElapsed}s');
 
-      if (targetSeconds > 0 && newElapsed >= targetSeconds) {
-        debugPrint('🛑 [SESSION DEBUG] AUTO-STOP on resume — elapsed($newElapsed) >= target($targetSeconds)');
-        if (isClosed) return;
-        emit(state.copyWith(elapsedSeconds: targetSeconds));
-        if (isClosed) return;
-        requestStopSession();
-        return;
-      }
-
+    if (targetSeconds > 0 && newElapsed >= targetSeconds) {
+      debugPrint('🛑 [SESSION DEBUG] AUTO-STOP on resume — elapsed($newElapsed) >= target($targetSeconds)');
       if (isClosed) return;
-      emit(state.copyWith(elapsedSeconds: newElapsed));
+      emit(state.copyWith(elapsedSeconds: targetSeconds));
+      if (isClosed) return;
+      requestStopSession();
+      return;
     }
+
+    if (isClosed) return;
+    emit(state.copyWith(
+        elapsedSeconds:
+            targetSeconds > 0 ? newElapsed.clamp(0, targetSeconds) : newElapsed));
 
     if (isClosed || !state.isSessionActive) return;
     _startTimer();
@@ -632,12 +634,70 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   // ── Launch-time session recovery ──────────────────────────────────────────
   // App launch pe ek baar call karo (athlete main screen se). Agar process
   // death (phone off / app swipe-kill) se ek active session adhoori reh gayi
-  // thi, to disk se padh ke server status verify karta hai aur decide karta hai:
-  //   • in_progress / pending  → session resume (socket reconnect + timer)
-  //   • completed (server ne khud band kiya) → resume NAHI; band se data upload
-  //   • offline / fetch fail    → kuch nahi; persisted rakho, agla launch resolve karega
-  // Stale (bahut purani) session ko bhi resume nahi karta — sirf upload flow.
+  // thi, to disk se padh ke `?status=in_progress` se verify karta hai:
+  //   • task abhi in_progress hai  → resume (persisted startMs se sahi elapsed,
+  //                                   socket reconnect + timer)
+  //   • in_progress nahi (complete/khatam) → resume NAHI; persisted discard
+  //   • offline / fetch fail       → kuch nahi; persisted rakho, agla launch resolve karega
+  // Stale (bahut purani) session ko bhi resume nahi karta — persisted discard.
+  // NOTE: `?page=1` (bina status) in_progress ko exclude karta hai, isliye
+  // in_progress check ke liye status filter zaroori hai.
   static const _maxRecoveryWindow = Duration(hours: 12);
+
+  /// Server pe `in_progress` mili session ko banner-tap pe live resume karta
+  /// hai — taaki task-detail screen seedha ActiveSessionView dikhaye (na ki
+  /// PendingTaskView "Start" wali). App-kill / process-death ke baad jab local
+  /// `isSessionActive` gum ho chuka ho, ye us running session ko wapas wire
+  /// karta hai: socket reconnect + foreground service + timer.
+  ///
+  /// Start time priority: persisted state (kill survive karta hai, sabse
+  /// accurate) → server `startedAt` → ab (last resort). Elapsed target se
+  /// upar ho to resume ki jagah clean stop bhejta hai (server complete karega).
+  void resumeInProgressTask(AthleteTaskEntity task) {
+    if (isClosed) return;
+    // Pehle se yahi session live hai → kuch mat karo (bas navigate hoga).
+    if (state.isSessionActive && state.activeTaskId == task.id) return;
+
+    final targetMin = int.tryParse(task.duration) ?? 0;
+
+    // Start/activity/location — persisted (agar wahi task) sabse accurate.
+    DateTime startTime;
+    String activity = state.selectedActivity;
+    String location = '';
+    final persistedId = _prefs.getInt(PrefKeys.activeSessionTaskId);
+    final persistedStartMs = _prefs.getInt(PrefKeys.activeSessionStartMs);
+    if (persistedId == task.id && persistedStartMs != null) {
+      startTime = DateTime.fromMillisecondsSinceEpoch(persistedStartMs);
+      activity = _prefs.getString(PrefKeys.activeSessionActivity) ?? activity;
+      location = _prefs.getString(PrefKeys.activeSessionLocation) ?? '';
+    } else {
+      final serverStart =
+          task.startedAt != null ? DateTime.tryParse(task.startedAt!) : null;
+      startTime = serverStart?.toLocal() ?? DateTime.now();
+    }
+
+    final elapsed = DateTime.now().difference(startTime).inSeconds;
+    final safeElapsed = elapsed < 0 ? 0 : elapsed;
+
+    // Duration puri ho chuki par server abhi in_progress — resume mat karo,
+    // clean stop bhejo (server complete karega → feedback/upload chalega).
+    if (targetMin > 0 && safeElapsed >= targetMin * 60) {
+      _reconstructActiveSession(
+          task.id, activity, targetMin, startTime, location, safeElapsed,
+          task: task);
+      _persistActiveSession(state.activeSession!, task.id);
+      requestStopSession();
+      return;
+    }
+
+    _reconstructActiveSession(
+        task.id, activity, targetMin, startTime, location, safeElapsed,
+        task: task);
+    _persistActiveSession(state.activeSession!, task.id);
+    _connectSocket();
+    _startConnWatchdog();
+    _startTimer();
+  }
 
   Future<void> attemptSessionRecovery() async {
     // Pehle se koi session active hai (cubit singleton hai, dobara call ho gaya)
@@ -659,25 +719,30 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
         'elapsed=${elapsed}s target=${targetMin}min');
 
     // Guard A: staleness — clock anomaly ya bahut purani session (e.g. agle din
-    // khuli). Resume mat karo; agar data ho to upload flow pe bhej do.
+    // khuli). Resume mat karo; persisted discard kar do (agar data chahiye to
+    // task result screen ke manual "Upload Session" se ja sakta hai).
     if (elapsed < 0 ||
         DateTime.now().difference(startTime) > _maxRecoveryWindow) {
-      debugPrint('🟡 [RECOVERY] stale session — resume skip, routing to upload');
+      debugPrint('🟡 [RECOVERY] stale session — discarding');
       _clearPersistedSession();
-      _routeRecoveredSessionToUpload(taskId, startTime, DateTime.now());
       return;
     }
 
-    // Guard B: server status verify karo (getMyTasks page 1 — recent task
-    // yahin hota hai).
-    final result = await _getMyTasks(page: 1).run();
+    // Guard B: server pe ye session abhi bhi in_progress hai kya?
+    // ZAROORI: `?page=1` (bina status) in_progress tasks ko EXCLUDE karta hai,
+    // isliye `status=in_progress` chahiye. Pehle plain page-1 se check hota tha
+    // → running session "task not found" ban ke galti se discard ho jaata tha,
+    // aur persisted startMs (jo sahi elapsed / upload-range ka source hai) udd
+    // jaata tha. Isi se resume pe timer 0 se dikhta tha aur stop pe sirf thoda
+    // data fetch hota tha.
+    final result = await _getMyTasks(page: 1, status: 'in_progress').run();
     if (isClosed || state.isSessionActive) return;
 
     result.fold(
       (failure) {
         // Offline / error — socket ko blind touch mat karo. Persisted rakho;
         // agla launch (online) resolve kar dega.
-        debugPrint('🟡 [RECOVERY] status fetch fail (${failure.message}) — '
+        debugPrint('🟡 [RECOVERY] in_progress fetch fail (${failure.message}) — '
             'keeping persisted for next launch');
       },
       (page) {
@@ -688,47 +753,36 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
             break;
           }
         }
-        final status = task?.status?.toLowerCase();
-        debugPrint('🟡 [RECOVERY] server status=$status');
 
         if (task == null) {
-          // Server ke paas ye task hi nahi (delete/unknown) — clear.
+          // Server pe ye session ab in_progress nahi (complete / khatam ho gaya)
+          // — resume nahi, persisted discard. (Data chahiye to task result se
+          // manual "Upload Session".)
+          debugPrint('🟡 [RECOVERY] task server pe in_progress nahi — discarding');
           _clearPersistedSession();
           return;
         }
 
-        if (status == 'completed') {
-          // Server ne session khud band kar diya. Resume nahi — band ki memory
-          // se us range ka data upload karne ke liye feedback/upload flow trigger.
-          debugPrint('🟡 [RECOVERY] server-completed — routing to upload');
-          _clearPersistedSession();
-          _routeRecoveredSessionToUpload(taskId, startTime, DateTime.now());
-          return;
-        }
-
-        // pending / in_progress / active → session abhi bhi server pe khuli hai.
-        if (targetMin > 0 && elapsed >= targetMin * 60) {
-          // Duration to puri ho chuki par server abhi tak in_progress hai —
-          // clean stop bhejo (server complete karega → feedback/upload chalega).
-          debugPrint('🟡 [RECOVERY] open but past target — resuming then stopping');
-          _reconstructActiveSession(
-              taskId, activity, targetMin, startTime, location, elapsed);
-          requestStopSession();
-        } else {
-          debugPrint('🟡 [RECOVERY] resuming live session');
-          _reconstructActiveSession(
-              taskId, activity, targetMin, startTime, location, elapsed);
-          _connectSocket();
-          _startConnWatchdog();
-          _startTimer();
-        }
+        // Abhi bhi in_progress — resume karo. Persisted startMs se elapsed sahi
+        // rehta hai (real session start), isliye timer aur upload-range dono
+        // theek. (Past-target ho to bhi resume — user khud stop karega.)
+        debugPrint('🟡 [RECOVERY] resuming in_progress session — elapsed=${elapsed}s');
+        _reconstructActiveSession(
+            taskId, activity, targetMin, startTime, location, elapsed,
+            task: task);
+        _connectSocket();
+        _startConnWatchdog();
+        _startTimer();
       },
     );
   }
 
   // Recovered session ko UI state me wapas wire karta hai (live resume ke liye).
+  // [task] pass karne par activeTask bhi set hota hai (banner-tap resume) —
+  // recovery se null aata hai (tab entity available nahi hoti).
   void _reconstructActiveSession(int taskId, String activity, int targetMin,
-      DateTime startTime, String location, int elapsed) {
+      DateTime startTime, String location, int elapsed,
+      {AthleteTaskEntity? task}) {
     final session = ActivitySession(
       id: _uuid.v4(),
       activityType: activity,
@@ -739,23 +793,18 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     _bleCubit.setSessionActive(true);
     emit(state.copyWith(
       activeSession: session,
+      activeTask: task,
       activeTaskId: taskId,
       elapsedSeconds: targetMin > 0 ? elapsed.clamp(0, targetMin * 60) : elapsed,
       clearPendingTaskId: true,
     ));
-  }
-
-  // Server-completed / stale recovered session ko feedback + upload flow pe
-  // bhejta hai — wahi 3 fields jo normal _endSession set karta hai. UI
-  // (athlete_main_screen) inhe dekh ke feedback sheet + BLE upload chalata hai.
-  void _routeRecoveredSessionToUpload(
-      int taskId, DateTime start, DateTime end) {
-    if (isClosed) return;
-    emit(state.copyWith(
-      pendingFeedbackTaskId: taskId,
-      completedSessionStart: start,
-      completedSessionEnd: end,
-    ));
+    // App kill ke baad cold launch — band ka connection toot chuka hai aur
+    // disconnect EVENT kabhi nahi aayega (jo normal reconnect loop trigger
+    // karta hai). Isliye yahan explicitly loop chalu karo — pehla attempt
+    // turant hota hai, connect hote hi loop khud cancel ho jaata hai.
+    if (!_bleCubit.state.isConnected) {
+      _startBleReconnectLoop();
+    }
   }
 
   void requestStopSession() {
@@ -804,7 +853,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     _bleReconnectTimer = null;
     _connWatchdog?.cancel();
     _connWatchdog = null;
-    _pausedAt = null;
     _reconnect.cancel();
     // UI session end ho chuki — disk se persisted session hata do. Iske baad
     // recovery kabhi is session ko resume na kare (stop delivery BG ka kaam hai).
@@ -961,17 +1009,25 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     final session = state.activeSession;
     if (session == null) return;
 
+    final targetMinutes = session.targetDurationMinutes;
+    final targetSeconds = targetMinutes * 60;
+
+    // Elapsed hamesha wall-clock (startTime) se — counter increment se nahi.
+    // Isse timer drift nahi karta aur missed lifecycle events pe bhi sahi rehta.
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (isClosed || !state.isSessionActive) {
         _timer?.cancel();
         return;
       }
-      emit(state.copyWith(elapsedSeconds: state.elapsedSeconds + 1));
+      final elapsed = DateTime.now().difference(session.startTime).inSeconds;
+      final safe = elapsed < 0 ? 0 : elapsed;
+      emit(state.copyWith(
+          elapsedSeconds:
+              targetSeconds > 0 ? safe.clamp(0, targetSeconds) : safe));
     });
 
-    final targetMinutes = session.targetDurationMinutes;
     if (targetMinutes > 0) {
-      final remaining = (targetMinutes * 60) - state.elapsedSeconds;
+      final remaining = targetSeconds - state.elapsedSeconds;
       if (remaining > 0) {
         _autoStopTimer = Timer(Duration(seconds: remaining), () {
           if (!isClosed && state.isSessionActive) {

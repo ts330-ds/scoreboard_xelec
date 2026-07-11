@@ -6,6 +6,7 @@ import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/domain/entity/athlete_task_entity.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/cubit/task_zip_submit_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/athlete/activity/presentation/screen/session_upload_screen.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/athlete/history_sql/presentation/widgets/hr_scrollable_chart.dart';
 import 'package:xelex_esp/service/dependency_injection/di_service.dart';
 import '../cubit/task_result_cubit.dart';
 import '../cubit/task_result_state.dart';
@@ -255,6 +256,7 @@ class _ResultBody extends StatelessWidget {
         const SizedBox(height: 14),
         _UploadSessionButton(
           taskId: task.id,
+          taskName: task.name,
           sessionStart: sessionStart,
           sessionEnd: sessionEnd,
         ),
@@ -286,12 +288,24 @@ class _ResultBody extends StatelessWidget {
       return t.difference(anchor).inSeconds.toDouble();
     }
 
-    // Build chart spots — x = elapsed seconds from FIRST raw_data timestamp
+    // Build chart spots — x = elapsed seconds from FIRST raw_data timestamp.
+    // (HR Zones card ke liye — wo elapsed-based spots use karta hai.)
     final hrSpots = <FlSpot>[];
     for (var i = 0; i < sortedRaw.length; i++) {
       final hr = _toD(sortedRaw[i]['heart_rate']);
       if (hr <= 0) continue;
       hrSpots.add(FlSpot(elapsedFor(sortedRaw[i], i), hr));
+    }
+
+    // HR readings in the History-chart format (stamp ms + heartRate). Ye
+    // HrScrollableChart ko feed hota hai taaki activity result ka chart bilkul
+    // History tab jaisa dikhe (real clock time x-axis, gap segments).
+    final hrReadings = <Map<dynamic, dynamic>>[];
+    for (final r in sortedRaw) {
+      final hr = _toD(r['heart_rate']);
+      final t = tsOf(r);
+      if (hr <= 0 || t == null) continue;
+      hrReadings.add({'stamp': t.millisecondsSinceEpoch, 'heartRate': hr});
     }
 
     final hrvSpots = <FlSpot>[];
@@ -316,16 +330,13 @@ class _ResultBody extends StatelessWidget {
           startedAt: startedAt, endedAt: endedAt, duration: duration),
       const SizedBox(height: 14),
 
-      // Heart rate hero chart with time-based x-axis
-      if (hrSpots.isNotEmpty) ...[
+      // Heart rate chart — same design as History tab (blue background)
+      if (hrReadings.isNotEmpty) ...[
         _HeartRateHeroCard(
-          spots: hrSpots,
+          hrReadings: hrReadings,
           avg: _toD(hrStats['avg']),
           min: _toD(hrStats['min']),
           max: _toD(hrStats['max']),
-          readings: rawList.length,
-          totalSeconds: totalSeconds,
-          anchor: anchor,
         ),
         const SizedBox(height: 14),
       ],
@@ -487,381 +498,124 @@ class _InfoChip extends StatelessWidget {
 // ── Heart Rate Hero Card ──────────────────────────────────────────────────────
 
 class _HeartRateHeroCard extends StatelessWidget {
-  final List<FlSpot> spots;
+  final List<Map<dynamic, dynamic>> hrReadings;
   final double avg, min, max;
-  final int readings;
-  final double totalSeconds;
-  final DateTime? anchor;
 
   const _HeartRateHeroCard({
-    required this.spots,
+    required this.hrReadings,
     required this.avg,
     required this.min,
     required this.max,
-    required this.readings,
-    required this.totalSeconds,
-    required this.anchor,
   });
-
-  Color get _zoneColor {
-    if (avg < 100) return const Color(0xFF43A047);
-    if (avg < 140) return const Color(0xFFFFA726);
-    return const Color(0xFFEF5350);
-  }
-
-  String get _zoneLabel {
-    if (avg < 100) return 'Normal';
-    if (avg < 140) return 'Moderate';
-    return 'High';
-  }
 
   @override
   Widget build(BuildContext context) {
-    final dataMax = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
-    final dataMin = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
-    const double yInterval = 10;
-    final yFloor = (((dataMin - 5) / yInterval).floor() * 10.0).clamp(0.0, double.infinity);
-    final yCeil = ((dataMax + 5) / yInterval).ceil() * 10.0;
-    final double maxX = totalSeconds > 0
-        ? totalSeconds
-        : (spots.last.x > 0 ? spots.last.x : 1.0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Stat tiles — same layout as History tab (AVG / MAX / MIN)
+        Row(
+          children: [
+            _HrStatTile(
+              label: 'AVG',
+              value: avg.toStringAsFixed(0),
+              color: AppColors.primary,
+              icon: Icons.favorite,
+            ),
+            const SizedBox(width: 10),
+            _HrStatTile(
+              label: 'MAX',
+              value: max.toStringAsFixed(0),
+              color: AppColors.heartRed,
+              icon: Icons.arrow_upward_rounded,
+            ),
+            const SizedBox(width: 10),
+            _HrStatTile(
+              label: 'MIN',
+              value: min.toStringAsFixed(0),
+              color: AppColors.vitalStress,
+              icon: Icons.arrow_downward_rounded,
+            ),
+          ].map((w) => Expanded(child: w)).toList(),
+        ),
+        const SizedBox(height: 16),
+        // Chart — reuses the History tab widget, light-blue background
+        HrScrollableChart(
+          readings: hrReadings,
+          backgroundColor: AppColors.surface,
+        ),
+      ],
+    );
+  }
+}
 
+// Stat tile — mirrors the History tab's per-day AVG/MAX/MIN tiles.
+class _HrStatTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final IconData icon;
+  const _HrStatTile({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-              color: AppColors.heartRed.withValues(alpha: 0.06),
-              blurRadius: 14,
-              offset: const Offset(0, 4))
-        ],
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            right: -20, top: -20,
-            child: Container(
-              width: 100, height: 100,
-              decoration: BoxDecoration(
-                  color: AppColors.heartRed.withValues(alpha: 0.04),
-                  shape: BoxShape.circle),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header row
-                Row(children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                        color: AppColors.heartRed.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.favorite,
-                        color: AppColors.heartRed, size: 18),
+          Row(
+            children: [
+              Icon(icon, size: 11, color: color),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: color.withValues(alpha: 0.7),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
                   ),
-                  const SizedBox(width: 10),
-                  const Text('Heart Rate',
-                      style: TextStyle(
-                          color: AppColors.text,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700)),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                        color: _zoneColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(20)),
-                    child: Text(_zoneLabel,
-                        style: TextStyle(
-                            color: _zoneColor,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700)),
-                  ),
-                ]),
-
-                const SizedBox(height: 14),
-
-                // Avg BPM display
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(avg.toStringAsFixed(0),
-                        style: const TextStyle(
-                            color: AppColors.text,
-                            fontSize: 52,
-                            fontWeight: FontWeight.w800,
-                            height: 1)),
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 8, left: 4),
-                      child: Text('bpm',
-                          style: TextStyle(
-                              color: AppColors.subtext, fontSize: 16)),
-                    ),
-                    const Spacer(),
-                    const Text('avg',
-                        style: TextStyle(
-                            color: AppColors.subtext,
-                            fontSize: 12)),
-                  ],
+                  overflow: TextOverflow.ellipsis,
                 ),
-
-                const SizedBox(height: 12),
-
-                Row(children: [
-                  Icon(Icons.swipe_outlined,
-                      size: 12,
-                      color: AppColors.subtext.withValues(alpha: 0.6)),
-                  const SizedBox(width: 4),
-                  Text('Swipe to scroll',
-                      style: TextStyle(
-                          color: AppColors.subtext.withValues(alpha: 0.6),
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600)),
-                ]),
-                const SizedBox(height: 8),
-
-                // Chart with fixed y-axis + scrollable area
-                Builder(builder: (context) {
-                  final screenWidth =
-                      MediaQuery.of(context).size.width - 92;
-                  const pxPerMinute = 100.0;
-                  final calculatedWidth = (maxX / 60) * pxPerMinute;
-                  final chartWidth =
-                      math.max(calculatedWidth, screenWidth);
-
-                  final double labelInterval;
-                  if (maxX <= 300) {
-                    labelInterval = 30;
-                  } else if (maxX <= 1800) {
-                    labelInterval = 60;
-                  } else {
-                    labelInterval = 300;
-                  }
-
-                  return SizedBox(
-                    height: 170,
-                    child: Row(
-                      children: [
-                        // Fixed y-axis
-                        SizedBox(
-                          width: 36,
-                          child: LineChart(
-                            LineChartData(
-                              minY: yFloor,
-                              maxY: yCeil,
-                              minX: 0,
-                              maxX: 1,
-                              gridData: const FlGridData(show: false),
-                              borderData: FlBorderData(show: false),
-                              lineBarsData: [],
-                              titlesData: FlTitlesData(
-                                leftTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: 32,
-                                    interval: yInterval,
-                                    getTitlesWidget: (v, _) => Text(
-                                      v.toInt().toString(),
-                                      style: const TextStyle(
-                                          color: AppColors.subtext,
-                                          fontSize: 9),
-                                    ),
-                                  ),
-                                ),
-                                rightTitles: const AxisTitles(
-                                    sideTitles:
-                                        SideTitles(showTitles: false)),
-                                topTitles: const AxisTitles(
-                                    sideTitles:
-                                        SideTitles(showTitles: false)),
-                                bottomTitles: AxisTitles(
-                                  sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: 22,
-                                    getTitlesWidget: (_, __) =>
-                                        const SizedBox.shrink(),
-                                  ),
-                                ),
-                              ),
-                              lineTouchData:
-                                  const LineTouchData(enabled: false),
-                            ),
-                          ),
-                        ),
-                        // Scrollable chart
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            physics: const BouncingScrollPhysics(),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16),
-                              child: SizedBox(
-                                width: chartWidth,
-                                child: LineChart(
-                                  LineChartData(
-                                    minX: -0.3,
-                                    maxX: maxX + 0.3,
-                                    minY: yFloor,
-                                    maxY: yCeil,
-                                    clipData: const FlClipData.none(),
-                                    gridData: FlGridData(
-                                      show: true,
-                                      drawVerticalLine: true,
-                                      horizontalInterval: yInterval,
-                                      verticalInterval: labelInterval,
-                                      getDrawingHorizontalLine: (_) =>
-                                          FlLine(
-                                              color: AppColors.borderLight,
-                                              strokeWidth: 1),
-                                      getDrawingVerticalLine: (_) =>
-                                          FlLine(
-                                              color: AppColors.borderLight
-                                                  .withValues(alpha: 0.5),
-                                              strokeWidth: 0.5),
-                                    ),
-                                    borderData:
-                                        FlBorderData(show: false),
-                                    titlesData: FlTitlesData(
-                                      leftTitles: const AxisTitles(
-                                          sideTitles: SideTitles(
-                                              showTitles: false)),
-                                      rightTitles: const AxisTitles(
-                                          sideTitles: SideTitles(
-                                              showTitles: false)),
-                                      topTitles: const AxisTitles(
-                                          sideTitles: SideTitles(
-                                              showTitles: false)),
-                                      bottomTitles: AxisTitles(
-                                        sideTitles: SideTitles(
-                                          showTitles: true,
-                                          reservedSize: 22,
-                                          interval: labelInterval,
-                                          getTitlesWidget: (v, _) {
-                                            if (v < 0 || v > maxX) {
-                                              return const SizedBox
-                                                  .shrink();
-                                            }
-                                            return Padding(
-                                              padding:
-                                                  const EdgeInsets.only(
-                                                      top: 4),
-                                              child: Text(
-                                                anchor != null
-                                                    ? _fmtClock(
-                                                        anchor!,
-                                                        v.toInt())
-                                                    : _fmtElapsed(
-                                                        v.toInt()),
-                                                style: const TextStyle(
-                                                  color: AppColors.subtext,
-                                                  fontSize: 9,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                    lineBarsData: [
-                                      LineChartBarData(
-                                        spots: spots,
-                                        isCurved: true,
-                                        curveSmoothness: 0.35,
-                                        color: AppColors.heartRed,
-                                        barWidth: 2.5,
-                                        dotData: FlDotData(
-                                          show: true,
-                                          getDotPainter:
-                                              (s, _, __, index) =>
-                                                  FlDotCirclePainter(
-                                            radius:
-                                                index ==
-                                                        spots.length - 1
-                                                    ? 4
-                                                    : 0,
-                                            color:
-                                                AppColors.heartRed,
-                                            strokeWidth: 2,
-                                            strokeColor: AppColors.surface,
-                                          ),
-                                        ),
-                                        belowBarData: BarAreaData(
-                                          show: true,
-                                          gradient: LinearGradient(
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                            colors: [
-                                              AppColors.heartRed
-                                                  .withValues(
-                                                      alpha: 0.18),
-                                              AppColors.heartRed
-                                                  .withValues(
-                                                      alpha: 0.0),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                    lineTouchData: LineTouchData(
-                                      touchTooltipData:
-                                          LineTouchTooltipData(
-                                        getTooltipColor: (_) =>
-                                            AppColors.text,
-                                        getTooltipItems: (touched) =>
-                                            touched
-                                                .map((s) =>
-                                                    LineTooltipItem(
-                                                      '${s.y.toInt()} bpm  •  ${anchor != null ? _fmtClockSec(anchor!, s.x.toInt()) : _fmtElapsed(s.x.toInt())}',
-                                                      const TextStyle(
-                                                          color: Colors
-                                                              .white,
-                                                          fontSize: 11,
-                                                          fontWeight:
-                                                              FontWeight
-                                                                  .w600),
-                                                    ))
-                                                .toList(),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
-
-                const SizedBox(height: 14),
-
-                // Stats row
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceAlt,
-                    borderRadius: BorderRadius.circular(14),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: AppColors.text,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _StatItem(label: 'Min', value: '${min.toInt()}', unit: 'bpm'),
-                      _Divider(),
-                      _StatItem(label: 'Avg', value: avg.toStringAsFixed(0), unit: 'bpm'),
-                      _Divider(),
-                      _StatItem(label: 'Max', value: '${max.toInt()}', unit: 'bpm'),
-                      //_Divider(),
-                    //  _StatItem(label: 'Readings', value: '$readings', unit: ''),
-                    ],
+                ),
+                const SizedBox(width: 2),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    'bpm',
+                    style: TextStyle(
+                      color: color.withValues(alpha: 0.6),
+                      fontSize: 10,
+                    ),
                   ),
                 ),
               ],
@@ -871,37 +625,6 @@ class _HeartRateHeroCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _StatItem extends StatelessWidget {
-  final String label, value, unit;
-  const _StatItem(
-      {required this.label, required this.value, required this.unit});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(children: [
-      Text(label,
-          style: const TextStyle(
-              color: AppColors.subtext, fontSize: 10)),
-      const SizedBox(height: 3),
-      Text(value,
-          style: const TextStyle(
-              color: AppColors.text,
-              fontSize: 16,
-              fontWeight: FontWeight.w800)),
-      if (unit.isNotEmpty)
-        Text(unit,
-            style: const TextStyle(
-                color: AppColors.subtext, fontSize: 9)),
-    ]);
-  }
-}
-
-class _Divider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) => Container(
-      width: 1, height: 30, color: AppColors.border);
 }
 
 // SpO2 aur Stress charts hata diye gaye — requirements ke according.
@@ -1431,11 +1154,13 @@ class _HrvChip extends StatelessWidget {
 
 class _UploadSessionButton extends StatelessWidget {
   final int taskId;
+  final String taskName;
   final DateTime? sessionStart;
   final DateTime? sessionEnd;
 
   const _UploadSessionButton({
     required this.taskId,
+    required this.taskName,
     required this.sessionStart,
     required this.sessionEnd,
   });
@@ -1514,6 +1239,7 @@ class _UploadSessionButton extends StatelessWidget {
         builder: (_) => SessionUploadScreen(
           submitCubit: submitCubit,
           taskId: taskId,
+          taskName: taskName,
           sessionStart: sessionStart!,
           sessionEnd: sessionEnd!,
         ),

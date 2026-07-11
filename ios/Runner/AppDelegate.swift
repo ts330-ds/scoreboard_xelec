@@ -79,10 +79,20 @@ import CoreBluetooth
                 FitBLECentralManager.shareInstance().dissConnect()
                 result("Disconnect Command Sent")
 
+            case "isBluetoothOn":
+                let cm = FitBLECentralManager.shareInstance().centralManager
+                result(cm?.state == .poweredOn)
+
             case "reconnectByAddress":
                 // iOS does not support connecting by MAC address directly.
                 // Start a short scan — device will auto-connect via
                 // fitConnectState when found (same as link-loss recovery).
+                // Silent guard — BT explicitly off ho to try mat karo.
+                let cm = FitBLECentralManager.shareInstance().centralManager
+                if cm?.state == .poweredOff {
+                    result(FlutterError(code: "BLUETOOTH_OFF", message: "Bluetooth is disabled", details: nil))
+                    return
+                }
                 self.userInitiatedDisconnect = false
                 self.sendToFlutter(type: "STATUS", value: "Reconnecting...")
                 FitBLECentralManager.shareInstance().centralStartSaomiao()

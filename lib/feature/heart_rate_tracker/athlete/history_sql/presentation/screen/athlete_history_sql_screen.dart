@@ -95,6 +95,91 @@ class _HistorySqlShellState extends State<_HistorySqlShell> {
     context.read<HeartBleCubit>().syncNewFromDevice();
   }
 
+  bool _guardConnected(HeartBleState s) {
+    if (!s.isConnected) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Device is not connected'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _onShutdownTap(HeartBleState s) async {
+    if (!_guardConnected(s)) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Shutdown device?'),
+        content: const Text(
+          'The band will power off and disconnect. You will need to '
+          'turn it back on manually to reconnect.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Shutdown'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final ok = await context.read<HeartBleCubit>().shutdownDevice();
+    if (!mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Shutdown command sent'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _onRestoreTap(HeartBleState s) async {
+    if (!_guardConnected(s)) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Factory reset device?'),
+        content: const Text(
+          'This will ERASE all settings and stored history on the band. '
+          'This cannot be undone.\n\nMake sure any data you need has already '
+          'been synced and pushed to the server.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.heartRed),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Factory reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final ok = await context.read<HeartBleCubit>().restoreDevice();
+    if (!mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Factory reset command sent'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<HeartBleCubit, HeartBleState>(
@@ -125,6 +210,43 @@ class _HistorySqlShellState extends State<_HistorySqlShell> {
                       isSyncing: syncing,
                       onTap: syncing ? null : () => _onSyncTap(bleState),
                     ),
+                  ),
+                if (Platform.isAndroid)
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: Colors.white),
+                    tooltip: 'Device actions',
+                    onSelected: (value) {
+                      if (value == 'shutdown') {
+                        _onShutdownTap(bleState);
+                      } else if (value == 'restore') {
+                        _onRestoreTap(bleState);
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'shutdown',
+                        child: Row(
+                          children: [
+                            Icon(Icons.power_settings_new,
+                                size: 18, color: AppColors.text),
+                            SizedBox(width: 10),
+                            Text('Shutdown device'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'restore',
+                        child: Row(
+                          children: [
+                            Icon(Icons.restart_alt,
+                                size: 18, color: AppColors.heartRed),
+                            SizedBox(width: 10),
+                            Text('Factory reset',
+                                style: TextStyle(color: AppColors.heartRed)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
               ],
             ),

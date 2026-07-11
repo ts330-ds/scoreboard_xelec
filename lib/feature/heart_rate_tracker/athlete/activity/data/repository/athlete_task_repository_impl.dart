@@ -18,8 +18,8 @@ class AthleteTaskRepositoryImpl implements AthleteTaskRepository {
       _dataSource.createTask(name: name, assignedBy: assignedBy);
 
   @override
-  TaskEither<Failure, MyTasksPage> getMyTasks({int page = 1}) =>
-      _dataSource.getMyTasks(page: page).map(
+  TaskEither<Failure, MyTasksPage> getMyTasks({int page = 1, String? status}) =>
+      _dataSource.getMyTasks(page: page, status: status).map(
             (result) => MyTasksPage(
               tasks: result.tasks,
               totalRecords: result.totalRecords,

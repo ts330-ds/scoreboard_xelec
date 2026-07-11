@@ -12,7 +12,7 @@ class HistoryDatabase {
   static final HistoryDatabase instance = HistoryDatabase._();
 
   static const _dbName = 'history_sql.db';
-  static const _dbVersion = 2;
+  static const _dbVersion = 3;
 
   Database? _db;
 
@@ -50,12 +50,31 @@ class HistoryDatabase {
           )
         ''');
         await _createSyncMeta(db);
+        await _createSessionReadings(db);
       },
       onUpgrade: (db, oldVersion, _) async {
         // v1 → v2: sync metadata moved out of Hive into this DB.
         if (oldVersion < 2) await _createSyncMeta(db);
+        // v2 → v3: session upload staging table — activity session ka data
+        // ab health-history tables me nahi ghusta; apni alag table me rehta
+        // hai aur successful upload ke baad clear ho jaata hai.
+        if (oldVersion < 3) await _createSessionReadings(db);
       },
     );
+  }
+
+  /// Staging table for activity-session uploads. Rows live only between
+  /// BLE fetch and a successful server upload; cleared per-task after upload
+  /// and fully on logout.
+  Future<void> _createSessionReadings(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS session_readings (
+        task_id INTEGER NOT NULL,
+        stamp INTEGER NOT NULL,
+        heart_rate INTEGER NOT NULL,
+        PRIMARY KEY (task_id, stamp)
+      )
+    ''');
   }
 
   /// Single-row key/value table holding history sync metadata

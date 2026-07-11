@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:fpdart/fpdart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:xelex_esp/core/failure.dart';
+import 'package:xelex_esp/core/network/dio_error_message.dart';
 import 'package:xelex_esp/core/pref_keys.dart';
 import '../../domain/entity/athlete_health_metrics_entity.dart';
 import '../../domain/entity/athlete_hour_raw_entity.dart';
@@ -88,9 +89,7 @@ class MyAthletesRemoteDataSourceImpl implements MyAthletesRemoteDataSource {
           ));
         } on DioException catch (e) {
           return left(ServerFailure(
-            e.response?.data['message'] ??
-                e.message ??
-                'Failed to load athletes',
+            friendlyDioMessage(e, fallback: 'Failed to load athletes'),
           ));
         } catch (e) {
           return left(ServerFailure('Failed to load athletes: $e'));
@@ -115,7 +114,7 @@ class MyAthletesRemoteDataSourceImpl implements MyAthletesRemoteDataSource {
           return right(MyAthleteModel.fromDetailJson(data));
         } on DioException catch (e) {
           return left(ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Failed to load athlete detail',
+            friendlyDioMessage(e, fallback: 'Failed to load athlete detail'),
           ));
         } catch (e) {
           return left(ServerFailure('Failed to load athlete detail: $e'));
@@ -144,7 +143,7 @@ class MyAthletesRemoteDataSourceImpl implements MyAthletesRemoteDataSource {
           return right(null);
         } on DioException catch (e) {
           return left(ServerFailure(
-            e.response?.data['message'] ?? e.message ?? 'Failed to remove athlete',
+            friendlyDioMessage(e, fallback: 'Failed to remove athlete'),
           ));
         } catch (e) {
           return left(ServerFailure('Failed to remove athlete: $e'));
@@ -181,9 +180,7 @@ class MyAthletesRemoteDataSourceImpl implements MyAthletesRemoteDataSource {
           return right(AthleteHealthMetricsEntity(raw: raw));
         } on DioException catch (e) {
           return left(ServerFailure(
-            e.response?.data['message'] ??
-                e.message ??
-                'Failed to load health metrics',
+            friendlyDioMessage(e, fallback: 'Failed to load health metrics'),
           ));
         } catch (e) {
           return left(ServerFailure('Failed to load health metrics: $e'));
@@ -220,9 +217,7 @@ class MyAthletesRemoteDataSourceImpl implements MyAthletesRemoteDataSource {
           return right(AthleteHourRawEntity(raw: raw));
         } on DioException catch (e) {
           return left(ServerFailure(
-            e.response?.data['message'] ??
-                e.message ??
-                'Failed to load hourly readings',
+            friendlyDioMessage(e, fallback: 'Failed to load hourly readings'),
           ));
         } catch (e) {
           return left(ServerFailure('Failed to load hourly readings: $e'));
@@ -270,9 +265,7 @@ class MyAthletesRemoteDataSourceImpl implements MyAthletesRemoteDataSource {
           return right(tasks);
         } on DioException catch (e) {
           return left(ServerFailure(
-            e.response?.data['message'] ??
-                e.message ??
-                'Failed to load completed tasks',
+            friendlyDioMessage(e, fallback: 'Failed to load completed tasks'),
           ));
         } catch (e) {
           return left(ServerFailure('Failed to load completed tasks: $e'));

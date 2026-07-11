@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
@@ -61,40 +60,36 @@ class ActiveSessionView extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
-          // ── Circular Timer
-          SizedBox(
-            width: 220,
-            height: 220,
-            child: Stack(
-              alignment: Alignment.center,
+          // ── Compact recording timer (no target → no progress ring)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                CustomPaint(
-                  size: const Size(220, 220),
-                  painter: ActivityRingPainter(
-                    progress: state.progressRatio,
-                    color: type.color,
+                const _RecordingDot(),
+                const SizedBox(width: 12),
+                Text(
+                  AthleteActivityCubit.formatSeconds(state.elapsedSeconds),
+                  style: const TextStyle(
+                    color: AppColors.text,
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                    fontFeatures: [FontFeature.tabularFigures()],
                   ),
-                ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      AthleteActivityCubit.formatSeconds(state.elapsedSeconds),
-                      style: const TextStyle(
-                          color: AppColors.text,
-                          fontSize: 40,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2),
-                    ),
-                  ],
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
 
           // ── Live Stats
           Row(
@@ -323,46 +318,45 @@ class LiveStatCard extends StatelessWidget {
   }
 }
 
-// ── Ring Painter ──────────────────────────────────────────────────────────────
-class ActivityRingPainter extends CustomPainter {
-  final double progress;
-  final Color color;
-  const ActivityRingPainter({required this.progress, required this.color});
+// ── Recording Dot ─────────────────────────────────────────────────────────────
+// Timer ke aage pulsing red dot — "live recording" ka visual cue (target-based
+// progress ring ki jagah, kyunki session duration fixed nahi hoti).
+class _RecordingDot extends StatefulWidget {
+  const _RecordingDot();
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    const strokeWidth = 12.0;
-    final radius = (size.width / 2) - strokeWidth / 2;
+  State<_RecordingDot> createState() => _RecordingDotState();
+}
 
-    // Background ring
-    canvas.drawCircle(
-      Offset(cx, cy),
-      radius,
-      Paint()
-        ..color = color.withOpacity(0.12)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth,
-    );
+class _RecordingDotState extends State<_RecordingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
 
-    // Progress arc
-    canvas.drawArc(
-      Rect.fromCircle(center: Offset(cx, cy), radius: radius),
-      -math.pi / 2,
-      2 * math.pi * progress,
-      false,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
-        ..strokeCap = StrokeCap.round,
-    );
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
-  bool shouldRepaint(ActivityRingPainter old) =>
-      old.progress != progress || old.color != color;
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween<double>(begin: 1.0, end: 0.3).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      ),
+      child: Container(
+        width: 12,
+        height: 12,
+        decoration: const BoxDecoration(
+          color: AppColors.error,
+          shape: BoxShape.circle,
+        ),
+      ),
+    );
+  }
 }
 
 // ── Session Reconnect Banner ──────────────────────────────────────────────────

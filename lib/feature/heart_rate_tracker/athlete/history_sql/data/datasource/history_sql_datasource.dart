@@ -244,6 +244,9 @@ class HistorySqlDatasource {
     batch.delete('rr_samples');
     batch.delete('sleep_sessions');
     batch.delete('sync_meta');
+    // Activity session ka staging table (SessionReadingsStore) — same DB file
+    // me hai, logout pe iska pending data bhi per-user hai, wipe karo.
+    batch.delete('session_readings');
     await batch.commit(noResult: true);
   }
 }

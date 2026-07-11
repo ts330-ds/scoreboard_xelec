@@ -250,6 +250,7 @@ class _LogViewerScreenState extends State<LogViewerScreen> {
                   ),
                 ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'log_viewer_share_fab',
         backgroundColor: AppColors.primary,
         onPressed: _share,
         icon: const Icon(Icons.share, color: Colors.white),

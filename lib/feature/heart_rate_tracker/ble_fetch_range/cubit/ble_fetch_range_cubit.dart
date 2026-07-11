@@ -12,7 +12,7 @@ class BleFetchRangeCubit extends Cubit<BleFetchRangeState> {
   StreamSubscription<HeartBleState>? _bleSub;
 
   // Idle timer: device se jab tak naya data aata rahe, ye reset hota rahega.
-  // Sirf tab fire hoga jab device 60s tak kuch na bheje (stall/disconnect).
+  // Sirf tab fire hoga jab device 90s tak kuch na bheje (stall/disconnect).
   Timer? _idleTimer;
 
   // Absolute safety cap: last-resort backstop taaki fetch kabhi anant tak na
@@ -23,7 +23,11 @@ class BleFetchRangeCubit extends Cubit<BleFetchRangeState> {
   // fire hoga jab data lagataar 2 ghante tak aata rahe (practically asambhav).
   Timer? _maxTimer;
 
-  static const _idleTimeout = Duration(seconds: 60);
+  // Native ka per-record timeout 60s hai (ChileafWearHandler.perRecordTimeoutMs).
+  // Ek bade record ke transfer ke dauraan koi naya chunk nahi aata, isliye ye
+  // idle timeout us 60s se SAFELY upar rehna chahiye — warna Flutter native ke
+  // record wait ko beech me hi cut karke partial/empty finalize kar dega.
+  static const _idleTimeout = Duration(seconds: 90);
   static const _maxTimeout = Duration(hours: 2);
 
   DateTime? _fromDate;
