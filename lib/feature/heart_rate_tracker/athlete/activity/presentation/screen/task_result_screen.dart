@@ -358,6 +358,16 @@ class _ResultBody extends StatelessWidget {
           anchor: anchor,
         ),
       ],
+
+      // Reupload — agar athlete data se satisfied na ho ya incomplete aaya ho
+      // to device se session dobara flush kar sakta hai (sirf 3 din ke andar).
+      const SizedBox(height: 14),
+      _ReuploadSessionButton(
+        taskId: task.id,
+        taskName: task.name,
+        sessionStart: sessionStart,
+        sessionEnd: sessionEnd,
+      ),
     ];
   }
 }
@@ -543,6 +553,7 @@ class _HeartRateHeroCard extends StatelessWidget {
         HrScrollableChart(
           readings: hrReadings,
           backgroundColor: AppColors.surface,
+          emphasizeYGrid: true,
         ),
       ],
     );
@@ -1233,6 +1244,138 @@ class _UploadSessionButton extends StatelessWidget {
   }
 
   void _startUpload(BuildContext context) {
+    final submitCubit = sl<TaskZipSubmitCubit>();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SessionUploadScreen(
+          submitCubit: submitCubit,
+          taskId: taskId,
+          taskName: taskName,
+          sessionStart: sessionStart!,
+          sessionEnd: sessionEnd!,
+        ),
+      ),
+    ).then((_) {
+      if (!submitCubit.isClosed) {
+        submitCubit.close();
+      }
+      if (context.mounted) {
+        context.read<TaskResultCubit>().load();
+      }
+    });
+  }
+}
+
+// ── Reupload Session Button (completed task — re-flush from device) ──────────
+// Athlete agar result se satisfied na ho ya incomplete data aaya ho to device
+// se session dobara flush/upload kar sakta hai. Rule: sirf session ke 3 din ke
+// andar (band history limited + relevance window). 90% completeness gate
+// SessionUploadScreen → TaskZipSubmitCubit me already lagta hai, isliye adhoora
+// data yahan se bhi server pe nahi jaata.
+class _ReuploadSessionButton extends StatelessWidget {
+  final int taskId;
+  final String taskName;
+  final DateTime? sessionStart;
+  final DateTime? sessionEnd;
+
+  static const _reuploadWindow = Duration(days: 3);
+
+  const _ReuploadSessionButton({
+    required this.taskId,
+    required this.taskName,
+    required this.sessionStart,
+    required this.sessionEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Bina session timestamps ke re-flush possible nahi (fetch range chahiye).
+    if (sessionStart == null || sessionEnd == null) {
+      return const SizedBox.shrink();
+    }
+
+    final withinWindow =
+        DateTime.now().difference(sessionStart!) <= _reuploadWindow;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Not satisfied with this data?',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.text,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'If the readings look incomplete, you can flush the session '
+            'again from your device.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.subtext, fontSize: 12),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: withinWindow ? () => _startReupload(context) : null,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Reupload Data'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: BorderSide(
+                    color: withinWindow
+                        ? AppColors.primary
+                        : AppColors.borderLight),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                textStyle:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+          if (!withinWindow) ...[
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.info_outline,
+                    size: 14, color: AppColors.warning),
+                const SizedBox(width: 6),
+                const Flexible(
+                  child: Text(
+                    'You can reupload data only within 3 days of session',
+                    style: TextStyle(
+                        color: AppColors.warning,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _startReupload(BuildContext context) {
     final submitCubit = sl<TaskZipSubmitCubit>();
     Navigator.of(context).push(
       MaterialPageRoute(

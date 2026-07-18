@@ -121,10 +121,26 @@ class AthleteForegroundService {
     });
   }
 
-  static Future<void> stopActivitySession(int taskId) async {
+  static Future<void> stopActivitySession(
+    int taskId, {
+    String? token,
+    String? baseUrl,
+  }) async {
+    // Cold-start path (app-kill ke baad overdue resume-stop): service running
+    // nahi hoti — pehle start karo, warna command kahin nahi jaata aur stop
+    // kabhi deliver nahi hota. _activityActive true rakho taaki stopIfIdle()
+    // pending-stop delivery ke beech service na maar de (confirm/abandon pe
+    // cleanupAfterSessionEnd() ise false karega).
+    _activityActive = true;
+    await _ensureServiceRunning();
+    await _waitForBgReady();
     FlutterForegroundTask.sendDataToTask({
       'cmd': 'stop_activity',
       'task_id': taskId,
+      // Fresh BG isolate ke paas creds nahi hote — saath bhejo taaki wo
+      // reconnect karke stop deliver kar sake.
+      if (token != null) 'token': token,
+      if (baseUrl != null) 'base_url': baseUrl,
     });
     // _activityActive abhi false mat karo — server confirm hone tak BLE data
     // flow chalta rahe. cleanupAfterSessionEnd() mein false hoga.

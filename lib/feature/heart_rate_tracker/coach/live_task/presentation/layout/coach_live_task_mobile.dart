@@ -968,10 +968,28 @@ class _HeartRateChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spots = readings
+    // ~15 readings (~15s @1/sec) ke buckets me average → smooth curve. Header ka
+    // "Current BPM" raw last reading se aata hai, isliye live number accurate.
+    final srcBpms = readings.map((r) => r.bpm).toList();
+    final List<double> plotBpms;
+    if (srcBpms.length < 4) {
+      plotBpms = srcBpms.map((b) => b.toDouble()).toList();
+    } else {
+      const bucket = 15;
+      plotBpms = <double>[];
+      for (int i = 0; i < srcBpms.length; i += bucket) {
+        final end = math.min(i + bucket, srcBpms.length);
+        double sum = 0;
+        for (int j = i; j < end; j++) {
+          sum += srcBpms[j];
+        }
+        plotBpms.add(sum / (end - i));
+      }
+    }
+    final spots = plotBpms
         .asMap()
         .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value.bpm.toDouble()))
+        .map((e) => FlSpot(e.key.toDouble(), e.value))
         .toList();
 
     final bpms = readings.map((r) => r.bpm);
@@ -1035,11 +1053,18 @@ class _HeartRateChart extends StatelessWidget {
                   gridData: FlGridData(
                     show: true,
                     drawVerticalLine: false,
-                    horizontalInterval: 20,
-                    getDrawingHorizontalLine: (_) => FlLine(
-                      color: AppColors.borderLight,
-                      strokeWidth: 1,
-                    ),
+                    // Sub-lines: minor har 5, major (har 20) darker.
+                    horizontalInterval: 5,
+                    getDrawingHorizontalLine: (value) {
+                      final isMajor = (value - minY).round() % 20 == 0;
+                      return isMajor
+                          ? const FlLine(
+                              color: AppColors.border, strokeWidth: 1.2)
+                          : FlLine(
+                              color:
+                                  AppColors.borderLight.withValues(alpha: 0.45),
+                              strokeWidth: 0.5);
+                    },
                   ),
                   borderData: FlBorderData(show: false),
                   titlesData: FlTitlesData(
@@ -1066,7 +1091,8 @@ class _HeartRateChart extends StatelessWidget {
                     LineChartBarData(
                       spots: spots,
                       isCurved: true,
-                      curveSmoothness: 0.35,
+                      curveSmoothness: 0.4,
+                      preventCurveOverShooting: true,
                       color: AppColors.error,
                       barWidth: 2.5,
                       dotData: FlDotData(

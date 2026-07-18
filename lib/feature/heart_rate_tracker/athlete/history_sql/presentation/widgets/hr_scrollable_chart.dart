@@ -15,14 +15,26 @@ class HrScrollableChart extends StatelessWidget {
   // Card ka background — default surface (white). Activity task-result screen
   // ise light-blue tint se use karta hai; history tab default rakhta hai.
   final Color backgroundColor;
+  // Jab true ho, y-axis ki horizontal guide-lines (har [yInterval]=8 bpm pe)
+  // darker/clear dikhti hain — history HR chart isse on rakhta hai taaki value
+  // padhna aasan ho. Baaki charts (activity result) default faint rakhte hain.
+  final bool emphasizeYGrid;
   const HrScrollableChart({
     super.key,
     required this.readings,
     this.backgroundColor = AppColors.surface,
+    this.emphasizeYGrid = false,
   });
 
   static const _gapThresholdMin = 5.0;
   static const _segmentGapMin = 2.0;
+  // Dense 1-reading/sec data ko curve pe smooth dikhane ke liye ~15s ke buckets
+  // me average karke downsample karte hain — warna itne paas-paas points par
+  // spline curve spiky lagti hai (curve dikhti hi nahi). Display-only — MAX/MIN/
+  // AVG tiles alag stats se aate hain, in numbers pe koi asar nahi.
+  static const _downsampleBucketMs = 15000;
+  // Y-axis sub-line spacing (major 8-line ke beech ki halki minor lines).
+  static const _ySubInterval = 2.0;
 
   ({
     List<List<FlSpot>> segments,
@@ -68,8 +80,9 @@ class HrScrollableChart extends StatelessWidget {
 
     // Latest segment first — reverse order so newest data is on left
     for (int si = rawSegments.length - 1; si >= 0; si--) {
-      final seg = rawSegments[si];
-      if (seg.isEmpty) continue;
+      final raw = rawSegments[si];
+      if (raw.isEmpty) continue;
+      final seg = _downsample(raw);
       final segFirstMs = seg.first.ms;
       segmentStartMs.add(segFirstMs);
       final segDuration = (seg.last.ms - segFirstMs) / 60000.0;
@@ -86,6 +99,7 @@ class HrScrollableChart extends StatelessWidget {
     final allY = segments.expand((s) => s.map((p) => p.y)).toList();
     final rawMin = allY.reduce(math.min);
     final rawMax = allY.reduce(math.max);
+    // Y-ticks 8 ke multiples pe — taaki 8-gap labels clean (56, 64, 72…) rahen.
     final minY = ((rawMin - 4) / 8).floor() * 8.0;
     final maxY = ((rawMax + 4) / 8).ceil() * 8.0;
     final maxX = xOffset > _segmentGapMin ? xOffset - _segmentGapMin : 0.0;
@@ -98,6 +112,33 @@ class HrScrollableChart extends StatelessWidget {
       minY: minY,
       maxY: maxY,
     );
+  }
+
+  /// Dense per-second readings ko ~15s buckets me average karke kam points
+  /// banata hai — taaki curved line visibly smooth dikhe (spiky nahi). Chhote
+  /// segments (4 se kam points) jaise ke taise return hote hain.
+  List<({int ms, double hr})> _downsample(List<({int ms, double hr})> pts) {
+    if (pts.length < 4) return pts;
+    final out = <({int ms, double hr})>[];
+    int bucketStartMs = pts.first.ms;
+    int firstMs = pts.first.ms;
+    int lastMs = pts.first.ms;
+    double sum = 0;
+    int n = 0;
+    for (final p in pts) {
+      if (p.ms - bucketStartMs >= _downsampleBucketMs && n > 0) {
+        out.add((ms: (firstMs + lastMs) ~/ 2, hr: sum / n));
+        bucketStartMs = p.ms;
+        firstMs = p.ms;
+        sum = 0;
+        n = 0;
+      }
+      sum += p.hr;
+      lastMs = p.ms;
+      n++;
+    }
+    if (n > 0) out.add((ms: (firstMs + lastMs) ~/ 2, hr: sum / n));
+    return out;
   }
 
   int _xToMs(
@@ -144,19 +185,24 @@ class HrScrollableChart extends StatelessWidget {
     const double pxPerLabel = 18.0;
     final chartHeight = math.max(220.0, yLabelCount * pxPerLabel);
 
-    // One x-axis label roughly every ~64px so dense days don't overlap.
-    final span = data.maxX <= 0 ? 1.0 : data.maxX;
-    final approxLabels = chartWidth / 64.0;
-    final xInterval = math.max(1.0, (span / math.max(1.0, approxLabels)));
+    // X-axis unit = minutes → har 2 min pe label + vertical gridline.
+    const double xInterval = 2.0;
 
-    final gapAnnotations = <VerticalRangeAnnotation>[];
+    // Segment ke beech ke gap ko ab shaded band ki jagah DOTTED line se dikhate
+    // hain — pichle segment ke aakhri point se agle segment ke pehle point tak
+    // ek dashed connector, taaki user ko missing-data window clearly samajh aaye.
+    final gapConnectors = <LineChartBarData>[];
     for (int i = 0; i < data.segments.length - 1; i++) {
-      final gapStart = data.segments[i].last.x;
-      final gapEnd = data.segments[i + 1].first.x;
-      gapAnnotations.add(VerticalRangeAnnotation(
-        x1: gapStart,
-        x2: gapEnd,
-        color: AppColors.subtext.withValues(alpha: 0.07),
+      final gapStart = data.segments[i].last;
+      final gapEnd = data.segments[i + 1].first;
+      gapConnectors.add(LineChartBarData(
+        spots: [gapStart, gapEnd],
+        color: AppColors.heartRed.withValues(alpha: 0.45),
+        barWidth: 1.6,
+        isCurved: false,
+        dashArray: const [4, 4],
+        dotData: const FlDotData(show: false),
+        belowBarData: BarAreaData(show: false),
       ));
     }
 
@@ -272,16 +318,20 @@ class HrScrollableChart extends StatelessWidget {
                             minX: -0.5,
                             maxX: data.maxX + 0.5,
                             clipData: const FlClipData.none(),
-                            rangeAnnotations: RangeAnnotations(
-                              verticalRangeAnnotations: gapAnnotations,
-                            ),
-                            lineBarsData: data.segments
+                            lineBarsData: [
+                              ...gapConnectors,
+                              ...data.segments
                                 .map((seg) => LineChartBarData(
                                       spots: seg,
                                       color: AppColors.heartRed,
                                       barWidth: 2.2,
                                       isCurved: true,
-                                      curveSmoothness: 0.2,
+                                      // Zyada smooth/curvy line — 0.2 thodi
+                                      // sharp lag rahi thi. Overshoot guard se
+                                      // peaks band ke actual max/min se bahar
+                                      // nahi jaati.
+                                      curveSmoothness: 0.4,
+                                      preventCurveOverShooting: true,
                                       dotData: const FlDotData(show: false),
                                       belowBarData: BarAreaData(
                                         show: true,
@@ -296,17 +346,37 @@ class HrScrollableChart extends StatelessWidget {
                                           ],
                                         ),
                                       ),
-                                    ))
-                                .toList(),
+                                    )),
+                            ],
                             gridData: FlGridData(
                               show: true,
                               drawVerticalLine: true,
                               verticalInterval: xInterval,
-                              horizontalInterval: yInterval,
-                              getDrawingHorizontalLine: (_) => FlLine(
-                                color: AppColors.borderLight,
-                                strokeWidth: 1,
-                              ),
+                              // History pe sub-lines: interval chhota (2) rakho;
+                              // 8-ke-multiple = major (darker), beech wali = sub
+                              // (halki). Baaki charts sirf 8-interval single line.
+                              horizontalInterval:
+                                  emphasizeYGrid ? _ySubInterval : yInterval,
+                              getDrawingHorizontalLine: (value) {
+                                if (!emphasizeYGrid) {
+                                  return const FlLine(
+                                    color: AppColors.borderLight,
+                                    strokeWidth: 1,
+                                  );
+                                }
+                                final isMajor =
+                                    value.round() % yInterval.toInt() == 0;
+                                return isMajor
+                                    ? const FlLine(
+                                        color: AppColors.border,
+                                        strokeWidth: 1.2,
+                                      )
+                                    : FlLine(
+                                        color: AppColors.borderLight
+                                            .withValues(alpha: 0.45),
+                                        strokeWidth: 0.5,
+                                      );
+                              },
                               getDrawingVerticalLine: (_) => FlLine(
                                 color: AppColors.borderLight
                                     .withValues(alpha: 0.5),

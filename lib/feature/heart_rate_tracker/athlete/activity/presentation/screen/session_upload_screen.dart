@@ -251,7 +251,11 @@ class _SessionUploadScreenState extends State<SessionUploadScreen> {
       case TaskZipStatus.idle:
         return 'Getting ready...';
       case TaskZipStatus.fetching:
-        return 'Retrieving heart rate data from your device.\nThis may take a moment.';
+        // Cubit har attempt pe message me "Attempt X of 3 • …" bhejta hai —
+        // wahi dikhao taaki user ko pata rahe kaunsi try chal rahi hai.
+        return state.message.isNotEmpty
+            ? state.message
+            : 'Retrieving heart rate data from your device.\nThis may take a moment.';
       case TaskZipStatus.compressing:
         return 'Compressing ${state.totalReadings} readings for upload.';
       case TaskZipStatus.uploading:

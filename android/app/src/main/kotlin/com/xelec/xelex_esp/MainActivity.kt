@@ -1,6 +1,7 @@
 package com.xelec.xelex_esp
 
 import android.Manifest
+import android.app.ActivityManager
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
@@ -175,6 +176,48 @@ class MainActivity : FlutterActivity() {
                         result.success("Latest session sync started")
                     }
 
+                    "previewHrRecords" -> {
+                        if (!chileafHandler.isDeviceConnected) {
+                            result.error("NOT_CONNECTED", "No device connected", null)
+                            return@setMethodCallHandler
+                        }
+                        chileafHandler.previewHrRecords()
+                        result.success("Records preview started")
+                    }
+
+                    "previewHrRecordData" -> {
+                        if (!chileafHandler.isDeviceConnected) {
+                            result.error("NOT_CONNECTED", "No device connected", null)
+                            return@setMethodCallHandler
+                        }
+                        val args = call.arguments as? Map<*, *>
+                        val stamp = (args?.get("stamp") as? Number)?.toLong() ?: 0L
+                        chileafHandler.previewHrRecordData(stamp)
+                        result.success("Record data preview started")
+                    }
+
+                    "getHeartRateStatus" -> {
+                        if (!chileafHandler.isDeviceConnected) {
+                            result.error("NOT_CONNECTED", "No device connected", null)
+                            return@setMethodCallHandler
+                        }
+                        chileafHandler.requestHeartRateStatus()
+                        result.success("HR status requested")
+                    }
+
+                    "setHeartRateStatus" -> {
+                        if (!chileafHandler.isDeviceConnected) {
+                            result.error("NOT_CONNECTED", "No device connected", null)
+                            return@setMethodCallHandler
+                        }
+                        val args = call.arguments as? Map<*, *>
+                        val status = (args?.get("status") as? Number)?.toInt() ?: 1
+                        val interval = (args?.get("interval") as? Number)?.toInt() ?: 1
+                        val duration = (args?.get("duration") as? Number)?.toInt() ?: 1
+                        chileafHandler.setHeartRateStatus(status, interval, duration)
+                        result.success("HR status set")
+                    }
+
                     "syncHistorySingleRecord" -> {
                         val args = call.arguments as? Map<*, *>
                         val stamp = (args?.get("stamp") as? Number)?.toLong() ?: 0L
@@ -197,6 +240,21 @@ class MainActivity : FlutterActivity() {
                             Log.e(TAG, "Bluetooth settings open failed: ${e.message}")
                         }
                         result.success("Opening Bluetooth Settings")
+                    }
+
+                    "isBackgroundRestricted" -> {
+                        // App Info → Battery → "Restricted" state (Android 9+).
+                        // Ye battery-optimization exemption se ALAG setting hai —
+                        // koi API isse SET nahi kar sakti, sirf DETECT kar sakti hai.
+                        // true = user ne app ko background me restrict kiya hua hai.
+                        val restricted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                            am.isBackgroundRestricted
+                        } else {
+                            false // API < 28: koi background-restriction concept nahi
+                        }
+                        Log.d(TAG, ">>> isBackgroundRestricted → $restricted (sdk=${Build.VERSION.SDK_INT})")
+                        result.success(restricted)
                     }
 
                     else -> result.notImplemented()

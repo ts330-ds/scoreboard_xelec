@@ -28,6 +28,9 @@ abstract class PrefKeys {
 
   // Onboarding flags
   static const String batteryOptPromptShown = 'battery_opt_prompt_shown';
+  // Last-known battery-optimization exemption status (hard-block tracking).
+  // Har check pe update hota hai; server-report / diagnostics ke kaam aa sakta hai.
+  static const String batteryOptGranted = 'battery_opt_granted';
 
   // History push watermarks (per athlete: '<prefix><athleteId>')
   // Backend has no dedupe — these prevent re-emitting already-sent records.

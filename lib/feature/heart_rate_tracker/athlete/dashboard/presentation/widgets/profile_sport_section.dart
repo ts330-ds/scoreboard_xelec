@@ -88,6 +88,12 @@ class ProfileSportSection extends StatelessWidget {
                           ))
                       .toList(),
                   onChanged: isLoading ? null : onChanged,
+                  // Client-side validation: sport server pe required hai
+                  // (null bhejne pe "Sport must be a positive integer" 400 aata
+                  // tha). Form validate() ise ab catch karta hai — save se pehle
+                  // inline error dikhta hai, raw server error nahi.
+                  validator: (value) =>
+                      value == null ? 'Please select your sport' : null,
                 ),
               ],
             ),

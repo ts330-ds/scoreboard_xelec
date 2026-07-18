@@ -62,6 +62,11 @@ class HeartBleState extends Equatable {
   final double bodyTemp2;
   final double bodyTemp3;
   final int hrMax;
+  // DIAGNOSTIC: band ki auto-HR-monitoring config (getHeartRateStatus reply).
+  // -1 = abhi tak koi reply nahi aayi.
+  final int hrMonitorStatus;
+  final int hrMonitorInterval;
+  final int hrMonitorDuration;
   final List<int> rrIntervals; // latest batch from device
   final List<int> rrBuffer;   // rolling accumulator across notifications
   final double hrv;            // RMSSD in ms, 0.0 if unavailable
@@ -74,6 +79,10 @@ class HeartBleState extends Equatable {
   // ── History Data ──
   final List<Map<dynamic, dynamic>> historySport;
   final List<Map<dynamic, dynamic>> historyHrRecord;
+  // Read-only records preview (previewHrRecords()); NOT persisted, NOT pushed.
+  final List<Map<dynamic, dynamic>> previewHrRecords;
+  // Read-only single-record data preview (previewHrRecordData()); NOT persisted.
+  final List<Map<dynamic, dynamic>> previewHrRecordData;
   final List<Map<dynamic, dynamic>> historyHrData;
   final List<Map<dynamic, dynamic>> historyRrRecord;
   final List<Map<dynamic, dynamic>> historyRrData;
@@ -121,6 +130,9 @@ class HeartBleState extends Equatable {
     this.bodyTemp2 = 0.0,
     this.bodyTemp3 = 0.0,
     this.hrMax = 0,
+    this.hrMonitorStatus = -1,
+    this.hrMonitorInterval = -1,
+    this.hrMonitorDuration = -1,
     this.rrIntervals = const [],
     this.rrBuffer = const [],
     this.hrv = 0.0,
@@ -129,6 +141,8 @@ class HeartBleState extends Equatable {
     this.pollingMessage = '',
     this.historySport = const [],
     this.historyHrRecord = const [],
+    this.previewHrRecords = const [],
+    this.previewHrRecordData = const [],
     this.historyHrData = const [],
     this.historyRrRecord = const [],
     this.historyRrData = const [],
@@ -211,6 +225,9 @@ class HeartBleState extends Equatable {
     double? bodyTemp2,
     double? bodyTemp3,
     int? hrMax,
+    int? hrMonitorStatus,
+    int? hrMonitorInterval,
+    int? hrMonitorDuration,
     List<int>? rrIntervals,
     List<int>? rrBuffer,
     double? hrv,
@@ -219,6 +236,8 @@ class HeartBleState extends Equatable {
     String? pollingMessage,
     List<Map<dynamic, dynamic>>? historySport,
     List<Map<dynamic, dynamic>>? historyHrRecord,
+    List<Map<dynamic, dynamic>>? previewHrRecords,
+    List<Map<dynamic, dynamic>>? previewHrRecordData,
     List<Map<dynamic, dynamic>>? historyHrData,
     List<Map<dynamic, dynamic>>? historyRrRecord,
     List<Map<dynamic, dynamic>>? historyRrData,
@@ -266,6 +285,9 @@ class HeartBleState extends Equatable {
       bodyTemp2: bodyTemp2 ?? this.bodyTemp2,
       bodyTemp3: bodyTemp3 ?? this.bodyTemp3,
       hrMax: hrMax ?? this.hrMax,
+      hrMonitorStatus: hrMonitorStatus ?? this.hrMonitorStatus,
+      hrMonitorInterval: hrMonitorInterval ?? this.hrMonitorInterval,
+      hrMonitorDuration: hrMonitorDuration ?? this.hrMonitorDuration,
       rrIntervals: rrIntervals ?? this.rrIntervals,
       rrBuffer: rrBuffer ?? this.rrBuffer,
       hrv: hrv ?? this.hrv,
@@ -274,6 +296,8 @@ class HeartBleState extends Equatable {
       pollingMessage: pollingMessage ?? this.pollingMessage,
       historySport: historySport ?? this.historySport,
       historyHrRecord: historyHrRecord ?? this.historyHrRecord,
+      previewHrRecords: previewHrRecords ?? this.previewHrRecords,
+      previewHrRecordData: previewHrRecordData ?? this.previewHrRecordData,
       historyHrData: historyHrData ?? this.historyHrData,
       historyRrRecord: historyRrRecord ?? this.historyRrRecord,
       historyRrData: historyRrData ?? this.historyRrData,
@@ -297,8 +321,10 @@ class HeartBleState extends Equatable {
     hardwareVersion, softwareVersion, serialNumber, systemId, vendorName, 
     steps, distance, calorie, bodySensorLocation, bondingStatus, spo2, 
     systolic, diastolic, stressLevel, bodyTemp1, bodyTemp2, bodyTemp3, 
-    hrMax, rrIntervals, rrBuffer, hrv, isPolling, pollingJobId, pollingMessage,
-    historySport, historyHrRecord, historyHrData, historyRrRecord,
+    hrMax, hrMonitorStatus, hrMonitorInterval, hrMonitorDuration,
+    rrIntervals, rrBuffer, hrv, isPolling, pollingJobId, pollingMessage,
+    historySport, historyHrRecord, previewHrRecords, previewHrRecordData,
+    historyHrData, historyRrRecord,
     historyRrData, historyStepRecord, historyStepData, historySleep, 
     historySingleRecord, history3D, tempHistory3D, intervalSteps, 
     singleTapRecords, customData,

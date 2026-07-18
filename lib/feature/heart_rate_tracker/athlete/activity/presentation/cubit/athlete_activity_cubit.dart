@@ -135,8 +135,17 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
         lng: state.lng,
       );
     } else {
-      // Connected hai par HR abhi 0 (sensor warm-up) — biometrics aage bhejo.
-      updateBiometrics(spo2: spo2, stressLevel: stress, hrv: hrv);
+      // Connected hai par HR 0 (warm-up / loose strap / sensor error).
+      // Biometrics sirf state me rakho (forward: false) aur BG ko HR=0 bhejo —
+      // warna BG apni stored purani value se server pe jhooti flat-line bhejta
+      // rehta hai (wahi problem jo disconnect-case me fix hui thi). forward:
+      // true bhi nahi chalega — wo last valid bpm dobara bhej deta.
+      updateBiometrics(spo2: spo2, stressLevel: stress, hrv: hrv, forward: false);
+      AthleteForegroundService.updateMetrics(
+        heartRate: 0,
+        lat: state.lat,
+        lng: state.lng,
+      );
     }
   }
 
@@ -188,7 +197,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   void _onBackgroundEvent(Map<String, dynamic> data) {
     if (isClosed) return;
     final event = data['event'] as String?;
-    debugPrint('🛑 [SESSION DEBUG] BG event received: $event — isSessionActive=${state.isSessionActive}');
 
     switch (event) {
       case 'activity_task_saved':
@@ -204,7 +212,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
         }
 
       case 'activity_recording_stopped':
-        debugPrint('🛑 [SESSION DEBUG] BG event: activity_recording_stopped — data=$data');
         _stopTimeoutTimer?.cancel();
         _stopTimeoutTimer = null;
         _endSession(stopConfirmed: true);
@@ -213,7 +220,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
         // BG ne pending stop deadline cross hone pe chhod diya (internet bahut
         // der off raha). UI to pehle hi end ho chuka — ab sirf service tear
         // down karo taaki wo hamesha alive na rahe.
-        debugPrint('🛑 [SESSION DEBUG] BG event: activity_stop_abandoned');
         _stopTimeoutTimer?.cancel();
         _stopTimeoutTimer = null;
         _endSession(stopConfirmed: true);
@@ -296,7 +302,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (isClosed) return;
-    debugPrint('🛑 [SESSION DEBUG] lifecycle=$state, isSessionActive=${this.state.isSessionActive}, taskId=${this.state.activeTaskId}');
     switch (state) {
       case AppLifecycleState.paused:
         _onAppPaused();
@@ -349,7 +354,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
     debugPrint('[LIFECYCLE] Resumed — elapsed(from startTime): ${newElapsed}s');
 
     if (targetSeconds > 0 && newElapsed >= targetSeconds) {
-      debugPrint('🛑 [SESSION DEBUG] AUTO-STOP on resume — elapsed($newElapsed) >= target($targetSeconds)');
       if (isClosed) return;
       emit(state.copyWith(elapsedSeconds: targetSeconds));
       if (isClosed) return;
@@ -575,7 +579,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
 
   void startSession() {
     final taskId = state.pendingTaskId;
-    debugPrint('🟢 [SESSION DEBUG] startSession — taskId=$taskId, duration=${state.selectedDuration}min, activity=${state.selectedActivity}');
     if (taskId == null) return;
 
     final session = ActivitySession(
@@ -594,6 +597,10 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       activeTaskId: taskId,
       activeTask: _pendingTask,
       clearPendingTaskId: true,
+      // Pichli session ka stale `true` watchdog/net-listener ko disable kar
+      // deta hai (dono isko dekh ke connect skip karte hain) — fresh session
+      // hamesha disconnected se shuru hoti hai, first task_saved pe true hoga.
+      isSocketConnected: false,
     ));
     _pendingTask = null;
 
@@ -797,6 +804,8 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       activeTaskId: taskId,
       elapsedSeconds: targetMin > 0 ? elapsed.clamp(0, targetMin * 60) : elapsed,
       clearPendingTaskId: true,
+      // Stale connected-flag reset — startSession() jaisa hi (watchdog fix).
+      isSocketConnected: false,
     ));
     // App kill ke baad cold launch — band ka connection toot chuka hai aur
     // disconnect EVENT kabhi nahi aayega (jo normal reconnect loop trigger
@@ -810,21 +819,27 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   void requestStopSession() {
     if (isClosed) return;
     final taskId = state.activeTaskId;
-    debugPrint('🛑 [SESSION DEBUG] requestStopSession called — taskId=$taskId, isSessionActive=${state.isSessionActive}');
-    debugPrint('🛑 [SESSION DEBUG] caller stack: ${StackTrace.current.toString().split('\n').take(5).join(' | ')}');
 
     _timer?.cancel();
     _timer = null;
 
     if (taskId != null) {
       emit(state.copyWith(isStoppingSession: true));
-      // Background ko stop command bhejo
-      AthleteForegroundService.stopActivitySession(taskId);
+      // Background ko stop command bhejo. Token/baseUrl saath bhejte hain —
+      // cold-start (overdue resume-stop) me BG isolate fresh hota hai aur uske
+      // paas _lastToken/_lastBaseUrl nahi hote, jinke bina wo reconnect karke
+      // stop deliver hi nahi kar sakta.
+      final token = _prefs.getString(PrefKeys.userToken) ?? '';
+      final baseUrl = dotenv.env['BASE_URL'] ?? '';
+      AthleteForegroundService.stopActivitySession(
+        taskId,
+        token: token.isNotEmpty ? token : null,
+        baseUrl: baseUrl.isNotEmpty ? baseUrl : null,
+      );
 
       _stopTimeoutTimer?.cancel();
       _stopTimeoutTimer = Timer(const Duration(seconds: 8), () {
         if (!isClosed && state.isStoppingSession) {
-          debugPrint('🛑 [SESSION DEBUG] 8s stop TIMEOUT — ending UI, service alive for BG delivery');
           _endSession(stopConfirmed: false);
         }
       });
@@ -840,8 +855,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
   /// offline) pe UI to end hota hai par service ALIVE rehti hai taaki BG isolate
   /// connectivity wapas aate hi pending stop deliver kar sake (Layer 1).
   void _endSession({bool stopConfirmed = false}) {
-    debugPrint('🛑 [SESSION DEBUG] _endSession called — activeTaskId=${state.activeTaskId}, isSessionActive=${state.isSessionActive}, stopConfirmed=$stopConfirmed');
-    debugPrint('🛑 [SESSION DEBUG] _endSession caller: ${StackTrace.current.toString().split('\n').take(5).join(' | ')}');
     _bleCubit.setSessionActive(false);
     _timer?.cancel();
     _timer = null;
@@ -899,6 +912,7 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       reconnectAttempt: 0,
       isReconnectExhausted: false,
       isSocketReconnecting: false,
+      isSocketConnected: false,
       isAuthFailure: false,
     ));
 
@@ -910,7 +924,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       // aate hi stop deliver karega. Service tab band hogi jab BG
       // 'activity_recording_stopped' (delivered) ya 'activity_stop_abandoned'
       // (deadline cross) bhejega.
-      debugPrint('🛑 [SESSION DEBUG] stop unconfirmed — service alive for BG delivery');
     }
   }
 
@@ -1031,7 +1044,6 @@ class AthleteActivityCubit extends Cubit<AthleteActivityState>
       if (remaining > 0) {
         _autoStopTimer = Timer(Duration(seconds: remaining), () {
           if (!isClosed && state.isSessionActive) {
-            debugPrint('🛑 [SESSION DEBUG] AUTO-STOP timer fired — remaining was ${remaining}s');
             requestStopSession();
           }
         });

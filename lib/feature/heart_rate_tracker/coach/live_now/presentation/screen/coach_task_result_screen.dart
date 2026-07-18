@@ -300,12 +300,42 @@ class _HeartRateHeroCardState extends State<_HeartRateHeroCard> {
     final sorted = [...widget.session.rawData]
       ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
     final anchor = widget.session.startedAt;
-    final spots = sorted
-        .map((p) => FlSpot(
-              p.recordedAt.difference(anchor).inSeconds.toDouble(),
-              p.heartRate.toDouble(),
-            ))
-        .toList();
+    // ~15s buckets me average → smooth curve (dense per-second data warna spiky
+    // dikhti hai). maxBpm/minBpm aur stats raw se aate hain, numbers pe asar nahi.
+    final anchorMs = anchor.millisecondsSinceEpoch;
+    final spots = <FlSpot>[];
+    if (sorted.length < 4) {
+      for (final p in sorted) {
+        spots.add(FlSpot(
+            p.recordedAt.difference(anchor).inSeconds.toDouble(),
+            p.heartRate.toDouble()));
+      }
+    } else {
+      const bucketMs = 15000;
+      int bucketStart = sorted.first.recordedAt.millisecondsSinceEpoch;
+      int firstMs = bucketStart;
+      int lastMs = bucketStart;
+      double sum = 0;
+      int n = 0;
+      for (final p in sorted) {
+        final ms = p.recordedAt.millisecondsSinceEpoch;
+        if (ms - bucketStart >= bucketMs && n > 0) {
+          final midMs = (firstMs + lastMs) ~/ 2;
+          spots.add(FlSpot((midMs - anchorMs) / 1000.0, sum / n));
+          bucketStart = ms;
+          firstMs = ms;
+          sum = 0;
+          n = 0;
+        }
+        sum += p.heartRate;
+        lastMs = ms;
+        n++;
+      }
+      if (n > 0) {
+        final midMs = (firstMs + lastMs) ~/ 2;
+        spots.add(FlSpot((midMs - anchorMs) / 1000.0, sum / n));
+      }
+    }
 
     final bpms = sorted.map((p) => p.heartRate).toList();
     final maxBpm = bpms.reduce(math.max);
@@ -558,11 +588,21 @@ class _HeartRateHeroCardState extends State<_HeartRateHeroCard> {
                             gridData: FlGridData(
                               show: true,
                               drawVerticalLine: true,
-                              horizontalInterval: yInterval,
+                              // Sub-lines: minor har 5, major (har 20) darker.
+                              horizontalInterval: 5,
                               verticalInterval: labelInterval,
-                              getDrawingHorizontalLine: (_) => FlLine(
-                                  color: AppColors.borderLight,
-                                  strokeWidth: 1),
+                              getDrawingHorizontalLine: (value) {
+                                final isMajor =
+                                    (value - yFloor).round() % 20 == 0;
+                                return isMajor
+                                    ? const FlLine(
+                                        color: AppColors.border,
+                                        strokeWidth: 1.2)
+                                    : FlLine(
+                                        color: AppColors.borderLight
+                                            .withValues(alpha: 0.45),
+                                        strokeWidth: 0.5);
+                              },
                               getDrawingVerticalLine: (_) => FlLine(
                                   color: AppColors.borderLight
                                       .withValues(alpha: 0.5),
@@ -620,7 +660,8 @@ class _HeartRateHeroCardState extends State<_HeartRateHeroCard> {
                               LineChartBarData(
                                 spots: spots,
                                 isCurved: true,
-                                curveSmoothness: 0.35,
+                                curveSmoothness: 0.4,
+                                preventCurveOverShooting: true,
                                 color: color,
                                 barWidth: 2.5,
                                 dotData: const FlDotData(show: false),

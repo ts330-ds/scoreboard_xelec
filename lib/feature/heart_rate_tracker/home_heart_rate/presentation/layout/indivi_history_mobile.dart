@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/screen/history_records_screen.dart';
 
 List<Map<dynamic, dynamic>> _dedupeHrData(List<Map<dynamic, dynamic>> data) {
   if (data.isEmpty) return data;
@@ -98,8 +99,36 @@ class _Header extends StatelessWidget {
             ],
           ),
           const Spacer(),
+          _RecordsButton(),
+          const SizedBox(width: 8),
           _SyncButton(isSyncing: state.status.contains('yncing')),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Records screen button ──────────────────────────────────────────────────────
+
+class _RecordsButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () =>
+          Navigator.of(context).push(HistoryRecordsScreen.route(context)),
+      child: Tooltip(
+        message: 'View session records',
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.primaryLight,
+            border: Border.all(color: AppColors.primary.withOpacity(0.35)),
+          ),
+          child: const Icon(Icons.folder_copy_outlined,
+              color: AppColors.primary, size: 18),
+        ),
       ),
     );
   }

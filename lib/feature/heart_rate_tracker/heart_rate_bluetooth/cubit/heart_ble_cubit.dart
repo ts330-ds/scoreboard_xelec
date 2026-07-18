@@ -327,6 +327,33 @@ class HeartBleCubit extends Cubit<HeartBleState> {
             _dumpHistory('HISTORY_HR_RECORD', hrRec);
             emit(state.copyWith(historyHrRecord: hrRec));
             break;
+          case "HISTORY_HR_RECORD_PREVIEW":
+            // Read-only records preview — koi persist/timer/auto-push NAHI.
+            final preview = _toList(value);
+            _dumpHistory('HISTORY_HR_RECORD_PREVIEW', preview);
+            emit(state.copyWith(previewHrRecords: preview));
+            break;
+          case "HISTORY_HR_DATA_PREVIEW":
+            // Read-only single-record data preview — persist/push kuch NAHI.
+            final previewData = _toList(value);
+            _dumpHistory('HISTORY_HR_DATA_PREVIEW', previewData);
+            emit(state.copyWith(previewHrRecordData: previewData));
+            break;
+          case "HEART_RATE_STATUS":
+            // DIAGNOSTIC: band ki current auto-HR-monitoring config. debugPrint se
+            // FileLogger/console dono me dikhega + state me store (UI pe dikhane ke liye).
+            final m = value as Map<dynamic, dynamic>;
+            final st = (m['status'] as num?)?.toInt() ?? -1;
+            final iv = (m['interval'] as num?)?.toInt() ?? -1;
+            final du = (m['duration'] as num?)?.toInt() ?? -1;
+            debugPrint('[HR-STATUS] status=$st interval=$iv duration=$du '
+                '(0=OFF/1=ON — OFF matlab band standalone HR log nahi karta)');
+            emit(state.copyWith(
+              hrMonitorStatus: st,
+              hrMonitorInterval: iv,
+              hrMonitorDuration: du,
+            ));
+            break;
           case "HISTORY_HR_DATA_CHUNK":
             _resetSyncSafetyTimerIfSyncing();
             final chunk = _toList(value);
@@ -917,24 +944,84 @@ class HeartBleCubit extends Cubit<HeartBleState> {
   /// Smart sync — fetches only data newer than the last successful push.
   /// Falls back to full sync if no watermark exists (first time).
   /// Unlike syncHistoryRange, this does NOT skip auto-push.
+  /// DIAGNOSTIC: band ki auto-HR-monitoring config SET karo. status 1=ON/0=OFF.
+  /// Reply (agar aaye) HEART_RATE_STATUS event me → state update ho jaayega.
+  Future<void> setHeartRateStatus({
+    int status = 1,
+    int interval = 1,
+    int duration = 1,
+  }) async {
+    try {
+      await _methodChannel.invokeMethod('setHeartRateStatus', {
+        'status': status,
+        'interval': interval,
+        'duration': duration,
+      });
+    } on PlatformException catch (e) {
+      debugPrint('[HR-STATUS] set failed: ${e.message}');
+    }
+  }
+
+  /// DIAGNOSTIC: band se current auto-HR-monitoring config maango. Result
+  /// `[HR-STATUS]` log me aata hai (native logcat + FileLogger/console). On-connect
+  /// auto bhi chalta hai; ye manual re-check ke liye hai.
+  Future<void> getHeartRateStatus() async {
+    try {
+      await _methodChannel.invokeMethod('getHeartRateStatus');
+    } on PlatformException catch (e) {
+      debugPrint('[HR-STATUS] request failed: ${e.message}');
+    }
+  }
+
+  /// READ-ONLY records preview. Fetches ONLY the HR record headers (see
+  /// [HistoryRecordsScreen]) — no per-record data, no SQLite persist, no server
+  /// push. Result lands in `state.previewHrRecords`.
+  Future<void> previewHrRecords() async {
+    try {
+      await _methodChannel.invokeMethod('previewHrRecords');
+    } on PlatformException catch (e) {
+      if (e.code == 'NOT_CONNECTED') {
+        emit(state.copyWith(status: "Not connected — connect a device first"));
+      } else {
+        emit(state.copyWith(status: "Records preview failed: ${e.message}"));
+      }
+    }
+  }
+
+  /// READ-ONLY single-record data preview. Fetches ONE record's readings by its
+  /// session-start [stamp] into `state.previewHrRecordData`. Clears the previous
+  /// preview first so the detail screen never shows stale data. No persist/push.
+  Future<void> previewHrRecordData(int stamp) async {
+    emit(state.copyWith(previewHrRecordData: const []));
+    try {
+      await _methodChannel
+          .invokeMethod('previewHrRecordData', {'stamp': stamp});
+    } on PlatformException catch (e) {
+      if (e.code == 'NOT_CONNECTED') {
+        emit(state.copyWith(status: "Not connected — connect a device first"));
+      } else {
+        emit(state.copyWith(status: "Record data preview failed: ${e.message}"));
+      }
+    }
+  }
+
   Future<void> syncNewFromDevice() async {
     if (_sessionActive) {
       debugPrint('[BLE] syncNewFromDevice skipped — activity session active');
       return;
     }
     try {
-      // Server watermark is the source of truth — refresh local first (this
-      // also advances the delta cursor), then decide the range from it.
+      // Server watermark refresh — UI ke "last reached" display ke liye. Fetch
+      // ki range ab watermark se NAHI, balki aaj ki shुरुआत (local midnight) se
+      // leke abhi tak. Isse din bhar ka poora data (late-commit / split records
+      // bhi) dobara device se aata hai aur watermark-se-neeche wale gaps — jo
+      // pehle permanently miss ho jaate the — bhar jaate hain. Server timestamp
+      // pe dedup karta hai, isliye dobara aana safe hai.
       await refreshServerWatermark();
-      final wm = await HistoryWatermarkStore.create();
-      final lastStamp = wm.lastHrStamp;
-      final toMs = DateTime.now().millisecondsSinceEpoch;
-      final int fromMs;
-      if (lastStamp > 0) {
-        fromMs = lastStamp > 9999999999 ? lastStamp : lastStamp * 1000;
-      } else {
-        fromMs = DateTime.now().subtract(const Duration(days: 30)).millisecondsSinceEpoch;
-      }
+      final now = DateTime.now();
+      final toMs = now.millisecondsSinceEpoch;
+      final fromMs =
+          DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
       await _methodChannel.invokeMethod('syncHistoryRange', {
         'fromMs': fromMs,
         'toMs': toMs,
@@ -1171,32 +1258,34 @@ class HeartBleCubit extends Cubit<HeartBleState> {
         return;
       }
 
-      // syncNewFromDevice() ne already fresh server watermark fetch karke local
-      // mein save kiya hai — dobara API call ki zaroorat nahi. Sirf local use karo.
       int stampMs(int s) => s > 9999999999 ? s : s * 1000;
-      // Watermark bhi normalize karo — purane state mein seconds mein store ho
-      // sakta hai; bina normalize kiye ms-reading vs seconds-watermark compare
-      // se har reading pass ho jaati thi (duplicate push).
-      final watermark = stampMs(wm.lastHrStamp);
+      // Day-scoped push: watermark ke bajaye aaj ki shुरुआत (local midnight) se
+      // filter karo. Server timestamp pe dedup karta hai, isliye already-saved
+      // readings dobara bhejna safe hai — aur watermark-se-neeche wale
+      // late/backfilled gaps is baar bhar jaate hain (jo pehle permanently miss
+      // ho jaate the). Watermark ab sirf UI ke "last reached" display ke liye.
+      final now = DateTime.now();
+      final startOfDayMs =
+          DateTime(now.year, now.month, now.day).millisecondsSinceEpoch;
 
       final hive = await _historyRepo.hydrate();
 
       final hrFiltered = hive.hr.where((r) {
         final s = (r['stamp'] as num?)?.toInt() ?? 0;
         if (s <= 0) return false;
-        return stampMs(s) > watermark;
+        return stampMs(s) >= startOfDayMs;
       }).toList();
 
       final rrFiltered = hive.rr.where((r) {
         final s = (r['stamp'] as num?)?.toInt() ?? 0;
         if (s <= 0) return false;
-        return stampMs(s) > watermark;
+        return stampMs(s) >= startOfDayMs;
       }).toList();
 
       final sleepFiltered = hive.sleep.where((r) {
         final u = (r['utc'] as num?)?.toInt() ?? 0;
         if (u <= 0) return false;
-        return stampMs(u) > watermark;
+        return stampMs(u) >= startOfDayMs;
       }).toList();
 
       if (hrFiltered.isEmpty &&

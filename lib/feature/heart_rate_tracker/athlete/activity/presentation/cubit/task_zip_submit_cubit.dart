@@ -32,12 +32,32 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
   // ~10s lagte hain (log evidence: stop 11:40:29, record commit 11:40:39 —
   // fetch 6 sec se race haar ke 0 readings laayi thi). Isliye pehli fetch se
   // pehle chhota delay, aur khaali/bahut-kam data aane par bounded re-fetch.
+  // Close-aware re-fetch: band ka record commit (~30s tak / next data-request
+  // pe) hone tak fetch se poora data nahi milta. Vendor confirm: data maangna
+  // hi record close ka trigger hai — isliye har fetch band ko commit ke kareeb
+  // dhakelta hai, aur agla fetch aksar closed record ka pura data laata hai.
+  // Blind-timer ke bajaye record-list se decide karte hain (dekho _onFetchComplete).
+  // Max 3 fetch tries — pehli fetch + 2 re-fetch. Isse zyada try karne se sirf
+  // user ka time jaata hai; agar band 3 fetch-cycle me record commit nahi karta
+  // to wo turant nahi hoga, isliye ruk ke user ko "wapas aakar dobara flush"
+  // ka mauka dete hain.
   static const _maxFetchAttempts = 3;
   static const _initialFetchDelay = Duration(seconds: 5);
-  static const _fetchRetryDelay = Duration(seconds: 10);
-  // ~1 reading/sec aati hai — expected ke 10% se kam matlab record abhi
-  // adhoora hai (close nahi hua), poora data nahi mila.
-  static const _minDataFraction = 0.10;
+  // Escalating backoff — re-fetch ke beech wait. 3 attempts pe window ~5+10=15s
+  // (+ fetch durations). Extra entries (>attempts) safe hain — clamp use hota hai.
+  static const _fetchRetryDelays = [
+    Duration(seconds: 5),
+    Duration(seconds: 10),
+    Duration(seconds: 15),
+    Duration(seconds: 20),
+    Duration(seconds: 30),
+  ];
+  // ~1 reading/sec aati hai. Session ka data tab hi "poora" maana jaata hai jab
+  // expected readings ka >=95% mil jaaye. Isse kam = record abhi band ke andar
+  // commit ho raha hai (tail missing) — server pe partial NAHI bhejte; user ko
+  // wapas aakar dobara flush karne ko kehte hain. (Pehle 10% tha jo 20+ min ka
+  // tail-gap bhi "complete" maan ke partial upload kar deta tha.)
+  static const _minDataFraction = 0.90;
   int _fetchAttempt = 0;
 
   // Concurrency guard — har naya flow (submit/retry) generation badhata hai,
@@ -76,7 +96,8 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
     // adhoora milta hai (feedback form ka time + ye delay usually kaafi).
     emit(state.copyWith(
       status: TaskZipStatus.fetching,
-      message: 'Waiting for device to finalize session data...',
+      message: 'Attempt 1 of $_maxFetchAttempts • Waiting for the watch to '
+          'finalize this recording...',
       clearError: true,
     ));
     await Future.delayed(_initialFetchDelay);
@@ -100,7 +121,8 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
   }) {
     emit(state.copyWith(
       status: TaskZipStatus.fetching,
-      message: 'Fetching data from device...',
+      message: 'Attempt $_fetchAttempt of $_maxFetchAttempts • Fetching session '
+          'data from your watch...',
       clearError: true,
     ));
 
@@ -111,7 +133,10 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
         return;
       }
       if (fetchState.status == FetchRangeStatus.syncing) {
-        emit(state.copyWith(message: fetchState.message));
+        emit(state.copyWith(
+          message: 'Attempt $_fetchAttempt of $_maxFetchAttempts • '
+              '${fetchState.message}',
+        ));
       } else if (fetchState.status == FetchRangeStatus.complete) {
         _fetchSub?.cancel();
         _onFetchComplete(
@@ -120,6 +145,7 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
           sessionStartMs: sessionStart.millisecondsSinceEpoch,
           sessionEndMs: sessionEnd.millisecondsSinceEpoch,
           hrData: fetchState.hrData,
+          recordMaxStampSec: fetchState.recordMaxStampSec,
         ).catchError((e) {
           if (!_isStale(gen)) {
             emit(state.copyWith(
@@ -192,6 +218,7 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
     required int sessionStartMs,
     required int sessionEndMs,
     required List<Map<dynamic, dynamic>> hrData,
+    required int recordMaxStampSec,
   }) async {
     // Fetch cubit pehle hi session range (±30s drift) pe filter kar chuka hai.
     // Ise health-history me NAHI — session staging table me rakhte hain, taaki
@@ -201,28 +228,38 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
     final readings = await SessionReadingsStore.instance.readForTask(taskId);
     if (_isStale(gen)) return;
 
-    // Band ~1 reading/sec deta hai. Expected ke 10% se kam mila to band ne
-    // shayad in-flight record abhi close nahi kiya (close hone me stop ke
-    // baad ~10s lagte hain) — thoda ruk ke dobara fetch karo, max 3 attempts.
-    // Staging (task_id, stamp) PK pe upsert hai, isliye re-fetch pe duplicate
-    // readings nahi banti.
+    // Band ~1 reading/sec deta hai. Expected ke 10% se kam = adhoora data.
     final expectedSeconds = ((sessionEndMs - sessionStartMs) / 1000).round();
     final minReadings =
         expectedSeconds > 0 ? (expectedSeconds * _minDataFraction).ceil() : 1;
     final incomplete = readings.length < minReadings;
 
-    if (incomplete && _fetchAttempt < _maxFetchAttempts) {
+    // ── Close-aware signal ──────────────────────────────────────────────────
+    // Agar record-list me session ke END ke baad shuru hone wala koi record
+    // maujood hai, to session ka record commit ho chuka (band ne uske baad naya
+    // record khol diya) — matlab jitna data mila wahi final hai, retry se aur
+    // nahi aayega. Agar aisa koi record NAHI, to session ka record abhi OPEN ho
+    // sakta hai — tab retry sarthak hai (har fetch band ko commit ka nudge deta
+    // hai, agla fetch closed record ka data laata hai). recordMaxStampSec 0 ho
+    // (record info hi na mile) to conservatively "open" maano.
+    final sessionEndSec = (sessionEndMs / 1000).round();
+    final recordClosed =
+        recordMaxStampSec > 0 && recordMaxStampSec > sessionEndSec;
+
+    // Adhoora data + record shayad abhi open + attempts bache → ruk ke re-fetch.
+    if (incomplete && !recordClosed && _fetchAttempt < _maxFetchAttempts) {
+      final delay = _fetchRetryDelays[
+          (_fetchAttempt - 1).clamp(0, _fetchRetryDelays.length - 1)];
       _fetchAttempt++;
-      debugPrint('[TASK-ZIP] Incomplete data for task $taskId — '
-          '${readings.length}/$expectedSeconds expected readings. '
-          'Re-fetch attempt $_fetchAttempt/$_maxFetchAttempts '
-          'in ${_fetchRetryDelay.inSeconds}s');
+      debugPrint('[TASK-ZIP] Incomplete (${readings.length}/$expectedSeconds), '
+          'record still open — re-fetch $_fetchAttempt/$_maxFetchAttempts '
+          'in ${delay.inSeconds}s');
       emit(state.copyWith(
         status: TaskZipStatus.fetching,
-        message: 'Device is still finalizing session data — '
-            'retrying ($_fetchAttempt/$_maxFetchAttempts)...',
+        message: 'The watch is still saving this recording — retrying '
+            '(Attempt $_fetchAttempt of $_maxFetchAttempts)...',
       ));
-      await Future.delayed(_fetchRetryDelay);
+      await Future.delayed(delay);
       if (_isStale(gen)) return;
       _startFetch(
         gen: gen,
@@ -234,24 +271,49 @@ class TaskZipSubmitCubit extends Cubit<TaskZipSubmitState> {
     }
 
     if (readings.isEmpty) {
-      debugPrint('[TASK-ZIP] No readings found for task $taskId '
-          '(range: $sessionStartMs – $sessionEndMs) '
-          'after $_fetchAttempt fetch attempts');
+      debugPrint('[TASK-ZIP] No readings for task $taskId after $_fetchAttempt '
+          'attempts (recordClosed=$recordClosed, range: $sessionStartMs–$sessionEndMs)');
       emit(state.copyWith(
         status: TaskZipStatus.error,
-        errorMessage: 'No heart rate readings found for this session. '
-            'Make sure your device was worn during the session.',
+        // Record abhi open ho sakta hai — user ko Retry pe guide karo (band ko
+        // finalize hone ka mauka). Ye wahi "Upload Session" fallback trigger karega.
+        errorMessage: 'No heart rate readings found yet. If you were wearing '
+            'the device, wait a moment and tap Retry — the band may still be '
+            'finalizing this recording.',
         message: 'No readings',
         totalReadings: 0,
       ));
       return;
     }
 
+    // ── 95% completeness gate ────────────────────────────────────────────────
+    // Data adhoora + record abhi OPEN (band ne session-end ke baad naya record
+    // nahi khola) → matlab band abhi tail commit kar raha hai. Server pe partial
+    // MAT bhejo. User ko rok ke bolo: thodi der baad wapas aakar Retry (flush)
+    // dabayein — tab tak band record close kar dega aur agli flush pura data
+    // laayegi. (Retry button retryUpload → device se fresh fetch karta hai.)
+    if (incomplete && !recordClosed) {
+      debugPrint('[TASK-ZIP] Incomplete (${readings.length}/$expectedSeconds, '
+          'record still open) after $_fetchAttempt attempts — asking user to re-flush');
+      emit(state.copyWith(
+        status: TaskZipStatus.error,
+        errorMessage: 'The recording is still open on your watch and hasn\'t '
+            'finished saving yet — this can take some time to complete. '
+            'Got ${readings.length} of ~$expectedSeconds readings so far. '
+            'Please keep the band nearby, wait a moment, then tap Retry.',
+        message: 'Recording still open on watch',
+        totalReadings: readings.length,
+      ));
+      return;
+    }
+
     if (incomplete) {
-      // 3 attempts ke baad bhi kam data — band ke paas shayad itna hi hai
-      // (e.g. band aadhi session hi pehna tha). Jo mila wahi upload karo.
-      debugPrint('[TASK-ZIP] Still low data after $_fetchAttempt attempts '
-          '(${readings.length}/$expectedSeconds) — uploading what we have');
+      // recordClosed == true → band ne session-end ke baad naya record khol diya,
+      // matlab is session ka record FINAL hai; band ke paas itna hi data hai
+      // (aadhi session pehni / beech me utaari). Re-flush se aur nahi aayega,
+      // isliye jo mila wahi upload karo — warna user hamesha atka rahega.
+      debugPrint('[TASK-ZIP] Uploading final partial (${readings.length}/'
+          '$expectedSeconds, record closed) after $_fetchAttempt attempts');
     }
 
     final mapped = _mapReadingsForApi(readings);

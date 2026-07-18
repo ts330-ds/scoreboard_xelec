@@ -168,8 +168,27 @@ class BleFetchRangeCubit extends Cubit<BleFetchRangeState> {
       return stampMs >= fromMs && stampMs <= toMs;
     }).toList();
 
+    // Close-aware signal: newest history record ka start-stamp nikaalo aur UTC
+    // me normalize karke expose karo. Device record HEADERS local-time (jaise
+    // IST, +5:30) me aate hain — isliye phone ke tz-offset se UTC me laate hain
+    // taaki caller ise UTC session-end se compare kar sake. (Ye sirf comparison
+    // ke liye hai; stored/upload hone wale DATA stamps ko chhua nahi jaata —
+    // wo already UTC hain.)
+    int recordMaxStampSec = 0;
+    final records = _bleCubit.state.historyHrRecord;
+    if (records.isNotEmpty) {
+      final tzSec = DateTime.now().timeZoneOffset.inSeconds;
+      for (final r in records) {
+        final raw = (r['stamp'] as num?)?.toInt() ?? 0;
+        if (raw <= 0) continue;
+        final rawSec = raw > 9999999999 ? raw ~/ 1000 : raw;
+        final utcSec = rawSec - tzSec;
+        if (utcSec > recordMaxStampSec) recordMaxStampSec = utcSec;
+      }
+    }
+
     debugPrint(
-        '[FETCH-RANGE] done — HR: ${hrFiltered.length}, RR: ${rrFiltered.length}, timeout: $timedOut');
+        '[FETCH-RANGE] done — HR: ${hrFiltered.length}, RR: ${rrFiltered.length}, timeout: $timedOut, recordMaxUtc: $recordMaxStampSec');
 
     emit(BleFetchRangeState(
       status: FetchRangeStatus.complete,
@@ -177,6 +196,7 @@ class BleFetchRangeCubit extends Cubit<BleFetchRangeState> {
       rrData: rrFiltered,
       hrCount: hrFiltered.length,
       rrCount: rrFiltered.length,
+      recordMaxStampSec: recordMaxStampSec,
       message: timedOut
           ? 'Timeout! HR: ${hrFiltered.length}, RR: ${rrFiltered.length}'
           : 'Done! HR: ${hrFiltered.length}, RR: ${rrFiltered.length}',

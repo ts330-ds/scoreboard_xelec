@@ -134,34 +134,48 @@ class AthleteBackgroundHandler extends TaskHandler {
   // Har command ek Map hai jisme 'cmd' key hoti hai.
   @override
   void onReceiveData(Object data) {
-    if (data is! Map<String, dynamic>) return;
-    final cmd = data['cmd'] as String?;
+    // Cross-isolate map kabhi-kabhi Map<Object?, Object?> ke roop me aata hai —
+    // strict Map<String, dynamic> check use silently drop kar deta tha (main-
+    // side _onDataFromBackground me yahi lesson pehle seekha ja chuka hai).
+    if (data is! Map) return;
+    final map = Map<String, dynamic>.from(data);
+    final cmd = map['cmd'] as String?;
     debugPrint('[BG HANDLER] received cmd: $cmd');
 
     switch (cmd) {
       case 'start_activity':
         _startActivity(
-          data['token'] as String,
-          data['base_url'] as String,
-          data['task_id'] as int,
+          map['token'] as String,
+          map['base_url'] as String,
+          (map['task_id'] as num).toInt(),
         );
       case 'stop_activity':
-        _handleStopActivity(data['task_id'] as int?);
+        _handleStopActivity(
+          (map['task_id'] as num?)?.toInt(),
+          token: map['token'] as String?,
+          baseUrl: map['base_url'] as String?,
+        );
       case 'update_metrics':
         // Main isolate se BLE data aata hai — yahan store karo
-        _heartRate = (data['hr'] as num?)?.toInt() ?? 0;
-        _spo2 = (data['spo2'] as num?)?.toDouble();
-        _stressLevel = (data['stress'] as num?)?.toInt();
-        _hrv = (data['hrv'] as num?)?.toDouble();
-        _lat = (data['lat'] as num?)?.toDouble();
-        _lng = (data['lng'] as num?)?.toDouble();
+        _heartRate = (map['hr'] as num?)?.toInt() ?? 0;
+        _spo2 = (map['spo2'] as num?)?.toDouble();
+        _stressLevel = (map['stress'] as num?)?.toInt();
+        _hrv = (map['hrv'] as num?)?.toDouble();
+        _lat = (map['lat'] as num?)?.toDouble();
+        _lng = (map['lng'] as num?)?.toDouble();
     }
   }
 
-  void _handleStopActivity(int? taskId) {
+  void _handleStopActivity(int? taskId, {String? token, String? baseUrl}) {
     _reconnectTimer?.cancel();
     _reconnectAttempt = 0;
     _activeTaskId = null;
+
+    // Cold-start stop (app-kill ke baad overdue resume-stop): fresh isolate ke
+    // paas creds nahi hote — command ke saath aaye ho to store karo, warna
+    // reconnect/delivery kabhi ho hi nahi sakti thi.
+    if (token != null) _lastToken = token;
+    if (baseUrl != null) _lastBaseUrl = baseUrl;
 
     if (taskId == null) return;
 
@@ -169,23 +183,25 @@ class AthleteBackgroundHandler extends TaskHandler {
     _pendingStopDeadline = DateTime.now().add(_pendingStopMaxDuration);
     _stopRetryCount = 0;
 
-    if (_taskSocket.isConnected) {
-      _taskSocket.stopTask(taskId);
-    } else {
-      _attemptStopDelivery();
-    }
+    // Connected ho ya na ho — hamesha delivery loop se jao. Pehle connected-
+    // case single-shot emit tha: ack kho jaaye to koi retry nahi, service
+    // zombie + task in_progress atka rehta tha.
+    _attemptStopDelivery();
   }
 
   int _stopRetryCount = 0;
 
+  // Retry-until-ack: stop tab tak re-send hota hai jab tak server
+  // `recording_stopped` na bhej de (onRecordingStopped sab clear karta hai)
+  // ya deadline cross ho jaye (abandon).
   void _attemptStopDelivery() {
-    if (_pendingStopTaskId == null) return;
-    final token = _lastToken;
-    final baseUrl = _lastBaseUrl;
-    if (token == null || baseUrl == null) return;
+    final taskId = _pendingStopTaskId;
+    if (taskId == null) return;
 
     // Deadline cross — itni der internet off raha ki ab give-up karo.
     // Main isolate ko batao taaki wo foreground service tear down kar de.
+    // (Ye check creds-check se PEHLE — token na ho tab bhi abandon fire ho,
+    // warna service hamesha ke liye zinda rehti.)
     if (_pendingStopDeadline != null &&
         DateTime.now().isAfter(_pendingStopDeadline!)) {
       debugPrint('[BG HANDLER] pending stop deadline exceeded — abandoning delivery');
@@ -193,7 +209,17 @@ class AthleteBackgroundHandler extends TaskHandler {
       return;
     }
 
-    if (!_taskSocket.isConnected) _taskSocket.connect(baseUrl, token);
+    if (_taskSocket.isConnected) {
+      // Re-send safe hai — server ack aate hi onRecordingStopped loop band
+      // kar deta hai; duplicate stop server pe idempotent no-op hai.
+      _taskSocket.stopTask(taskId);
+    } else {
+      final token = _lastToken;
+      final baseUrl = _lastBaseUrl;
+      if (token != null && baseUrl != null) {
+        _taskSocket.connect(baseUrl, token);
+      }
+    }
 
     // Backoff fallback retry — connectivity listener bhi parallel mein turant
     // try karega jab net wapas aaye.
@@ -228,8 +254,15 @@ class AthleteBackgroundHandler extends TaskHandler {
       if (token == null || baseUrl == null) return;
       debugPrint('[BG HANDLER] connectivity restored — immediate reconnect');
       _reconnectTimer?.cancel();
-      _stopDeliveryTimer?.cancel();
-      _taskSocket.connect(baseUrl, token);
+      if (_pendingStopTaskId != null) {
+        // Delivery-loop se jao (connect + agla retry schedule) — seedha
+        // connect karne se retry timer mar jaata tha aur ack kho jaane par
+        // koi dobara koshish nahi hoti thi.
+        _stopDeliveryTimer?.cancel();
+        _attemptStopDelivery();
+      } else {
+        _taskSocket.connect(baseUrl, token);
+      }
     });
   }
 
@@ -293,8 +326,10 @@ class AthleteBackgroundHandler extends TaskHandler {
       final pendingStop = _pendingStopTaskId;
       if (pendingStop != null) {
         debugPrint('[BG HANDLER] delivering pending stop for task $pendingStop');
-        _pendingStopTaskId = null;
-        _stopDeliveryTimer?.cancel();
+        // Pending stop yahan clear NAHI hota — sirf server ack
+        // (onRecordingStopped) pe. Emit ke turant baad socket gir jaaye to
+        // stop hamesha ke liye kho jaata tha (task in_progress atka + service
+        // zombie). Retry timer chalta rehta hai jab tak ack/abandon na ho.
         _taskSocket.stopTask(pendingStop);
       }
 

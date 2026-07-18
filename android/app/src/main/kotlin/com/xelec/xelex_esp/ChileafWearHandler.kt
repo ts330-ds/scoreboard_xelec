@@ -88,6 +88,13 @@ class ChileafWearHandler(
     // instead of applying the rangeFromSec/rangeToSec filter. Reset after use.
     @Volatile private var latestSessionOnly: Boolean = false
 
+    // READ-ONLY preview flags (records-inspection screen). When set, the NEXT
+    // matching callback just ships raw data to Flutter and returns — no filter,
+    // no per-record data fetch, no accumulate/queue, no persist, no
+    // SYNC_COMPLETE, no auto-push. Reset after use.
+    @Volatile private var recordsPreviewOnly: Boolean = false      // HR record headers
+    @Volatile private var recordDataPreviewOnly: Boolean = false   // one record's readings
+
     // When true, record callbacks skip the stampInRange filter and fetch ALL
     // records' data. Data-level filter (in HR/RR data callbacks) still applies
     // rangeFromSec/rangeToSec. Used by syncHistoryRange() because a record's
@@ -655,6 +662,66 @@ class ChileafWearHandler(
         }
     }
 
+    /**
+     * READ-ONLY records preview. Requests just the HR record HEADERS and ships
+     * them straight to Flutter (HISTORY_HR_RECORD_PREVIEW) — no data fetch, no
+     * persist, no SYNC_COMPLETE / auto-push. For inspecting device records only.
+     */
+    fun previewHrRecords() {
+        recordsPreviewOnly = true
+        Log.d(TAG, ">>> previewHrRecords() — read-only, no data fetch / no push")
+        try {
+            wearManager.getHistoryOfHRRecord()
+        } catch (e: Exception) {
+            recordsPreviewOnly = false
+            Log.w(TAG, "previewHrRecords getHistoryOfHRRecord: ${e.message}")
+        }
+    }
+
+    /**
+     * READ-ONLY single-record data preview. Fetches ONE record's HR readings
+     * (by session-start [stamp]) and ships them to Flutter
+     * (HISTORY_HR_DATA_PREVIEW) — no filter, no accumulate/queue, no persist,
+     * no SYNC_COMPLETE, no push. Pairs with [previewHrRecords].
+     */
+    fun previewHrRecordData(stamp: Long) {
+        recordDataPreviewOnly = true
+        Log.d(TAG, ">>> previewHrRecordData(stamp=$stamp) — read-only")
+        mainHandler.post {
+            try {
+                wearManager.getHistoryOfHRData(stamp)
+            } catch (e: Exception) {
+                recordDataPreviewOnly = false
+                Log.w(TAG, "previewHrRecordData getHistoryOfHRData: ${e.message}")
+                sendToFlutter("HISTORY_HR_DATA_PREVIEW", emptyList<Any>())
+            }
+        }
+    }
+
+    /**
+     * DIAGNOSTIC: band se current HR-monitoring config maango. Response
+     * addHeartRateStatusCallback ([HR-STATUS] log + HEART_RATE_STATUS event) me
+     * aayega. On-connect auto bhi call hota hai; ye manual re-check ke liye hai.
+     */
+    fun requestHeartRateStatus() {
+        try {
+            wearManager.getHeartRateStatus()
+            Log.d(TAG, "[HR-STATUS] getHeartRateStatus() requested (manual)")
+        } catch (e: Exception) { Log.w(TAG, "getHeartRateStatus: ${e.message}") }
+    }
+
+    /**
+     * DIAGNOSTIC: band ki auto-HR-monitoring config SET karo (command 70).
+     * status 1=ON/0=OFF, interval/duration single-byte. Reply (agar aaye) ->
+     * addHeartRateStatusCallback ([HR-STATUS] log + HEART_RATE_STATUS event).
+     */
+    fun setHeartRateStatus(status: Int, interval: Int, duration: Int) {
+        try {
+            wearManager.setHeartRateStatus(status, interval, duration)
+            Log.d(TAG, "[HR-STATUS] setHeartRateStatus(status=$status interval=$interval duration=$duration) sent")
+        } catch (e: Exception) { Log.w(TAG, "setHeartRateStatus: ${e.message}") }
+    }
+
     /** Single-record lookup by timestamp */
     fun syncHistorySingleRecord(stamp: Long) {
         try { wearManager.getHistoryOfSingleRecord(stamp) } catch (e: Exception) {
@@ -747,6 +814,18 @@ class ChileafWearHandler(
                 } catch (e: SecurityException) { /* name needs BLUETOOTH_CONNECT */ }
                 startRssiPolling()
                 try { wearManager.setUTCTime() } catch (e: Exception) { Log.w(TAG, "setUTCTime: ${e.message}") }
+
+                // ── DIAGNOSTIC: band ki current HR-monitoring config maango.
+                // Response addHeartRateStatusCallback me aayega — wahan [HR-STATUS]
+                // log dekho. status=0 ya bada interval = band standalone HR log
+                // nahi kar raha → disconnected session me history khaali → upload fail.
+                // Thoda delay taaki setUTCTime/other commands se BLE queue clash na ho.
+                mainHandler.postDelayed({
+                    try {
+                        wearManager.getHeartRateStatus()
+                        Log.d(TAG, "[HR-STATUS] getHeartRateStatus() requested")
+                    } catch (e: Exception) { Log.w(TAG, "getHeartRateStatus: ${e.message}") }
+                }, 1200L)
 
                 // ── TEST (temporary): PPG raw stream enable karne ki koshish.
                 // PPG callback register hai par device ko kabhi START nahi bola
@@ -944,7 +1023,11 @@ class ChileafWearHandler(
 
         // ── Heart Rate Status ─────────────────────────────────────────────────
         wearManager.addHeartRateStatusCallback { device, status, interval, duration ->
-            // Log.d(TAG, "[CB] HR Status: status=$status interval=$interval duration=$duration")
+            // DIAGNOSTIC: band ki current HR-monitoring config. status=0 → auto HR
+            // monitoring OFF (standalone recording nahi hoga). interval/duration ka
+            // scale bhi yahin se pata chalega (setHeartRateStatus set karne se pehle).
+            Log.d(TAG, "[HR-STATUS] status=$status  interval=$interval  duration=$duration  " +
+                    "(status 0=OFF/1=ON — OFF matlab band standalone HR log nahi karta)")
             val map = HashMap<String, Int>()
             map["status"] = status
             map["interval"] = interval
@@ -1101,6 +1184,20 @@ class ChileafWearHandler(
 
         // ── History: HR Record (auto-chains to fetch HR data) ─────────────────
         wearManager.addHistoryOfHRRecordCallback { device, list ->
+            // READ-ONLY preview: raw headers bhejo aur ruk jao. Koi data fetch /
+            // persist / SYNC_COMPLETE / auto-push nahi.
+            if (recordsPreviewOnly) {
+                recordsPreviewOnly = false
+                val preview = list.map { item ->
+                    val m = HashMap<String, Any>()
+                    m["stamp"] = item.stamp
+                    m["record"] = item.record
+                    m
+                }
+                Log.d(TAG, "[HR-RECORD-PREVIEW] total=${list.size}")
+                sendToFlutter("HISTORY_HR_RECORD_PREVIEW", preview)
+                return@addHistoryOfHRRecordCallback
+            }
             // Record callback aa gaya — fallback timeout cancel karo (ab data
             // fetch chain hi completion handle karegi).
             hrRecordFired = true
@@ -1150,19 +1247,49 @@ class ChileafWearHandler(
 
         // ── History: HR Data — filter + stream each chunk to Flutter ─────────
         wearManager.addHistoryOfHRDataCallback { device, list ->
+            // READ-ONLY single-record preview: is record ki saari readings jaisi
+            // hain waisi bhejo aur ruk jao — koi filter/accumulate/persist/push nahi.
+            if (recordDataPreviewOnly) {
+                recordDataPreviewOnly = false
+                val preview = list.map { item ->
+                    val m = HashMap<String, Any>()
+                    m["stamp"] = item.stamp
+                    m["heartRate"] = item.heartRate
+                    m
+                }
+                Log.d(TAG, "[HR-DATA-PREVIEW] readings=${list.size}")
+                sendToFlutter("HISTORY_HR_DATA_PREVIEW", preview)
+                return@addHistoryOfHRDataCallback
+            }
+            // ╔══ SDK STAMP-FRAME FIX (revert: is block ko purane raw/chunk se badlo) ══╗
+            // Kuch records (aksar bade/continuous) ke liye SDK per-reading stamp ko
+            // ABSOLUTE epoch ke bajaye record-header ke RELATIVE (chhota/negative,
+            // e.g. -19779000) deta hai. Aise readings range filter se 100% gir jaate
+            // the (filtered=0 → task upload khaali). Fix: relative stamps ko us record
+            // ke baked header stamp (jo humne fetch kiya = hrFetchQueue[hrFetchIndex])
+            // se absolute banao. Normal absolute stamps jyon-ke-tyon rehte hain.
+            val fetchStampSec = synchronized(hrDataLock) {
+                if (hrFetchIndex < hrFetchQueue.size) hrFetchQueue[hrFetchIndex] else 0L
+            }
+            // raw stamp → true absolute ms. Threshold: absolute-ms ~1.78e12 (>1e11);
+            // absolute-sec ~1.78e9 (>1e9); baaki sab (chhota/negative) = relative-ms.
+            fun toTrueMs(s: Long): Long = when {
+                s > 100_000_000_000L -> s                        // absolute ms — as-is
+                s > 1_000_000_000L   -> s * 1000L                // absolute sec → ms
+                else                 -> s + fetchStampSec * 1000L // relative ms → absolute ms
+            }
             val raw = list.map { item ->
                 val m = HashMap<String, Any>()
-                m["stamp"] = item.stamp
+                m["stamp"] = toTrueMs(item.stamp)
                 m["heartRate"] = item.heartRate
                 m
             }
             // ★ Data-level filter: drop readings whose stamp falls outside range
-            // Stamps can be seconds or milliseconds — normalize to seconds
             val chunk = raw.filter { m ->
-                val s = (m["stamp"] as? Number)?.toLong() ?: 0L
-                val sSec = if (s > 9999999999L) s / 1000L else s
+                val sSec = (m["stamp"] as Number).toLong() / 1000L
                 sSec in rangeFromSec..rangeToSec
             }
+            // ╚══════════════════════════════════════════════════════════════════════╝
             Log.d(TAG, "[HR-DATA] raw=${raw.size} filtered=${chunk.size} range=$rangeFromSec..$rangeToSec")
             if (chunk.isNotEmpty()) {
                 sendToFlutter("HISTORY_HR_DATA_CHUNK", chunk)
@@ -1215,21 +1342,32 @@ class ChileafWearHandler(
 
         // ── History: RR Data — filter + stream each chunk to Flutter ──────────
         wearManager.addHistoryOfRRDataCallback { device, list ->
+            // ╔══ SDK STAMP-FRAME FIX (HR wala hi logic — revert: purane raw/chunk se badlo) ══╗
+            // Kuch records ke liye SDK per-reading stamp ko relative/negative deta hai
+            // (dekho HR data callback). Relative stamps ko record ke baked header stamp
+            // se absolute banao; normal absolute stamps jyon-ke-tyon.
+            val fetchStampSec = synchronized(rrDataLock) {
+                if (rrFetchIndex < rrFetchQueue.size) rrFetchQueue[rrFetchIndex] else 0L
+            }
+            fun toTrueMs(s: Long): Long = when {
+                s > 100_000_000_000L -> s                        // absolute ms — as-is
+                s > 1_000_000_000L   -> s * 1000L                // absolute sec → ms
+                else                 -> s + fetchStampSec * 1000L // relative ms → absolute ms
+            }
             val raw = list.map { item ->
                 val m = HashMap<String, Any>()
-                m["stamp"] = item.stamp
+                m["stamp"] = toTrueMs(item.stamp)
                 // SDK names field `respiratoryRate` but per SDK changelog this actually
                 // carries the R-R interval value. Forward raw; Flutter side labels as `value`.
                 m["value"] = item.respiratoryRate
                 m
             }
             // ★ Data-level filter: drop readings outside range
-            // Stamps can be seconds or milliseconds — normalize to seconds
             val chunk = raw.filter { m ->
-                val s = (m["stamp"] as? Number)?.toLong() ?: 0L
-                val sSec = if (s > 9999999999L) s / 1000L else s
+                val sSec = (m["stamp"] as Number).toLong() / 1000L
                 sSec in rangeFromSec..rangeToSec
             }
+            // ╚══════════════════════════════════════════════════════════════════════════════╝
             Log.d(TAG, "[RR-DATA] raw=${raw.size} filtered=${chunk.size} range=$rangeFromSec..$rangeToSec")
             if (chunk.isNotEmpty()) {
                 sendToFlutter("HISTORY_RR_DATA_CHUNK", chunk)

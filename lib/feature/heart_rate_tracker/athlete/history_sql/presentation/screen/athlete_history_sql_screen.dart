@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:xelex_esp/core/theme/app_colors.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_cubit.dart';
 import 'package:xelex_esp/feature/heart_rate_tracker/heart_rate_bluetooth/cubit/heart_ble_state.dart';
+import 'package:xelex_esp/feature/heart_rate_tracker/home_heart_rate/presentation/screen/history_records_screen.dart';
 
 import '../../../history/presentation/widgets/empty_state.dart';
 import '../../../history/presentation/widgets/last_push_info.dart';
@@ -203,6 +204,14 @@ class _HistorySqlShellState extends State<_HistorySqlShell> {
               foregroundColor: Colors.white,
               elevation: 0,
               actions: [
+                if (Platform.isAndroid)
+                  IconButton(
+                    tooltip: 'View session records',
+                    icon: const Icon(Icons.folder_copy_outlined,
+                        color: Colors.white),
+                    onPressed: () => Navigator.of(context)
+                        .push(HistoryRecordsScreen.route(context)),
+                  ),
                 if (Platform.isAndroid)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
@@ -472,7 +481,7 @@ class _DayDetail extends StatelessWidget {
             ].map((w) => Expanded(child: w)).toList(),
           ),
           const SizedBox(height: 16),
-          HrScrollableChart(readings: readings),
+          HrScrollableChart(readings: readings, emphasizeYGrid: true),
           if (sleepResult != null) ...[
             const SizedBox(height: 16),
             SleepHrChart(sleep: sleepResult),
